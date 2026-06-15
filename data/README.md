@@ -10,14 +10,17 @@
 | Path | What |
 |---|---|
 | `emissions/<Nuclide>.json` | **Canonical** per-nuclide emission spectra (this project's schema). Generated; committed. |
+| `attenuation/<material>.json` | **Canonical** per-material μ/ρ & μ_en/ρ vs energy (this project's schema). Generated; committed. |
 | `vendor/icrp107/` | Raw upstream ICRP-107 JSON, vendored verbatim. See `vendor/PROVENANCE.md`. |
-| `vendor/MANIFEST.sha256` | Per-file hashes of the vendored upstream (drift guard). |
-| `build/build_emissions.py` | Transform: `vendor/icrp107/` → `emissions/`. Dev-time only. |
+| `vendor/nist_xraymac/` | Raw upstream NIST H&S pages, vendored verbatim. See `vendor/nist_xraymac/PROVENANCE.md`. |
+| `vendor/MANIFEST.sha256`, `vendor/nist_xraymac/MANIFEST.sha256` | Per-file hashes of each vendored source (drift guard). |
+| `build/build_emissions.py`, `build/build_attenuation.py` | Transforms: `vendor/…` → `emissions/` / `attenuation/`. Dev-time only. |
+| `build/fetch_nist_xraymac.py` | One-time acquisition of the NIST pages (verbatim). Dev-time only. |
 | `LICENSE.ICRP-07` | The license governing the emission data (see below). |
 
-Datasets still to land in M2 (§7): attenuation (μ, μ_en/ρ — NIST XCOM), G-P
-buildup (ANS-6.4.3/Harima), H\*(10) & effective-dose conversion coefficients,
-neutron source terms + fluence-to-dose, spent-fuel discharge vectors.
+Datasets still to land in M2 (§7): G-P buildup (ANS-6.4.3/Harima), H\*(10) &
+effective-dose conversion coefficients, neutron source terms + fluence-to-dose,
+spent-fuel discharge vectors. (Emissions ✅, attenuation ✅.)
 
 ## Emissions — canonical schema (`schema_version: 1`)
 
@@ -51,15 +54,59 @@ Design choices (M2 review — `docs/plans/M2-emissions.md`):
   branch, not the main 0.318 MeV endpoint).
 
 ### ⚠️ For M3 (gamma dose)
-ICRP includes photon lines down to ~14 eV — **below where NIST XCOM tables start
-(~1 keV)**. The dose engine must skip below-table photons **explicitly and
-logged**, never silently. Keep the lines in the data.
+ICRP includes photon lines down to ~14 eV — **below where the NIST attenuation
+tables start (1 keV)**. The dose engine must skip below-table photons
+**explicitly and logged**, never silently. Keep the lines in the data.
+
+## Attenuation — canonical schema (`schema_version: 1`)
+
+```jsonc
+{
+  "schema_version": 1,
+  "material": "lead",            // this project's stable slug / file stem
+  "name": "Lead",               // NIST display name ("Concrete, Ordinary", "Tissue, Soft (ICRU-44)", …)
+  "kind": "element",            // element | compound
+  "Z": 82,                       // elements only
+  "rho_g_cm3": 11.35,            // density, from the NIST tab1/tab2 index (never hardcoded)
+  "source": "NIST X-Ray Mass Attenuation Coefficients (Hubbell & Seltzer, NIST SRD 126 …)",
+  "E_MeV":          [ … ],       // ASCENDING; DUPLICATED at absorption edges
+  "mu_rho_cm2_g":   [ … ],       // mass attenuation μ/ρ  → shielding I = I₀·e^(−μx)
+  "muen_rho_cm2_g": [ … ],       // mass energy-absorption μ_en/ρ → dose line-sum E·y·(μ_en/ρ)
+  "edges": [ { "label": "K", "E_MeV": 0.0880045 }, … ]   // [] for low-Z compounds
+}
+```
+
+Materials: dose media `air`, `water`, `tissue_soft`; shields `lead`, `tungsten`,
+`iron`, `copper`, `aluminium`, `concrete`, `pmma`, `polyethylene`. Source is the
+**Hubbell & Seltzer** tables (SRD 126), *not* XCOM proper — XCOM lacks μ_en/ρ; H&S
+gives both. See `vendor/nist_xraymac/PROVENANCE.md` and `docs/plans/M2-attenuation.md`.
+
+Design choices (M2 review):
+
+- **Energy range is 1 keV – 20 MeV** (the NIST tabulation). The M3 dose engine skips
+  photon lines below 1 keV **explicitly and logged** — the other half of the sub-keV
+  contract above.
+- **Absorption edges are preserved as duplicate-energy rows** (μ/ρ steps up across an
+  edge). `np.interp` is ill-defined *at* a duplicated energy, so **edge-aware log–log
+  interpolation belongs to M3**; this dataset ships none.
+- **`μ_en/ρ ≤ μ/ρ` always holds** (you cannot absorb more than you attenuate) and is
+  asserted per row — the cheapest catch for a swapped-column parse.
+- **Density comes from the vendored index pages** (`tab1`/`tab2`), failing loud if
+  absent — never a hardcoded substitute (§11).
+
+### ⚠️ Trust boundary (honesty)
+XCOM and Hubbell & Seltzer share the **Berger/Hubbell** cross-section lineage, so the
+attenuation goldens catch transcription/unit/column/edge errors — **not** an
+independent re-evaluation of the underlying physics (none exists; H&S is the field
+standard). HVL goldens here are **narrow-beam** (ln2/μ); published *broad-beam*
+HVL/TVL include buildup and are validated in M3.
 
 ## Rebuilding & validating
 
 ```sh
 python data/build/build_emissions.py        # vendor → emissions (idempotent)
-python -m pytest tests/test_emissions_data.py
+python data/build/build_attenuation.py      # vendor → attenuation (idempotent)
+python -m pytest tests/test_emissions_data.py tests/test_attenuation_data.py
 ```
 
 The build fails loudly on any structural surprise (unknown category, bad row,
@@ -85,3 +132,8 @@ distribution **for educational, research, and not-for-profit purposes** provided
 the license text travels with it — it **does not grant commercial use**. This
 constrains the project's *eventual* repo license (currently deferred): the repo
 cannot grant commercial rights over this bundled data.
+
+The **attenuation** data (`attenuation/`, `vendor/nist_xraymac/`) derives from **NIST
+SRD 126** — a U.S.-Government work, **public domain** (17 U.S.C. §105), NIST requests
+citation. It carries **no** non-commercial restriction; the repo-license constraint
+above comes solely from the ICRP-107 emission data.

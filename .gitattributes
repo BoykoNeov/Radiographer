@@ -1,2 +1,7 @@
 # Normalize line endings: store LF in the repo, check out native on each OS.
 * text=auto
+
+# Vendored upstream is hash-pinned (MANIFEST.sha256 + a build-time drift guard) and
+# must stay byte-exact on every platform. Treat it as binary so git never converts
+# line endings — otherwise a CRLF checkout would break the pinned manifest hash.
+data/vendor/** -text
