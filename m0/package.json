@@ -1,0 +1,13 @@
+{
+  "name": "radiographer-m0-smoke",
+  "version": "0.0.0",
+  "private": true,
+  "description": "M0 Pyodide foundation smoke test (HANDOFF_PLAN.md §10).",
+  "type": "module",
+  "scripts": {
+    "smoke:browser": "node drive_browser.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

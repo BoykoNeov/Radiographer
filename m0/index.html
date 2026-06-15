@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Radiographer — M0 Pyodide smoke test</title>
+<!-- Empty inline icon so the browser does not auto-request /favicon.ico (would 404). -->
+<link rel="icon" href="data:," />
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 2rem auto; max-width: 64rem; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; }
+  #banner { padding: .75rem 1rem; border-radius: .5rem; font-weight: 600; font-size: 1.1rem; }
+  .pending { background: #fff3cd; color: #664d03; }
+  .pass { background: #d1e7dd; color: #0f5132; }
+  .fail { background: #f8d7da; color: #842029; }
+  #log { white-space: pre-wrap; font-family: ui-monospace, monospace; background: #00000010;
+         padding: .75rem; border-radius: .5rem; margin-top: 1rem; }
+  table { border-collapse: collapse; margin-top: 1rem; width: 100%; }
+  th, td { border: 1px solid #8888; padding: .35rem .6rem; text-align: left; vertical-align: top; }
+  th { background: #8881; }
+  pre.json { white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 12px;
+             background: #00000010; padding: .75rem; border-radius: .5rem; overflow-x: auto; }
+  .muted { opacity: .7; }
+</style>
+</head>
+<body>
+  <h1>Radiographer — M0 Pyodide smoke test</h1>
+  <p class="muted">Foundation check (HANDOFF_PLAN.md §10): load Pyodide, install
+  <code>radioactivedecay</code> via micropip, solve Cs-137 → Ba-137m, validate
+  secular equilibrium, time it, and probe the spectral-data path. All in-browser,
+  no server compute.</p>
+
+  <div id="banner" class="pending">⏳ Running… (first load pulls the WASM scientific stack — expect seconds to tens of seconds)</div>
+  <div id="log"></div>
+  <div id="results"></div>
+
+<script>
+const PYODIDE_VERSION = "314.0.0";
+const CDN = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
+
+const logEl = document.getElementById("log");
+const bannerEl = document.getElementById("banner");
+const resultsEl = document.getElementById("results");
+const t = () => performance.now();
+function log(msg) { logEl.textContent += msg + "\n"; }
+
+function esc(s) {
+  return String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+}
+
+function renderResults(timing, result) {
+  const eq = result.equilibrium || {};
+  const v = result.versions || {};
+  const sp = result.spectral_probe || {};
+  const rows = [
+    ["Pyodide", PYODIDE_VERSION],
+    ["Python", v.python],
+    ["radioactivedecay", v.radioactivedecay],
+    ["numpy / scipy / sympy", `${v.numpy} / ${v.scipy} / ${v.sympy}`],
+    ["—", "—"],
+    ["Pyodide + stack load", `${timing.load_s.toFixed(2)} s`],
+    ["micropip install radioactivedecay", `${timing.install_s.toFixed(2)} s`],
+    ["smoke compute (in-Python)", `${timing.run_s.toFixed(3)} s`],
+    ["— per-evaluation (solve-many cost)", eq && result.timing
+        ? `${result.timing.per_evaluation_ms.toFixed(3)} ms` : "n/a"],
+    ["—", "—"],
+    ["Equilibrium A(Ba-137m)/A(Cs-137)", eq.ratio_measured?.toFixed(6)],
+    ["Expected branching fraction", eq.branching_expected?.toFixed(6)],
+    ["Relative error", eq.rel_error?.toExponential(2) + ` (tol ${eq.rel_tol})`],
+    ["Equilibrium check", eq.pass ? "✅ PASS" : "❌ FAIL"],
+    ["—", "—"],
+    ["Decay dataset", sp.dataset_name],
+    ["Spectral lines exposed?", sp.spectral_available ? "yes" : "no — see verdict"],
+  ];
+  let html = "<table><tbody>";
+  for (const [k, val] of rows) {
+    html += k === "—"
+      ? `<tr><td colspan="2" style="border:none;height:.4rem"></td></tr>`
+      : `<tr><th>${esc(k)}</th><td>${esc(val ?? "—")}</td></tr>`;
+  }
+  html += "</tbody></table>";
+  if (sp.verdict) html += `<p class="muted"><strong>Spectral-path verdict (§13.6):</strong> ${esc(sp.verdict)}</p>`;
+  html += `<details><summary>Raw result JSON</summary><pre class="json">${esc(JSON.stringify(result, null, 2))}</pre></details>`;
+  resultsEl.innerHTML = html;
+}
+
+async function main() {
+  const timing = {};
+  try {
+    log("Loading Pyodide " + PYODIDE_VERSION + " from " + CDN);
+    let mark = t();
+    const pyodide = await loadPyodide({ indexURL: CDN });
+    timing.load_s = (t() - mark) / 1000;
+    log(`Pyodide + base stack loaded in ${timing.load_s.toFixed(2)} s`);
+
+    bannerEl.textContent = "⏳ Installing radioactivedecay (+ scipy/sympy deps) via micropip…";
+    log("loadPackage('micropip') then micropip.install('radioactivedecay')");
+    mark = t();
+    await pyodide.loadPackage("micropip");
+    const micropip = pyodide.pyimport("micropip");
+    await micropip.install("radioactivedecay");
+    timing.install_s = (t() - mark) / 1000;
+    log(`radioactivedecay installed in ${timing.install_s.toFixed(2)} s`);
+
+    bannerEl.textContent = "⏳ Solving Cs-137 chain & validating…";
+    log("Running smoke.py::run_smoke() in Pyodide");
+    const smokeSrc = await (await fetch("smoke.py")).text();
+    pyodide.FS.writeFile("/smoke.py", smokeSrc);
+    mark = t();
+    // Import as a module so the file's __main__ guard does not fire; run once.
+    const resultJson = await pyodide.runPythonAsync(`
+import sys, json
+if "/" not in sys.path:
+    sys.path.insert(0, "/")
+import smoke
+json.dumps(smoke.run_smoke())
+`);
+    timing.run_s = (t() - mark) / 1000;
+    const result = JSON.parse(resultJson);
+    log(`smoke compute finished in ${timing.run_s.toFixed(3)} s`);
+
+    renderResults(timing, result);
+
+    const ok = result.overall_pass === true;
+    bannerEl.className = ok ? "pass" : "fail";
+    bannerEl.textContent = ok
+      ? "✅ M0 PASS — foundation holds in this browser."
+      : "❌ M0 FAIL — see results / raw JSON below.";
+
+    // Expose for the headless Playwright driver.
+    window.__M0_RESULT__ = { ok, timing, result };
+    window.__M0_DONE__ = true;
+  } catch (err) {
+    log("ERROR: " + (err && err.stack ? err.stack : err));
+    bannerEl.className = "fail";
+    bannerEl.textContent = "❌ M0 FAIL — exception during smoke test (see log).";
+    window.__M0_RESULT__ = { ok: false, error: String(err && err.stack ? err.stack : err), timing };
+    window.__M0_DONE__ = true;
+  }
+}
+
+const tag = document.createElement("script");
+tag.src = CDN + "pyodide.js";
+tag.onload = main;
+tag.onerror = () => {
+  bannerEl.className = "fail";
+  bannerEl.textContent = "❌ Could not load pyodide.js from the CDN (offline?).";
+  window.__M0_RESULT__ = { ok: false, error: "pyodide.js CDN load failed" };
+  window.__M0_DONE__ = true;
+};
+document.head.appendChild(tag);
+</script>
+</body>
+</html>
