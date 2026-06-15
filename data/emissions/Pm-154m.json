@@ -1,0 +1,4469 @@
+{
+  "schema_version": 1,
+  "nuclide": "Pm-154m",
+  "source": "ICRP-107 (Endo & Eckerman 2008, Ann. ICRP 38(3)); reformatted via OpenGATE/icrp107-database 0.0.3",
+  "photons": [
+    {
+      "E_MeV": 1.45292e-05,
+      "yield": 8.34949,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 2.08988e-05,
+      "yield": 4.85158e-08,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00014521,
+      "yield": 0.000255067,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0003841,
+      "yield": 1.07243e-06,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.000610299,
+      "yield": 1.08722e-07,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.000968583,
+      "yield": 0.00994634,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0009944,
+      "yield": 4.1728e-05,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0050078,
+      "yield": 0.00420356,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00517601,
+      "yield": 2.71901e-05,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0053002,
+      "yield": 2.48547e-05,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.005595,
+      "yield": 0.00552373,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0056181,
+      "yield": 0.00144541,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0056221,
+      "yield": 0.0488678,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00591049,
+      "yield": 2.71153e-05,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00617039,
+      "yield": 0.00119713,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0062053,
+      "yield": 0.0372166,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0062946,
+      "yield": 0.00174632,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00636513,
+      "yield": 0.000519692,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00643047,
+      "yield": 3.85954e-06,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00645784,
+      "yield": 3.72793e-06,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0065665,
+      "yield": 0.000911213,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00657141,
+      "yield": 0.00814927,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0065894,
+      "yield": 2.38903e-05,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00661651,
+      "yield": 3.57327e-05,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00666015,
+      "yield": 9.34452e-05,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00667812,
+      "yield": 8.33583e-07,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00668188,
+      "yield": 7.20868e-07,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00669853,
+      "yield": 6.94668e-07,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00669915,
+      "yield": 3.97827e-06,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00697542,
+      "yield": 0.0002666,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00706815,
+      "yield": 5.37091e-06,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00717681,
+      "yield": 0.00639066,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00727045,
+      "yield": 4.37206e-05,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00729219,
+      "yield": 1.1467e-06,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00730882,
+      "yield": 2.96296e-06,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00742487,
+      "yield": 0.000280349,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00745223,
+      "yield": 0.000424876,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0075609,
+      "yield": 3.21659e-06,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00756578,
+      "yield": 4.94467e-06,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0076725,
+      "yield": 3.96637e-05,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00767628,
+      "yield": 5.85816e-05,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0395578,
+      "yield": 0.112648,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.040168,
+      "yield": 0.203895,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0453441,
+      "yield": 0.0204327,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0454683,
+      "yield": 0.0395322,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0455,
+      "yield": 0.00432256,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.045763,
+      "yield": 0.00028803,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0457901,
+      "yield": 0.000382591,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0465986,
+      "yield": 0.004431,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0466259,
+      "yield": 0.00860181,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0467346,
+      "yield": 6.3239e-05,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0467395,
+      "yield": 8.37842e-05,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0468462,
+      "yield": 0.000894366,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.0468499,
+      "yield": 0.00180909,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.064548,
+      "yield": 0.0456,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.082016,
+      "yield": 0.1463,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.1043,
+      "yield": 0.00133,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.107896,
+      "yield": 0.0646,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.138,
+      "yield": 0.00209,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.14374,
+      "yield": 0.00456,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.1716,
+      "yield": 0.06745,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.1718,
+      "yield": 0.00304,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.18481,
+      "yield": 0.304,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.214,
+      "yield": 0.00304,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.23082,
+      "yield": 0.05985,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.23208,
+      "yield": 0.0418,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.24775,
+      "yield": 0.006745,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.24952,
+      "yield": 0.009595,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.2561,
+      "yield": 5.7e-05,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.27396,
+      "yield": 0.002565,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.276,
+      "yield": 0.00855,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.27704,
+      "yield": 0.021945,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.27993,
+      "yield": 0.11305,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.2801,
+      "yield": 0.002565,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.29125,
+      "yield": 0.005985,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.2931,
+      "yield": 0.00323,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.3031,
+      "yield": 0.005795,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.3073,
+      "yield": 0.003135,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.31577,
+      "yield": 0.00646,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.33968,
+      "yield": 0.00665,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.3549,
+      "yield": 0.00646,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.35916,
+      "yield": 0.038855,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.36467,
+      "yield": 0.006175,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.3717,
+      "yield": 0.00342,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.37506,
+      "yield": 0.018525,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.40215,
+      "yield": 0.01539,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.40663,
+      "yield": 0.005985,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.41523,
+      "yield": 0.01178,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.43876,
+      "yield": 0.02071,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.4475,
+      "yield": 0.00418,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.47136,
+      "yield": 0.00969,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.48257,
+      "yield": 0.01368,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.49455,
+      "yield": 0.005605,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.526,
+      "yield": 0.01539,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.5267,
+      "yield": 0.002755,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.5289,
+      "yield": 0.002185,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.54666,
+      "yield": 0.13775,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.5925,
+      "yield": 0.01178,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.62814,
+      "yield": 0.01273,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.6371,
+      "yield": 0.004275,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.6617,
+      "yield": 0.002565,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.6817,
+      "yield": 0.00646,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.7,
+      "yield": 0.006175,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.7011,
+      "yield": 0.005415,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.7091,
+      "yield": 0.005605,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.721,
+      "yield": 0.00722,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.7301,
+      "yield": 0.00418,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.7422,
+      "yield": 0.02223,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.7434,
+      "yield": 0.0266,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.7454,
+      "yield": 0.03059,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.75224,
+      "yield": 0.00304,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.8027,
+      "yield": 0.00494,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.8334,
+      "yield": 0.02337,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.83445,
+      "yield": 0.029545,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.83936,
+      "yield": 0.03705,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.8531,
+      "yield": 0.00703,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.8612,
+      "yield": 0.00475,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.8669,
+      "yield": 0.002755,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.9019,
+      "yield": 0.013775,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.9097,
+      "yield": 0.008835,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.91093,
+      "yield": 0.002945,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.92136,
+      "yield": 0.0266,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.93038,
+      "yield": 0.0513,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.9335,
+      "yield": 0.007315,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.9581,
+      "yield": 0.003135,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.974,
+      "yield": 0.002755,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.01948,
+      "yield": 0.00627,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.0243,
+      "yield": 0.00513,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.0407,
+      "yield": 0.00304,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.09584,
+      "yield": 0.003895,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.1625,
+      "yield": 0.005415,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.1735,
+      "yield": 0.00836,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.17775,
+      "yield": 0.002755,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.20456,
+      "yield": 0.012635,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.2055,
+      "yield": 0.0057,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.22321,
+      "yield": 0.004275,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.23,
+      "yield": 0.0114,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.2602,
+      "yield": 0.011115,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.2706,
+      "yield": 0.004655,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.27185,
+      "yield": 0.01216,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.27377,
+      "yield": 0.00836,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.3177,
+      "yield": 0.01102,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.35805,
+      "yield": 0.10165,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.3983,
+      "yield": 0.0076,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.4041,
+      "yield": 0.00475,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.41173,
+      "yield": 0.0076,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.43338,
+      "yield": 0.0152,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.43994,
+      "yield": 0.1159,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.44,
+      "yield": 0.1026,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.4573,
+      "yield": 0.03629,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.5029,
+      "yield": 0.002375,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.53787,
+      "yield": 0.005985,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.54795,
+      "yield": 0.01425,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.55101,
+      "yield": 0.009785,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.5826,
+      "yield": 0.00171,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.61197,
+      "yield": 0.012065,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.62483,
+      "yield": 0.0513,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.65539,
+      "yield": 0.0418,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.6606,
+      "yield": 0.00475,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.71974,
+      "yield": 0.00665,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.73311,
+      "yield": 0.01729,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.79685,
+      "yield": 0.026125,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.7994,
+      "yield": 0.001425,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.8402,
+      "yield": 0.038,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.8639,
+      "yield": 0.007315,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.8783,
+      "yield": 0.001615,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.9051,
+      "yield": 0.007125,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 2.0269,
+      "yield": 0.006745,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 2.1505,
+      "yield": 0.00209,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 2.2119,
+      "yield": 0.0057,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 2.8009,
+      "yield": 0.0019,
+      "origin": "gamma"
+    }
+  ],
+  "betas": [
+    {
+      "E_mean_MeV": 0.67218,
+      "yield": 0.0402477,
+      "kind": "beta-"
+    },
+    {
+      "E_mean_MeV": 0.699014,
+      "yield": 0.0175439,
+      "kind": "beta-"
+    },
+    {
+      "E_mean_MeV": 0.772745,
+      "yield": 0.0608875,
+      "kind": "beta-"
+    },
+    {
+      "E_mean_MeV": 0.807948,
+      "yield": 0.701754,
+      "kind": "beta-"
+    },
+    {
+      "E_mean_MeV": 0.883393,
+      "yield": 0.0154799,
+      "kind": "beta-"
+    },
+    {
+      "E_mean_MeV": 0.889441,
+      "yield": 0.0185759,
+      "kind": "beta-"
+    },
+    {
+      "E_mean_MeV": 0.911278,
+      "yield": 0.00619195,
+      "kind": "beta-"
+    },
+    {
+      "E_mean_MeV": 0.952242,
+      "yield": 0.00619195,
+      "kind": "beta-"
+    },
+    {
+      "E_mean_MeV": 1.00905,
+      "yield": 0.0247678,
+      "kind": "beta-"
+    },
+    {
+      "E_mean_MeV": 1.05398,
+      "yield": 0.0319917,
+      "kind": "beta-"
+    },
+    {
+      "E_mean_MeV": 1.59197,
+      "yield": 0.0763674,
+      "kind": "beta-"
+    }
+  ],
+  "alphas": [],
+  "electrons": [
+    {
+      "E_MeV": 1.51033e-05,
+      "yield": 0.649398,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 3.756e-05,
+      "yield": 0.00517337,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 9.35139e-05,
+      "yield": 0.539486,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.00010681,
+      "yield": 3.4816,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.000170544,
+      "yield": 0.548537,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.000472123,
+      "yield": 0.0795053,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.000803326,
+      "yield": 1.21691,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.000972098,
+      "yield": 0.0776957,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.00115735,
+      "yield": 0.0022409,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.00445211,
+      "yield": 0.44877,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.00549981,
+      "yield": 0.153348,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.00657975,
+      "yield": 0.0130605,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.0325196,
+      "yield": 0.0194455,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.0384443,
+      "yield": 0.00947472,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.0443732,
+      "yield": 0.00110657,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.017672,
+      "yield": 0.0339263,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.03514,
+      "yield": 0.28954,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.0377977,
+      "yield": 0.000732007,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.0381818,
+      "yield": 0.000270955,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.0387921,
+      "yield": 0.000377593,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.0440923,
+      "yield": 0.000297974,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.0455,
+      "yield": 7.89082e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.0568457,
+      "yield": 0.00329947,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.0572298,
+      "yield": 0.000910896,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.0578401,
+      "yield": 0.00121796,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.06102,
+      "yield": 0.012276,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.0631403,
+      "yield": 0.00116817,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.064548,
+      "yield": 0.000312398,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.0743137,
+      "yield": 0.025591,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.0746978,
+      "yield": 0.146303,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.0753081,
+      "yield": 0.161421,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.0806083,
+      "yield": 0.0776284,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.082016,
+      "yield": 0.020195,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.096864,
+      "yield": 0.00188373,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.100194,
+      "yield": 0.00126822,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.100578,
+      "yield": 0.000236066,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.101188,
+      "yield": 0.000296248,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.106488,
+      "yield": 0.000386611,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.107896,
+      "yield": 0.000104966,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.124724,
+      "yield": 0.00365543,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.124924,
+      "yield": 0.000728254,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.136038,
+      "yield": 0.000184075,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.136422,
+      "yield": 0.000337722,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.137032,
+      "yield": 0.000316639,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.137934,
+      "yield": 0.0582405,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.142332,
+      "yield": 0.000193118,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.14374,
+      "yield": 5.06641e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.163898,
+      "yield": 0.000400537,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.164098,
+      "yield": 7.39459e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.164282,
+      "yield": 5.32539e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.164482,
+      "yield": 0.000100419,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.164892,
+      "yield": 6.32556e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.165092,
+      "yield": 8.86975e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.167124,
+      "yield": 0.000370689,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.170192,
+      "yield": 0.000110675,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.170392,
+      "yield": 6.02341e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.1716,
+      "yield": 3.02732e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.1718,
+      "yield": 1.5885e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.177108,
+      "yield": 0.0059864,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.177492,
+      "yield": 0.00724005,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.178102,
+      "yield": 0.00623484,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.183402,
+      "yield": 0.00444546,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.183944,
+      "yield": 0.001483,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.18481,
+      "yield": 0.00117492,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.185204,
+      "yield": 0.00397373,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.200874,
+      "yield": 0.000525655,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.206298,
+      "yield": 3.9183e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.206682,
+      "yield": 3.77675e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.207292,
+      "yield": 3.08659e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.209224,
+      "yield": 1.07605e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.212592,
+      "yield": 2.4495e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.214,
+      "yield": 6.50402e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.223118,
+      "yield": 0.000165795,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.223502,
+      "yield": 1.80039e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.224112,
+      "yield": 2.08199e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.224378,
+      "yield": 0.000426398,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.224762,
+      "yield": 0.000363726,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.225372,
+      "yield": 0.000288542,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.227084,
+      "yield": 4.06874e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.229124,
+      "yield": 0.000753346,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.229412,
+      "yield": 4.38726e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.230164,
+      "yield": 0.00122068,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.230672,
+      "yield": 0.000244303,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.23082,
+      "yield": 1.20812e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.23208,
+      "yield": 6.50333e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.233054,
+      "yield": 0.006096,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.233224,
+      "yield": 0.000444861,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.240048,
+      "yield": 5.71231e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.240432,
+      "yield": 4.4149e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.241042,
+      "yield": 3.41822e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.246342,
+      "yield": 3.05792e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.24775,
+      "yield": 8.15865e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.248398,
+      "yield": 1.21522e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.248782,
+      "yield": 1.23042e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.249392,
+      "yield": 1.40738e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.254692,
+      "yield": 3.17083e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.2561,
+      "yield": 8.73749e-09,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.256224,
+      "yield": 0.000246701,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.260424,
+      "yield": 0.000207853,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.266258,
+      "yield": 4.6215e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.266642,
+      "yield": 4.47136e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.267252,
+      "yield": 5.08038e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.268298,
+      "yield": 9.72521e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.268682,
+      "yield": 6.53184e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.268894,
+      "yield": 7.14609e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.269292,
+      "yield": 1.18814e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.269338,
+      "yield": 0.000135337,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.269722,
+      "yield": 8.86851e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.270332,
+      "yield": 6.58441e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.272228,
+      "yield": 0.000677074,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.272398,
+      "yield": 5.11229e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.272552,
+      "yield": 1.19557e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.272612,
+      "yield": 0.000436992,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.272782,
+      "yield": 0.000121485,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.273222,
+      "yield": 0.000323178,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.273392,
+      "yield": 7.06625e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.27396,
+      "yield": 3.29591e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.274592,
+      "yield": 2.25953e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.275632,
+      "yield": 6.50898e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.276,
+      "yield": 6.28935e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.27704,
+      "yield": 1.74326e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.278522,
+      "yield": 0.000322571,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.278692,
+      "yield": 5.69522e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.27993,
+      "yield": 8.64234e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.2801,
+      "yield": 1.50655e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.292804,
+      "yield": 0.000338916,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.295398,
+      "yield": 2.77648e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.295782,
+      "yield": 1.59616e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.296392,
+      "yield": 1.14558e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.299598,
+      "yield": 2.67718e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.299982,
+      "yield": 1.75262e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.300592,
+      "yield": 3.19692e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.301692,
+      "yield": 1.23363e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.3031,
+      "yield": 3.31437e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.305892,
+      "yield": 6.21001e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.3073,
+      "yield": 1.7281e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.308068,
+      "yield": 8.20696e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.308452,
+      "yield": 7.20562e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.309062,
+      "yield": 8.08873e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.312284,
+      "yield": 0.00101261,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.314362,
+      "yield": 2.08722e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.31577,
+      "yield": 5.75711e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.317794,
+      "yield": 4.79928e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.324824,
+      "yield": 0.000137833,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.328184,
+      "yield": 0.000427278,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.331978,
+      "yield": 4.35655e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.332362,
+      "yield": 2.77701e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.332972,
+      "yield": 5.08988e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.338272,
+      "yield": 1.00833e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.33968,
+      "yield": 2.80632e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.351458,
+      "yield": 0.000116676,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.351842,
+      "yield": 5.25437e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.352452,
+      "yield": 3.53652e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.355274,
+      "yield": 9.46952e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.356968,
+      "yield": 5.55648e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.357352,
+      "yield": 4.3963e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.357752,
+      "yield": 4.53691e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.357962,
+      "yield": 4.90656e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.35916,
+      "yield": 1.22637e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.359754,
+      "yield": 0.000110286,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.363262,
+      "yield": 1.39033e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.363998,
+      "yield": 1.7688e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.364382,
+      "yield": 1.09844e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.36467,
+      "yield": 3.83432e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.364992,
+      "yield": 2.02585e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.367358,
+      "yield": 4.94837e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.367742,
+      "yield": 2.09473e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.368352,
+      "yield": 1.38721e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.368354,
+      "yield": 0.000356653,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.370292,
+      "yield": 4.08382e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.3717,
+      "yield": 1.13699e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.373652,
+      "yield": 1.86587e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.37506,
+      "yield": 5.05153e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.391884,
+      "yield": 0.000544397,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.394448,
+      "yield": 1.10122e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.394832,
+      "yield": 8.10443e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.395442,
+      "yield": 9.03029e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.398928,
+      "yield": 1.28844e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.399312,
+      "yield": 4.8612e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.399922,
+      "yield": 3.12492e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.400624,
+      "yield": 0.000104479,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.400742,
+      "yield": 2.72678e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.40215,
+      "yield": 7.5199e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.405222,
+      "yield": 4.60301e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.40663,
+      "yield": 1.24979e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.407528,
+      "yield": 4.56835e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.407912,
+      "yield": 2.74186e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.408522,
+      "yield": 5.10737e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.413822,
+      "yield": 1.05126e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.41523,
+      "yield": 2.92857e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.424484,
+      "yield": 4.12355e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.431058,
+      "yield": 6.96729e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.431442,
+      "yield": 4.10822e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.432052,
+      "yield": 7.69808e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.437352,
+      "yield": 1.60055e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.43876,
+      "yield": 4.46021e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.439798,
+      "yield": 1.33676e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.440182,
+      "yield": 7.83142e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.440792,
+      "yield": 1.47083e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.446092,
+      "yield": 3.06895e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.4475,
+      "yield": 8.55315e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.463658,
+      "yield": 4.82417e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.464042,
+      "yield": 3.15274e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.464652,
+      "yield": 3.51266e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.469952,
+      "yield": 1.17541e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.47136,
+      "yield": 3.24526e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.479124,
+      "yield": 0.000143429,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.479824,
+      "yield": 2.55888e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.482024,
+      "yield": 2.00806e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.499784,
+      "yield": 0.00207618,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.518298,
+      "yield": 1.71293e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.518682,
+      "yield": 4.4766e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.518998,
+      "yield": 3.05627e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.519292,
+      "yield": 2.63591e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.519382,
+      "yield": 7.97214e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.519992,
+      "yield": 4.69219e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.521198,
+      "yield": 2.39908e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.521582,
+      "yield": 6.22064e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.522192,
+      "yield": 3.65654e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.524592,
+      "yield": 5.29317e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.525292,
+      "yield": 9.43816e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.526,
+      "yield": 1.44973e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.5267,
+      "yield": 2.58509e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.527492,
+      "yield": 7.39364e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.5289,
+      "yield": 2.02537e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.538958,
+      "yield": 0.000265292,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.539342,
+      "yield": 1.45263e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.539952,
+      "yield": 2.80296e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.545252,
+      "yield": 6.05322e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.545624,
+      "yield": 0.000145259,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.54666,
+      "yield": 1.68839e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.584798,
+      "yield": 1.85526e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.585182,
+      "yield": 9.87073e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.585792,
+      "yield": 1.93136e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.590224,
+      "yield": 2.48053e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.591092,
+      "yield": 4.22331e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.5925,
+      "yield": 1.17827e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.614824,
+      "yield": 1.35966e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.629398,
+      "yield": 2.99591e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.629782,
+      "yield": 5.95279e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.630392,
+      "yield": 3.31818e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.635692,
+      "yield": 8.51533e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.6371,
+      "yield": 2.34523e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.653124,
+      "yield": 5.05119e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.653998,
+      "yield": 1.64501e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.654224,
+      "yield": 4.41258e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.654382,
+      "yield": 3.0966e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.654992,
+      "yield": 1.70989e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.660292,
+      "yield": 4.60937e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.6617,
+      "yield": 1.27072e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.662224,
+      "yield": 9.81783e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.692298,
+      "yield": 6.43907e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.692682,
+      "yield": 3.21761e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.693292,
+      "yield": 6.52612e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.693398,
+      "yield": 5.62478e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.693782,
+      "yield": 2.80899e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.694392,
+      "yield": 5.69953e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.695324,
+      "yield": 9.02456e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.696524,
+      "yield": 0.000107589,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.698524,
+      "yield": 4.8394e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.698592,
+      "yield": 1.45969e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.699692,
+      "yield": 1.27506e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.7,
+      "yield": 4.07364e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.7011,
+      "yield": 3.55838e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.701398,
+      "yield": 1.16356e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.701782,
+      "yield": 5.57506e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.702392,
+      "yield": 6.29075e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.705364,
+      "yield": 1.19697e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.707692,
+      "yield": 2.73061e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.7091,
+      "yield": 7.61362e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.734498,
+      "yield": 1.0966e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.734882,
+      "yield": 1.75181e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.735492,
+      "yield": 9.43918e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.735698,
+      "yield": 1.30741e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.736082,
+      "yield": 2.08377e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.736692,
+      "yield": 1.12245e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.737698,
+      "yield": 5.74634e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.738082,
+      "yield": 2.64388e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.738692,
+      "yield": 2.99573e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.740792,
+      "yield": 2.95419e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.741992,
+      "yield": 3.52032e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.7422,
+      "yield": 8.16659e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.7434,
+      "yield": 9.73194e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.743992,
+      "yield": 1.34298e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.744538,
+      "yield": 1.45508e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.744922,
+      "yield": 2.28033e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.7454,
+      "yield": 3.74364e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.745532,
+      "yield": 1.22563e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.750832,
+      "yield": 3.9034e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.75224,
+      "yield": 1.07938e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.755824,
+      "yield": 6.73653e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.786524,
+      "yield": 7.31861e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.787574,
+      "yield": 0.000158062,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.792484,
+      "yield": 4.62628e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.794998,
+      "yield": 8.02074e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.795382,
+      "yield": 3.47285e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.795992,
+      "yield": 3.96445e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.801292,
+      "yield": 1.86362e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.8027,
+      "yield": 5.19178e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.806224,
+      "yield": 3.56714e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.820024,
+      "yield": 3.22993e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.825698,
+      "yield": 8.92018e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.826082,
+      "yield": 1.20858e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.826692,
+      "yield": 6.38776e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.826748,
+      "yield": 2.00515e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.827132,
+      "yield": 9.33311e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.827742,
+      "yield": 1.99004e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.831658,
+      "yield": 5.51667e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.831992,
+      "yield": 2.32282e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.832042,
+      "yield": 2.30212e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.832652,
+      "yield": 2.64188e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.833042,
+      "yield": 4.53284e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.8334,
+      "yield": 6.43638e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.83445,
+      "yield": 1.26484e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.837952,
+      "yield": 1.27753e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.83936,
+      "yield": 3.55737e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.845398,
+      "yield": 4.52218e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.845782,
+      "yield": 2.08546e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.846392,
+      "yield": 4.47929e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.851692,
+      "yield": 1.02196e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.8531,
+      "yield": 2.85164e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.859198,
+      "yield": 3.85561e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.859582,
+      "yield": 1.56647e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.860192,
+      "yield": 1.8052e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.862824,
+      "yield": 9.43779e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.864054,
+      "yield": 7.6034e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.865492,
+      "yield": 8.908e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.8669,
+      "yield": 2.47962e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.874484,
+      "yield": 2.77304e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.883504,
+      "yield": 5.24947e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.886624,
+      "yield": 1.79248e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.901998,
+      "yield": 1.12823e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.902382,
+      "yield": 4.40384e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.902992,
+      "yield": 5.10997e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.903228,
+      "yield": 9.2812e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.903612,
+      "yield": 1.10959e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.904222,
+      "yield": 5.79944e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.908292,
+      "yield": 2.59803e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.909522,
+      "yield": 2.36313e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.9097,
+      "yield": 7.228e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.91093,
+      "yield": 6.55776e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.911224,
+      "yield": 3.0341e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.913658,
+      "yield": 3.31617e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.914042,
+      "yield": 1.28076e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.914652,
+      "yield": 1.48901e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.919952,
+      "yield": 7.62985e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.92136,
+      "yield": 2.12242e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.922678,
+      "yield": 6.2793e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.923062,
+      "yield": 2.40558e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.923672,
+      "yield": 2.80098e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.925798,
+      "yield": 2.18866e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.926182,
+      "yield": 2.52866e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.926792,
+      "yield": 1.31834e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.927124,
+      "yield": 2.58481e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.928972,
+      "yield": 1.44382e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.93038,
+      "yield": 4.01592e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.932092,
+      "yield": 5.54113e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.9335,
+      "yield": 1.53822e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.950398,
+      "yield": 3.63203e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.950782,
+      "yield": 1.35781e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.951392,
+      "yield": 1.58856e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.956692,
+      "yield": 8.33563e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.9581,
+      "yield": 2.31784e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.966298,
+      "yield": 3.09539e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.966682,
+      "yield": 1.14143e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.967292,
+      "yield": 1.33917e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.972592,
+      "yield": 7.0968e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.972604,
+      "yield": 1.277e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.974,
+      "yield": 1.97308e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.977424,
+      "yield": 1.03467e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.993824,
+      "yield": 1.22666e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.01178,
+      "yield": 1.56025e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.01216,
+      "yield": 1.59562e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.01277,
+      "yield": 8.26107e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.0166,
+      "yield": 1.26418e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.01698,
+      "yield": 1.28448e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.01759,
+      "yield": 6.64836e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.01807,
+      "yield": 3.87691e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.01948,
+      "yield": 1.07736e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.02289,
+      "yield": 3.13832e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.0243,
+      "yield": 8.72152e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.033,
+      "yield": 1.55838e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.03338,
+      "yield": 3.41469e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.03399,
+      "yield": 1.02513e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.03929,
+      "yield": 4.37285e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.0407,
+      "yield": 1.20622e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.04896,
+      "yield": 1.09317e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.08814,
+      "yield": 1.37561e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.08852,
+      "yield": 5.68275e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.08913,
+      "yield": 1.35e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.09443,
+      "yield": 3.09763e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.09584,
+      "yield": 8.64631e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.11562,
+      "yield": 8.45408e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.12662,
+      "yield": 1.28096e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.13087,
+      "yield": 4.19115e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.1548,
+      "yield": 1.03151e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.15518,
+      "yield": 8.8277e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.15579,
+      "yield": 4.5508e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.15768,
+      "yield": 2.84458e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.15862,
+      "yield": 1.28095e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.16109,
+      "yield": 2.50401e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.1625,
+      "yield": 6.96462e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.1658,
+      "yield": 1.56277e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.16618,
+      "yield": 1.3207e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.16679,
+      "yield": 6.80823e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.17005,
+      "yield": 5.11297e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.17043,
+      "yield": 4.30019e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.17104,
+      "yield": 2.21676e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.17209,
+      "yield": 3.78806e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.1735,
+      "yield": 1.05364e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.17634,
+      "yield": 1.23866e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.17775,
+      "yield": 3.44533e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.18312,
+      "yield": 6.99597e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.19686,
+      "yield": 3.57107e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.19724,
+      "yield": 1.4118e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.1978,
+      "yield": 1.60807e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.19785,
+      "yield": 3.5175e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.19818,
+      "yield": 6.35502e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.19879,
+      "yield": 1.58402e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.20315,
+      "yield": 8.02866e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.20409,
+      "yield": 3.61528e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.20456,
+      "yield": 2.2421e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.2055,
+      "yield": 1.00962e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.21332,
+      "yield": 2.25389e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.2223,
+      "yield": 8.3894e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.22268,
+      "yield": 2.54986e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.22329,
+      "yield": 3.14673e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.22372,
+      "yield": 6.09937e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.22497,
+      "yield": 2.41393e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.22689,
+      "yield": 1.09009e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.22859,
+      "yield": 1.90098e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.23,
+      "yield": 5.28464e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.2525,
+      "yield": 2.8266e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.25288,
+      "yield": 1.09378e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.25349,
+      "yield": 2.79352e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.25879,
+      "yield": 6.3495e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.2602,
+      "yield": 1.77376e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.2629,
+      "yield": 7.4342e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.26328,
+      "yield": 5.65592e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.26389,
+      "yield": 2.9196e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.26415,
+      "yield": 3.02669e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.26453,
+      "yield": 1.16606e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.26514,
+      "yield": 2.9937e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.26607,
+      "yield": 1.32861e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.26645,
+      "yield": 1.00752e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.26706,
+      "yield": 5.20127e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.26919,
+      "yield": 1.78138e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.27044,
+      "yield": 6.79772e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.2706,
+      "yield": 4.95519e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.27082,
+      "yield": 5.99531e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.27185,
+      "yield": 1.89912e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.27236,
+      "yield": 3.18256e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.27377,
+      "yield": 8.85273e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.31,
+      "yield": 7.18417e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.31038,
+      "yield": 2.06442e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.31099,
+      "yield": 2.59669e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.31117,
+      "yield": 0.000173509,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.31629,
+      "yield": 1.62394e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.3177,
+      "yield": 4.51957e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.35035,
+      "yield": 2.17259e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.35073,
+      "yield": 8.10868e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.35134,
+      "yield": 2.16429e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.35142,
+      "yield": 1.21324e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.35664,
+      "yield": 4.87264e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.35805,
+      "yield": 1.36217e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.3865,
+      "yield": 7.15673e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.3906,
+      "yield": 1.51832e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.39098,
+      "yield": 5.58618e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.39159,
+      "yield": 1.51851e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.39306,
+      "yield": 0.000173011,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.39312,
+      "yield": 0.000105645,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.39689,
+      "yield": 3.40293e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.3983,
+      "yield": 9.51634e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.41042,
+      "yield": 5.27107e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.42568,
+      "yield": 8.56219e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.42606,
+      "yield": 2.29972e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.42667,
+      "yield": 2.96909e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.43197,
+      "yield": 1.93108e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.43224,
+      "yield": 2.16405e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.4323,
+      "yield": 1.28615e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.43262,
+      "yield": 7.84725e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.43268,
+      "yield": 8.33146e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.43323,
+      "yield": 2.17404e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.43329,
+      "yield": 4.33462e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.43338,
+      "yield": 5.38733e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.43853,
+      "yield": 4.84665e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.43859,
+      "yield": 3.03646e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.43994,
+      "yield": 1.35589e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.44,
+      "yield": 8.44102e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.4496,
+      "yield": 6.59182e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.44998,
+      "yield": 2.37611e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.45059,
+      "yield": 6.63534e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.45589,
+      "yield": 1.47586e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.45602,
+      "yield": 1.03214e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.4573,
+      "yield": 4.12953e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.49099,
+      "yield": 7.69121e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.4952,
+      "yield": 1.23329e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.49558,
+      "yield": 3.19082e-09,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.49619,
+      "yield": 4.18635e-09,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.50107,
+      "yield": 1.80429e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.50149,
+      "yield": 2.77897e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.5029,
+      "yield": 7.65747e-09,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.50413,
+      "yield": 8.75568e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.53017,
+      "yield": 9.61057e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.53055,
+      "yield": 3.37195e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.53116,
+      "yield": 9.77071e-09,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.53572,
+      "yield": 1.47331e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.53646,
+      "yield": 2.14852e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.53787,
+      "yield": 5.9742e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.54025,
+      "yield": 2.25436e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.54063,
+      "yield": 7.88348e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.54124,
+      "yield": 2.29497e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.54331,
+      "yield": 1.06571e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.54369,
+      "yield": 6.29412e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.5443,
+      "yield": 3.30107e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.54654,
+      "yield": 5.03882e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.54795,
+      "yield": 1.40102e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.5496,
+      "yield": 2.49828e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.55101,
+      "yield": 6.83649e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.56509,
+      "yield": 1.00434e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.5749,
+      "yield": 1.79331e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.57528,
+      "yield": 1.03333e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.57589,
+      "yield": 5.43374e-09,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.57795,
+      "yield": 4.20753e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.58119,
+      "yield": 4.19678e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.5826,
+      "yield": 1.14698e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.60427,
+      "yield": 1.22257e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.60465,
+      "yield": 6.88903e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.60526,
+      "yield": 3.63185e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.60851,
+      "yield": 3.3113e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.61056,
+      "yield": 2.85686e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.61197,
+      "yield": 7.79836e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.61713,
+      "yield": 5.12196e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.61751,
+      "yield": 2.85858e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.61812,
+      "yield": 1.50877e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.62342,
+      "yield": 1.19614e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.62483,
+      "yield": 3.26336e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.64769,
+      "yield": 4.03146e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.64807,
+      "yield": 2.20014e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.64868,
+      "yield": 1.16452e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.65398,
+      "yield": 9.40154e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.65539,
+      "yield": 2.56169e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.67286,
+      "yield": 4.90767e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.68623,
+      "yield": 1.25782e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.71204,
+      "yield": 5.97741e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.71242,
+      "yield": 3.11761e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.71303,
+      "yield": 1.66055e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.71833,
+      "yield": 1.39027e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.71974,
+      "yield": 3.77773e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.72541,
+      "yield": 1.53215e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.72579,
+      "yield": 7.91867e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.7264,
+      "yield": 4.22353e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.7317,
+      "yield": 3.5618e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.73311,
+      "yield": 9.67274e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.74997,
+      "yield": 2.36395e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.75252,
+      "yield": 9.67178e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.78915,
+      "yield": 2.94953e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.78953,
+      "yield": 9.54987e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.79014,
+      "yield": 3.11881e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.7917,
+      "yield": 1.17889e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.79208,
+      "yield": 5.83214e-09,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.79269,
+      "yield": 3.13254e-09,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.79332,
+      "yield": 3.26003e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.79544,
+      "yield": 6.55862e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.79685,
+      "yield": 1.82164e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.79799,
+      "yield": 2.73436e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.7994,
+      "yield": 7.40406e-09,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.81702,
+      "yield": 4.63294e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.83142,
+      "yield": 1.0084e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.8325,
+      "yield": 4.06719e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.83288,
+      "yield": 1.30038e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.83349,
+      "yield": 4.33288e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.83879,
+      "yield": 9.03502e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.8402,
+      "yield": 2.50912e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.8562,
+      "yield": 5.67618e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.85658,
+      "yield": 2.69701e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.85719,
+      "yield": 1.45907e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.85822,
+      "yield": 5.64793e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.86249,
+      "yield": 1.31408e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.8639,
+      "yield": 3.548e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.8706,
+      "yield": 1.23583e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.87098,
+      "yield": 5.82096e-09,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.87159,
+      "yield": 3.15431e-09,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.87689,
+      "yield": 2.85994e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.8783,
+      "yield": 7.7168e-09,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.8974,
+      "yield": 7.05836e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.89778,
+      "yield": 2.2155e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.89839,
+      "yield": 7.60716e-09,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.90369,
+      "yield": 1.56561e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.9051,
+      "yield": 4.34717e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.98002,
+      "yield": 3.66132e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 2.0192,
+      "yield": 4.50108e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 2.01958,
+      "yield": 1.94808e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 2.02019,
+      "yield": 1.07471e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 2.02549,
+      "yield": 1.03833e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 2.0269,
+      "yield": 2.78265e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 2.10362,
+      "yield": 1.01858e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 2.1428,
+      "yield": 1.25544e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 2.14318,
+      "yield": 5.09954e-09,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 2.14379,
+      "yield": 2.85839e-09,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 2.14909,
+      "yield": 2.89102e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 2.1505,
+      "yield": 7.70323e-09,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 2.16502,
+      "yield": 3.24872e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 2.2042,
+      "yield": 4.06195e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 2.20458,
+      "yield": 1.17549e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 2.20519,
+      "yield": 4.64971e-09,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 2.21049,
+      "yield": 8.94052e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 2.2119,
+      "yield": 2.48186e-08,
+      "origin": "IE"
+    }
+  ],
+  "neutrons": [],
+  "beta_spectra": [
+    {
+      "E_MeV": 0.0,
+      "intensity": 0.3597
+    },
+    {
+      "E_MeV": 0.0001,
+      "intensity": 0.3597
+    },
+    {
+      "E_MeV": 0.00011,
+      "intensity": 0.3597
+    },
+    {
+      "E_MeV": 0.00012,
+      "intensity": 0.3597
+    },
+    {
+      "E_MeV": 0.00013,
+      "intensity": 0.3597
+    },
+    {
+      "E_MeV": 0.00014,
+      "intensity": 0.3597
+    },
+    {
+      "E_MeV": 0.00015,
+      "intensity": 0.3597
+    },
+    {
+      "E_MeV": 0.00016,
+      "intensity": 0.3597
+    },
+    {
+      "E_MeV": 0.00018,
+      "intensity": 0.3597
+    },
+    {
+      "E_MeV": 0.0002,
+      "intensity": 0.3597
+    },
+    {
+      "E_MeV": 0.00022,
+      "intensity": 0.3598
+    },
+    {
+      "E_MeV": 0.00024,
+      "intensity": 0.3598
+    },
+    {
+      "E_MeV": 0.00026,
+      "intensity": 0.3598
+    },
+    {
+      "E_MeV": 0.00028,
+      "intensity": 0.3598
+    },
+    {
+      "E_MeV": 0.0003,
+      "intensity": 0.3598
+    },
+    {
+      "E_MeV": 0.00032,
+      "intensity": 0.3598
+    },
+    {
+      "E_MeV": 0.00036,
+      "intensity": 0.3598
+    },
+    {
+      "E_MeV": 0.0004,
+      "intensity": 0.3598
+    },
+    {
+      "E_MeV": 0.00045,
+      "intensity": 0.3598
+    },
+    {
+      "E_MeV": 0.0005,
+      "intensity": 0.3599
+    },
+    {
+      "E_MeV": 0.00055,
+      "intensity": 0.3599
+    },
+    {
+      "E_MeV": 0.0006,
+      "intensity": 0.3599
+    },
+    {
+      "E_MeV": 0.00065,
+      "intensity": 0.3599
+    },
+    {
+      "E_MeV": 0.0007,
+      "intensity": 0.3599
+    },
+    {
+      "E_MeV": 0.00075,
+      "intensity": 0.36
+    },
+    {
+      "E_MeV": 0.0008,
+      "intensity": 0.36
+    },
+    {
+      "E_MeV": 0.00085,
+      "intensity": 0.36
+    },
+    {
+      "E_MeV": 0.0009,
+      "intensity": 0.36
+    },
+    {
+      "E_MeV": 0.001,
+      "intensity": 0.36
+    },
+    {
+      "E_MeV": 0.0011,
+      "intensity": 0.3601
+    },
+    {
+      "E_MeV": 0.0012,
+      "intensity": 0.3601
+    },
+    {
+      "E_MeV": 0.0013,
+      "intensity": 0.3602
+    },
+    {
+      "E_MeV": 0.0014,
+      "intensity": 0.3602
+    },
+    {
+      "E_MeV": 0.0015,
+      "intensity": 0.3602
+    },
+    {
+      "E_MeV": 0.0016,
+      "intensity": 0.3603
+    },
+    {
+      "E_MeV": 0.0018,
+      "intensity": 0.3603
+    },
+    {
+      "E_MeV": 0.002,
+      "intensity": 0.3604
+    },
+    {
+      "E_MeV": 0.0022,
+      "intensity": 0.3605
+    },
+    {
+      "E_MeV": 0.0024,
+      "intensity": 0.3606
+    },
+    {
+      "E_MeV": 0.0026,
+      "intensity": 0.3606
+    },
+    {
+      "E_MeV": 0.0028,
+      "intensity": 0.3607
+    },
+    {
+      "E_MeV": 0.003,
+      "intensity": 0.3608
+    },
+    {
+      "E_MeV": 0.0032,
+      "intensity": 0.3609
+    },
+    {
+      "E_MeV": 0.0036,
+      "intensity": 0.361
+    },
+    {
+      "E_MeV": 0.004,
+      "intensity": 0.3612
+    },
+    {
+      "E_MeV": 0.0045,
+      "intensity": 0.3614
+    },
+    {
+      "E_MeV": 0.005,
+      "intensity": 0.3615
+    },
+    {
+      "E_MeV": 0.0055,
+      "intensity": 0.3617
+    },
+    {
+      "E_MeV": 0.006,
+      "intensity": 0.3619
+    },
+    {
+      "E_MeV": 0.0065,
+      "intensity": 0.3621
+    },
+    {
+      "E_MeV": 0.007,
+      "intensity": 0.3623
+    },
+    {
+      "E_MeV": 0.0075,
+      "intensity": 0.3625
+    },
+    {
+      "E_MeV": 0.008,
+      "intensity": 0.3626
+    },
+    {
+      "E_MeV": 0.0085,
+      "intensity": 0.3628
+    },
+    {
+      "E_MeV": 0.009,
+      "intensity": 0.363
+    },
+    {
+      "E_MeV": 0.01,
+      "intensity": 0.3634
+    },
+    {
+      "E_MeV": 0.011,
+      "intensity": 0.364
+    },
+    {
+      "E_MeV": 0.012,
+      "intensity": 0.3648
+    },
+    {
+      "E_MeV": 0.013,
+      "intensity": 0.3657
+    },
+    {
+      "E_MeV": 0.014,
+      "intensity": 0.3665
+    },
+    {
+      "E_MeV": 0.015,
+      "intensity": 0.3673
+    },
+    {
+      "E_MeV": 0.016,
+      "intensity": 0.3681
+    },
+    {
+      "E_MeV": 0.018,
+      "intensity": 0.3698
+    },
+    {
+      "E_MeV": 0.02,
+      "intensity": 0.3714
+    },
+    {
+      "E_MeV": 0.022,
+      "intensity": 0.3731
+    },
+    {
+      "E_MeV": 0.024,
+      "intensity": 0.3747
+    },
+    {
+      "E_MeV": 0.026,
+      "intensity": 0.3763
+    },
+    {
+      "E_MeV": 0.028,
+      "intensity": 0.378
+    },
+    {
+      "E_MeV": 0.03,
+      "intensity": 0.3796
+    },
+    {
+      "E_MeV": 0.032,
+      "intensity": 0.3812
+    },
+    {
+      "E_MeV": 0.036,
+      "intensity": 0.3844
+    },
+    {
+      "E_MeV": 0.04,
+      "intensity": 0.3877
+    },
+    {
+      "E_MeV": 0.045,
+      "intensity": 0.3917
+    },
+    {
+      "E_MeV": 0.05,
+      "intensity": 0.3957
+    },
+    {
+      "E_MeV": 0.055,
+      "intensity": 0.3998
+    },
+    {
+      "E_MeV": 0.06,
+      "intensity": 0.4038
+    },
+    {
+      "E_MeV": 0.065,
+      "intensity": 0.4078
+    },
+    {
+      "E_MeV": 0.07,
+      "intensity": 0.4118
+    },
+    {
+      "E_MeV": 0.075,
+      "intensity": 0.4159
+    },
+    {
+      "E_MeV": 0.08,
+      "intensity": 0.4199
+    },
+    {
+      "E_MeV": 0.085,
+      "intensity": 0.4239
+    },
+    {
+      "E_MeV": 0.09,
+      "intensity": 0.4279
+    },
+    {
+      "E_MeV": 0.1,
+      "intensity": 0.436
+    },
+    {
+      "E_MeV": 0.11,
+      "intensity": 0.444
+    },
+    {
+      "E_MeV": 0.12,
+      "intensity": 0.452
+    },
+    {
+      "E_MeV": 0.13,
+      "intensity": 0.4599
+    },
+    {
+      "E_MeV": 0.14,
+      "intensity": 0.4678
+    },
+    {
+      "E_MeV": 0.15,
+      "intensity": 0.4757
+    },
+    {
+      "E_MeV": 0.16,
+      "intensity": 0.4835
+    },
+    {
+      "E_MeV": 0.18,
+      "intensity": 0.4988
+    },
+    {
+      "E_MeV": 0.2,
+      "intensity": 0.5139
+    },
+    {
+      "E_MeV": 0.22,
+      "intensity": 0.5286
+    },
+    {
+      "E_MeV": 0.24,
+      "intensity": 0.543
+    },
+    {
+      "E_MeV": 0.26,
+      "intensity": 0.5569
+    },
+    {
+      "E_MeV": 0.28,
+      "intensity": 0.5704
+    },
+    {
+      "E_MeV": 0.3,
+      "intensity": 0.5835
+    },
+    {
+      "E_MeV": 0.32,
+      "intensity": 0.596
+    },
+    {
+      "E_MeV": 0.36,
+      "intensity": 0.6195
+    },
+    {
+      "E_MeV": 0.4,
+      "intensity": 0.6409
+    },
+    {
+      "E_MeV": 0.45,
+      "intensity": 0.6644
+    },
+    {
+      "E_MeV": 0.5,
+      "intensity": 0.6842
+    },
+    {
+      "E_MeV": 0.55,
+      "intensity": 0.7001
+    },
+    {
+      "E_MeV": 0.6,
+      "intensity": 0.712
+    },
+    {
+      "E_MeV": 0.65,
+      "intensity": 0.7198
+    },
+    {
+      "E_MeV": 0.7,
+      "intensity": 0.7237
+    },
+    {
+      "E_MeV": 0.75,
+      "intensity": 0.7235
+    },
+    {
+      "E_MeV": 0.8,
+      "intensity": 0.7193
+    },
+    {
+      "E_MeV": 0.85,
+      "intensity": 0.7113
+    },
+    {
+      "E_MeV": 0.9,
+      "intensity": 0.6995
+    },
+    {
+      "E_MeV": 1.0,
+      "intensity": 0.6652
+    },
+    {
+      "E_MeV": 1.1,
+      "intensity": 0.6179
+    },
+    {
+      "E_MeV": 1.2,
+      "intensity": 0.5596
+    },
+    {
+      "E_MeV": 1.3,
+      "intensity": 0.4926
+    },
+    {
+      "E_MeV": 1.4,
+      "intensity": 0.4198
+    },
+    {
+      "E_MeV": 1.5,
+      "intensity": 0.3442
+    },
+    {
+      "E_MeV": 1.6,
+      "intensity": 0.2693
+    },
+    {
+      "E_MeV": 1.8,
+      "intensity": 0.1378
+    },
+    {
+      "E_MeV": 2.0,
+      "intensity": 0.05457
+    },
+    {
+      "E_MeV": 2.2,
+      "intensity": 0.03373
+    },
+    {
+      "E_MeV": 2.4,
+      "intensity": 0.02527
+    },
+    {
+      "E_MeV": 2.6,
+      "intensity": 0.01948
+    },
+    {
+      "E_MeV": 2.8,
+      "intensity": 0.01507
+    },
+    {
+      "E_MeV": 3.0,
+      "intensity": 0.01072
+    },
+    {
+      "E_MeV": 3.2,
+      "intensity": 0.006695
+    },
+    {
+      "E_MeV": 3.6,
+      "intensity": 0.0009609
+    },
+    {
+      "E_MeV": 3.81316,
+      "intensity": 0.0
+    }
+  ]
+}

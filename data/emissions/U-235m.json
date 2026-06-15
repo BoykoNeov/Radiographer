@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "nuclide": "U-235m",
+  "source": "ICRP-107 (Endo & Eckerman 2008, Ann. ICRP 38(3)); reformatted via OpenGATE/icrp107-database 0.0.3",
+  "photons": [
+    {
+      "E_MeV": 7.65e-05,
+      "yield": 1e-10,
+      "origin": "gamma"
+    }
+  ],
+  "betas": [],
+  "alphas": [],
+  "electrons": [
+    {
+      "E_MeV": 7.65e-05,
+      "yield": 1.0,
+      "origin": "IE"
+    }
+  ],
+  "neutrons": [],
+  "beta_spectra": []
+}

@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "nuclide": "Ho-163",
+  "source": "ICRP-107 (Endo & Eckerman 2008, Ann. ICRP 38(3)); reformatted via OpenGATE/icrp107-database 0.0.3",
+  "photons": [
+    {
+      "E_MeV": 1.5344e-05,
+      "yield": 4.20532,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 2.45617e-05,
+      "yield": 1.80242e-07,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.000189995,
+      "yield": 0.000372487,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00129602,
+      "yield": 0.00169574,
+      "origin": "X"
+    }
+  ],
+  "betas": [],
+  "alphas": [],
+  "electrons": [
+    {
+      "E_MeV": 1.81686e-05,
+      "yield": 0.476658,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 4.297e-05,
+      "yield": 0.00370992,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.000122217,
+      "yield": 2.19129,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.000221478,
+      "yield": 0.204896,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.00025828,
+      "yield": 0.166997,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.00108025,
+      "yield": 0.130228,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.00132999,
+      "yield": 0.00878186,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.00153871,
+      "yield": 0.000438138,
+      "origin": "auger"
+    }
+  ],
+  "neutrons": [],
+  "beta_spectra": []
+}

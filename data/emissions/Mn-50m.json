@@ -1,0 +1,934 @@
+{
+  "schema_version": 1,
+  "nuclide": "Mn-50m",
+  "source": "ICRP-107 (Endo & Eckerman 2008, Ann. ICRP 38(3)); reformatted via OpenGATE/icrp107-database 0.0.3",
+  "photons": [
+    {
+      "E_MeV": 6.39128e-06,
+      "yield": 0.0613807,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 8.93001e-06,
+      "yield": 4.05501e-13,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 3.46457e-05,
+      "yield": 4.93346e-08,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 9.75997e-05,
+      "yield": 1.38492e-07,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00010653,
+      "yield": 4.90713e-07,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.000501618,
+      "yield": 2.5888e-05,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.000510549,
+      "yield": 1.41514e-05,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.000529557,
+      "yield": 2.17854e-08,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00053061,
+      "yield": 2.13072e-08,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.000539541,
+      "yield": 2.31781e-08,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.000574351,
+      "yield": 3.67265e-07,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.000574439,
+      "yield": 4.21087e-06,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00057485,
+      "yield": 4.86583e-07,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.000583279,
+      "yield": 2.42372e-06,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.000583781,
+      "yield": 2.66042e-07,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.000636088,
+      "yield": 1.43345e-06,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.000637138,
+      "yield": 2.09277e-06,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00068088,
+      "yield": 2.98139e-09,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00068097,
+      "yield": 4.24499e-09,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00536786,
+      "yield": 0.000704749,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00537679,
+      "yield": 0.00138337,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00590635,
+      "yield": 8.10261e-05,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00590738,
+      "yield": 0.000159605,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00595114,
+      "yield": 2.15532e-08,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.00595124,
+      "yield": 3.15395e-08,
+      "origin": "X"
+    },
+    {
+      "E_MeV": 0.161,
+      "yield": 0.02,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.511,
+      "yield": 1.98474,
+      "origin": "annihilation"
+    },
+    {
+      "E_MeV": 0.6615,
+      "yield": 0.25,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 0.7833,
+      "yield": 1.0,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.098,
+      "yield": 0.985,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.2824,
+      "yield": 0.33,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.4433,
+      "yield": 0.69,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.7935,
+      "yield": 0.005,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 1.9445,
+      "yield": 0.038,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 2.4044,
+      "yield": 0.0016,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 2.541,
+      "yield": 0.01,
+      "origin": "gamma"
+    },
+    {
+      "E_MeV": 3.042,
+      "yield": 0.02,
+      "origin": "gamma"
+    }
+  ],
+  "betas": [
+    {
+      "E_mean_MeV": 1.35437,
+      "yield": 0.268081,
+      "kind": "beta+"
+    },
+    {
+      "E_mean_MeV": 1.59413,
+      "yield": 0.649039,
+      "kind": "beta+"
+    },
+    {
+      "E_mean_MeV": 1.67144,
+      "yield": 0.0752509,
+      "kind": "beta+"
+    }
+  ],
+  "alphas": [],
+  "electrons": [
+    {
+      "E_MeV": 3.61228e-05,
+      "yield": 0.0288062,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 6.1058e-05,
+      "yield": 0.0027846,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.000500622,
+      "yield": 0.0139401,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.000544094,
+      "yield": 0.000104885,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.00474513,
+      "yield": 0.00498505,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.00529315,
+      "yield": 0.00115001,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.00584468,
+      "yield": 7.07017e-05,
+      "origin": "auger"
+    },
+    {
+      "E_MeV": 0.155042,
+      "yield": 0.00119365,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.160313,
+      "yield": 0.000105371,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.16041,
+      "yield": 4.69096e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.160419,
+      "yield": 6.54269e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.655542,
+      "yield": 0.000106174,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.660813,
+      "yield": 9.69211e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.66091,
+      "yield": 1.15022e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.660919,
+      "yield": 1.32356e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.777342,
+      "yield": 0.000265346,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.782613,
+      "yield": 2.41845e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.78271,
+      "yield": 2.39921e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 0.782719,
+      "yield": 2.79062e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.09204,
+      "yield": 0.000111918,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.09731,
+      "yield": 1.0156e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.09741,
+      "yield": 6.92911e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.09742,
+      "yield": 8.53919e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.27644,
+      "yield": 2.63891e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.28171,
+      "yield": 2.39235e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.28181,
+      "yield": 1.36691e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.28182,
+      "yield": 1.76135e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.43734,
+      "yield": 3.77555e-05,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.44261,
+      "yield": 3.4574e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.44271,
+      "yield": 1.31564e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.44272,
+      "yield": 1.40305e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.93854,
+      "yield": 1.22825e-06,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.94381,
+      "yield": 1.1239e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.94391,
+      "yield": 3.30409e-10,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 1.94392,
+      "yield": 4.35703e-10,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 2.53504,
+      "yield": 2.16945e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 2.54031,
+      "yield": 2.03823e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 2.54041,
+      "yield": 5.26803e-11,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 2.54042,
+      "yield": 9.68776e-11,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 3.03604,
+      "yield": 3.23415e-07,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 3.04131,
+      "yield": 3.14089e-08,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 3.04141,
+      "yield": 6.61034e-11,
+      "origin": "IE"
+    },
+    {
+      "E_MeV": 3.04142,
+      "yield": 1.40168e-10,
+      "origin": "IE"
+    }
+  ],
+  "neutrons": [],
+  "beta_spectra": [
+    {
+      "E_MeV": 0.0,
+      "intensity": 0.0
+    },
+    {
+      "E_MeV": 0.0001,
+      "intensity": 1.692e-25
+    },
+    {
+      "E_MeV": 0.00011,
+      "intensity": 2.252e-24
+    },
+    {
+      "E_MeV": 0.00012,
+      "intensity": 2.152e-23
+    },
+    {
+      "E_MeV": 0.00013,
+      "intensity": 1.577e-22
+    },
+    {
+      "E_MeV": 0.00014,
+      "intensity": 9.299e-22
+    },
+    {
+      "E_MeV": 0.00015,
+      "intensity": 4.577e-21
+    },
+    {
+      "E_MeV": 0.00016,
+      "intensity": 1.935e-20
+    },
+    {
+      "E_MeV": 0.00018,
+      "intensity": 2.392e-19
+    },
+    {
+      "E_MeV": 0.0002,
+      "intensity": 2.007e-18
+    },
+    {
+      "E_MeV": 0.00022,
+      "intensity": 1.251e-17
+    },
+    {
+      "E_MeV": 0.00024,
+      "intensity": 6.176e-17
+    },
+    {
+      "E_MeV": 0.00026,
+      "intensity": 2.528e-16
+    },
+    {
+      "E_MeV": 0.00028,
+      "intensity": 8.884e-16
+    },
+    {
+      "E_MeV": 0.0003,
+      "intensity": 2.752e-15
+    },
+    {
+      "E_MeV": 0.00032,
+      "intensity": 7.677e-15
+    },
+    {
+      "E_MeV": 0.00036,
+      "intensity": 4.643e-14
+    },
+    {
+      "E_MeV": 0.0004,
+      "intensity": 2.168e-13
+    },
+    {
+      "E_MeV": 0.00045,
+      "intensity": 1.142e-12
+    },
+    {
+      "E_MeV": 0.0005,
+      "intensity": 4.84e-12
+    },
+    {
+      "E_MeV": 0.00055,
+      "intensity": 1.739e-11
+    },
+    {
+      "E_MeV": 0.0006,
+      "intensity": 5.48e-11
+    },
+    {
+      "E_MeV": 0.00065,
+      "intensity": 1.548e-10
+    },
+    {
+      "E_MeV": 0.0007,
+      "intensity": 3.978e-10
+    },
+    {
+      "E_MeV": 0.00075,
+      "intensity": 9.412e-10
+    },
+    {
+      "E_MeV": 0.0008,
+      "intensity": 2.068e-09
+    },
+    {
+      "E_MeV": 0.00085,
+      "intensity": 4.249e-09
+    },
+    {
+      "E_MeV": 0.0009,
+      "intensity": 8.222e-09
+    },
+    {
+      "E_MeV": 0.001,
+      "intensity": 2.629e-08
+    },
+    {
+      "E_MeV": 0.0011,
+      "intensity": 7.037e-08
+    },
+    {
+      "E_MeV": 0.0012,
+      "intensity": 1.63e-07
+    },
+    {
+      "E_MeV": 0.0013,
+      "intensity": 3.353e-07
+    },
+    {
+      "E_MeV": 0.0014,
+      "intensity": 6.264e-07
+    },
+    {
+      "E_MeV": 0.0015,
+      "intensity": 1.08e-06
+    },
+    {
+      "E_MeV": 0.0016,
+      "intensity": 1.745e-06
+    },
+    {
+      "E_MeV": 0.0018,
+      "intensity": 3.893e-06
+    },
+    {
+      "E_MeV": 0.002,
+      "intensity": 7.424e-06
+    },
+    {
+      "E_MeV": 0.0022,
+      "intensity": 1.262e-05
+    },
+    {
+      "E_MeV": 0.0024,
+      "intensity": 1.971e-05
+    },
+    {
+      "E_MeV": 0.0026,
+      "intensity": 2.882e-05
+    },
+    {
+      "E_MeV": 0.0028,
+      "intensity": 4.004e-05
+    },
+    {
+      "E_MeV": 0.003,
+      "intensity": 5.341e-05
+    },
+    {
+      "E_MeV": 0.0032,
+      "intensity": 6.895e-05
+    },
+    {
+      "E_MeV": 0.0036,
+      "intensity": 0.0001065
+    },
+    {
+      "E_MeV": 0.004,
+      "intensity": 0.0001523
+    },
+    {
+      "E_MeV": 0.0045,
+      "intensity": 0.0002209
+    },
+    {
+      "E_MeV": 0.005,
+      "intensity": 0.0003013
+    },
+    {
+      "E_MeV": 0.0055,
+      "intensity": 0.0003928
+    },
+    {
+      "E_MeV": 0.006,
+      "intensity": 0.0004948
+    },
+    {
+      "E_MeV": 0.0065,
+      "intensity": 0.0006067
+    },
+    {
+      "E_MeV": 0.007,
+      "intensity": 0.0007278
+    },
+    {
+      "E_MeV": 0.0075,
+      "intensity": 0.0008577
+    },
+    {
+      "E_MeV": 0.008,
+      "intensity": 0.0009959
+    },
+    {
+      "E_MeV": 0.0085,
+      "intensity": 0.001142
+    },
+    {
+      "E_MeV": 0.009,
+      "intensity": 0.001296
+    },
+    {
+      "E_MeV": 0.01,
+      "intensity": 0.001623
+    },
+    {
+      "E_MeV": 0.011,
+      "intensity": 0.001976
+    },
+    {
+      "E_MeV": 0.012,
+      "intensity": 0.002352
+    },
+    {
+      "E_MeV": 0.013,
+      "intensity": 0.002749
+    },
+    {
+      "E_MeV": 0.014,
+      "intensity": 0.003163
+    },
+    {
+      "E_MeV": 0.015,
+      "intensity": 0.003595
+    },
+    {
+      "E_MeV": 0.016,
+      "intensity": 0.004041
+    },
+    {
+      "E_MeV": 0.018,
+      "intensity": 0.004974
+    },
+    {
+      "E_MeV": 0.02,
+      "intensity": 0.005951
+    },
+    {
+      "E_MeV": 0.022,
+      "intensity": 0.006964
+    },
+    {
+      "E_MeV": 0.024,
+      "intensity": 0.008007
+    },
+    {
+      "E_MeV": 0.026,
+      "intensity": 0.009075
+    },
+    {
+      "E_MeV": 0.028,
+      "intensity": 0.01016
+    },
+    {
+      "E_MeV": 0.03,
+      "intensity": 0.01127
+    },
+    {
+      "E_MeV": 0.032,
+      "intensity": 0.01239
+    },
+    {
+      "E_MeV": 0.036,
+      "intensity": 0.01465
+    },
+    {
+      "E_MeV": 0.04,
+      "intensity": 0.01695
+    },
+    {
+      "E_MeV": 0.045,
+      "intensity": 0.01984
+    },
+    {
+      "E_MeV": 0.05,
+      "intensity": 0.02275
+    },
+    {
+      "E_MeV": 0.055,
+      "intensity": 0.02567
+    },
+    {
+      "E_MeV": 0.06,
+      "intensity": 0.02858
+    },
+    {
+      "E_MeV": 0.065,
+      "intensity": 0.03149
+    },
+    {
+      "E_MeV": 0.07,
+      "intensity": 0.03438
+    },
+    {
+      "E_MeV": 0.075,
+      "intensity": 0.03727
+    },
+    {
+      "E_MeV": 0.08,
+      "intensity": 0.04015
+    },
+    {
+      "E_MeV": 0.085,
+      "intensity": 0.04301
+    },
+    {
+      "E_MeV": 0.09,
+      "intensity": 0.04586
+    },
+    {
+      "E_MeV": 0.1,
+      "intensity": 0.05153
+    },
+    {
+      "E_MeV": 0.11,
+      "intensity": 0.05715
+    },
+    {
+      "E_MeV": 0.12,
+      "intensity": 0.06273
+    },
+    {
+      "E_MeV": 0.13,
+      "intensity": 0.06827
+    },
+    {
+      "E_MeV": 0.14,
+      "intensity": 0.07376
+    },
+    {
+      "E_MeV": 0.15,
+      "intensity": 0.07923
+    },
+    {
+      "E_MeV": 0.16,
+      "intensity": 0.08466
+    },
+    {
+      "E_MeV": 0.18,
+      "intensity": 0.09543
+    },
+    {
+      "E_MeV": 0.2,
+      "intensity": 0.1061
+    },
+    {
+      "E_MeV": 0.22,
+      "intensity": 0.1167
+    },
+    {
+      "E_MeV": 0.24,
+      "intensity": 0.1272
+    },
+    {
+      "E_MeV": 0.26,
+      "intensity": 0.1376
+    },
+    {
+      "E_MeV": 0.28,
+      "intensity": 0.148
+    },
+    {
+      "E_MeV": 0.3,
+      "intensity": 0.1582
+    },
+    {
+      "E_MeV": 0.32,
+      "intensity": 0.1684
+    },
+    {
+      "E_MeV": 0.36,
+      "intensity": 0.1886
+    },
+    {
+      "E_MeV": 0.4,
+      "intensity": 0.2085
+    },
+    {
+      "E_MeV": 0.45,
+      "intensity": 0.2328
+    },
+    {
+      "E_MeV": 0.5,
+      "intensity": 0.2566
+    },
+    {
+      "E_MeV": 0.55,
+      "intensity": 0.2796
+    },
+    {
+      "E_MeV": 0.6,
+      "intensity": 0.3019
+    },
+    {
+      "E_MeV": 0.65,
+      "intensity": 0.3234
+    },
+    {
+      "E_MeV": 0.7,
+      "intensity": 0.344
+    },
+    {
+      "E_MeV": 0.75,
+      "intensity": 0.3636
+    },
+    {
+      "E_MeV": 0.8,
+      "intensity": 0.3822
+    },
+    {
+      "E_MeV": 0.85,
+      "intensity": 0.3996
+    },
+    {
+      "E_MeV": 0.9,
+      "intensity": 0.4159
+    },
+    {
+      "E_MeV": 1.0,
+      "intensity": 0.4448
+    },
+    {
+      "E_MeV": 1.1,
+      "intensity": 0.4684
+    },
+    {
+      "E_MeV": 1.2,
+      "intensity": 0.4865
+    },
+    {
+      "E_MeV": 1.3,
+      "intensity": 0.4989
+    },
+    {
+      "E_MeV": 1.4,
+      "intensity": 0.5054
+    },
+    {
+      "E_MeV": 1.5,
+      "intensity": 0.506
+    },
+    {
+      "E_MeV": 1.6,
+      "intensity": 0.5008
+    },
+    {
+      "E_MeV": 1.8,
+      "intensity": 0.4738
+    },
+    {
+      "E_MeV": 2.0,
+      "intensity": 0.4267
+    },
+    {
+      "E_MeV": 2.2,
+      "intensity": 0.3634
+    },
+    {
+      "E_MeV": 2.4,
+      "intensity": 0.2891
+    },
+    {
+      "E_MeV": 2.6,
+      "intensity": 0.2108
+    },
+    {
+      "E_MeV": 2.8,
+      "intensity": 0.1366
+    },
+    {
+      "E_MeV": 3.0,
+      "intensity": 0.07635
+    },
+    {
+      "E_MeV": 3.2,
+      "intensity": 0.03341
+    },
+    {
+      "E_MeV": 3.6,
+      "intensity": 0.0001859
+    },
+    {
+      "E_MeV": 3.67605,
+      "intensity": 0.0
+    }
+  ]
+}

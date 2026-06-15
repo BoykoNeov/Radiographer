@@ -38,3 +38,7 @@ Desktop.ini
 # into those tables.
 data/raw/
 *.tmp
+# data/build/ holds the dataset build scripts (source code, not JS build output) —
+# re-include it despite the generic `build/` ignore in the Node section above.
+!data/build/
+!data/build/**
