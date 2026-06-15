@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Radiographer — M1 engine bridge harness</title>
+<link rel="icon" href="data:," />
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 2rem auto; max-width: 70rem; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; }
+  h2 { font-size: 1.05rem; margin-top: 1.5rem; }
+  #banner { padding: .75rem 1rem; border-radius: .5rem; font-weight: 600; font-size: 1.1rem; }
+  .pending { background: #fff3cd; color: #664d03; }
+  .pass { background: #d1e7dd; color: #0f5132; }
+  .fail { background: #f8d7da; color: #842029; }
+  #log { white-space: pre-wrap; font-family: ui-monospace, monospace; background: #00000010;
+         padding: .75rem; border-radius: .5rem; margin-top: 1rem; }
+  table { border-collapse: collapse; margin-top: .5rem; width: 100%; }
+  th, td { border: 1px solid #8888; padding: .3rem .6rem; text-align: left; vertical-align: top; }
+  th { background: #8881; }
+  pre.json { white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 12px;
+             background: #00000010; padding: .75rem; border-radius: .5rem; overflow-x: auto; }
+  .muted { opacity: .7; }
+  code { font-family: ui-monospace, monospace; }
+</style>
+</head>
+<body>
+  <h1>Radiographer — M1 engine bridge harness</h1>
+  <p class="muted">Loads the pure-Python <code>engine/</code> package into Pyodide,
+  then drives the JSON bridge (<code>solve → evaluate → chain → release</code>)
+  entirely in-browser. Validates the solve-once path (Cs-137 secular equilibrium),
+  times evaluate-many, and shows the U-238 DAG + <code>hp_recommended</code> flag.
+  All compute on-device.</p>
+
+  <div id="banner" class="pending">⏳ Loading Pyodide + radioactivedecay (first load pulls the WASM scientific stack — seconds to tens of seconds)…</div>
+  <div id="log"></div>
+  <div id="results"></div>
+
+<script>
+const PYODIDE_VERSION = "314.0.0";
+const CDN = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
+// engine/ modules, written into the Pyodide FS in import order.
+const ENGINE_MODULES = ["__init__", "inventory", "chain", "bridge"];
+
+const logEl = document.getElementById("log");
+const bannerEl = document.getElementById("banner");
+const resultsEl = document.getElementById("results");
+const now = () => performance.now();
+const log = (m) => { logEl.textContent += m + "\n"; };
+const esc = (s) => String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+function table(rows) {
+  let h = "<table><tbody>";
+  for (const [k, v] of rows) {
+    h += k === "—"
+      ? `<tr><td colspan="2" style="border:none;height:.4rem"></td></tr>`
+      : `<tr><th>${esc(k)}</th><td>${esc(v ?? "—")}</td></tr>`;
+  }
+  return h + "</tbody></table>";
+}
+
+async function loadEngine(pyodide) {
+  pyodide.FS.mkdirTree("/engine");
+  for (const m of ENGINE_MODULES) {
+    const src = await (await fetch(`../engine/${m}.py`)).text();
+    pyodide.FS.writeFile(`/engine/${m}.py`, src);
+  }
+  await pyodide.runPythonAsync(`
+import sys
+if "/" not in sys.path:
+    sys.path.insert(0, "/")
+import engine.bridge as bridge
+`);
+  // Return a JS-callable wrapper around each bridge function (JSON in/out).
+  const bridge = pyodide.pyimport("engine.bridge");
+  return {
+    solve: (spec) => JSON.parse(bridge.solve(JSON.stringify(spec))),
+    evaluate: (h, req) => JSON.parse(bridge.evaluate(h, JSON.stringify(req))),
+    chain: (h) => JSON.parse(bridge.chain(h)),
+    release: (h) => JSON.parse(bridge.release(h)),
+  };
+}
+
+function checks(engine) {
+  const failures = [];
+  const expect = (cond, msg) => { if (!cond) failures.push(msg); };
+
+  // 1) Cs-137 solve + secular equilibrium via the bridge.
+  const cs = engine.solve({ nuclides: { "Cs-137": 1.0 }, unit: "Bq" });
+  expect(cs.ok === true, "Cs-137 solve failed");
+  expect(cs.hp_recommended === false, "Cs-137 should not need HP");
+  const ev = engine.evaluate(cs.handle, { times_s: [86400.0], axis: "activity", unit: "Bq" });
+  const ratio = ev.series["Ba-137m"][0] / ev.series["Cs-137"][0];
+  expect(Math.abs(ratio - 0.94399) < 1e-3, `Cs-137 equilibrium ratio ${ratio} != 0.944`);
+
+  // 2) evaluate-many timing (solve-once cost per tick).
+  const N = 2000;
+  const grid = Array.from({ length: N }, (_, i) => 10 ** (-3 + 6 * i / (N - 1)) * 86400.0);
+  const t0 = now();
+  const sweep = engine.evaluate(cs.handle, { times_s: grid, axis: "activity", unit: "Bq" });
+  const perEvalUs = (now() - t0) / N * 1000;
+  expect(sweep.series["Cs-137"].length === N, "sweep length mismatch");
+  engine.release(cs.handle);
+
+  // 3) U-238: stiff chain flagged, DAG branches/reconverges, SF sink present.
+  const u = engine.solve({ nuclides: { "U-238": 1.0 }, unit: "Bq" });
+  expect(u.hp_recommended === true, "U-238 should recommend HP");
+  const dag = engine.chain(u.handle);
+  const ids = new Set(dag.nodes.map(n => n.id));
+  expect(ids.has("SF"), "U-238 DAG missing SF sink");
+  const intoPb210 = new Set(dag.edges.filter(e => e.target === "Pb-210").map(e => e.source));
+  expect(intoPb210.has("Po-214") && intoPb210.has("Tl-210"), "U-238 chain does not reconverge at Pb-210");
+  engine.release(u.handle);
+
+  // 4) bridge surfaces errors loudly (no fabricated fallback).
+  const bad = engine.solve({ nuclides: { "Zz-000": 1.0 }, unit: "Bq" });
+  expect(bad.ok === false && /unknown nuclide/.test(bad.error.message), "bad nuclide not surfaced");
+
+  return { failures, cs, ev, ratio, perEvalUs, u, dag };
+}
+
+async function main() {
+  const timing = {};
+  try {
+    let mark = now();
+    const pyodide = await loadPyodide({ indexURL: CDN });
+    timing.load_s = (now() - mark) / 1000;
+    log(`Pyodide ${PYODIDE_VERSION} loaded in ${timing.load_s.toFixed(2)} s`);
+
+    bannerEl.textContent = "⏳ Installing radioactivedecay via micropip…";
+    mark = now();
+    await pyodide.loadPackage("micropip");
+    await pyodide.pyimport("micropip").install("radioactivedecay");
+    timing.install_s = (now() - mark) / 1000;
+    log(`radioactivedecay installed in ${timing.install_s.toFixed(2)} s`);
+
+    bannerEl.textContent = "⏳ Loading engine/ and running bridge checks…";
+    const engine = await loadEngine(pyodide);
+    log("engine.bridge imported in Pyodide");
+
+    const r = checks(engine);
+    const ok = r.failures.length === 0;
+
+    resultsEl.innerHTML =
+      "<h2>Result</h2>" +
+      table([
+        ["Pyodide / engine load", `${timing.load_s.toFixed(2)} s + install ${timing.install_s.toFixed(2)} s`],
+        ["—", "—"],
+        ["Cs-137 closure", r.cs.nuclides.join(", ")],
+        ["Cs-137 hp_recommended", String(r.cs.hp_recommended)],
+        ["Cs-137 auto time-range (s)", `${r.cs.time_range_s[0].toExponential(2)} … ${r.cs.time_range_s[1].toExponential(2)}`],
+        ["A(Ba-137m)/A(Cs-137) @ 1 d", r.ratio.toFixed(6) + "  (expect ≈ 0.94399)"],
+        ["evaluate-many per-eval", `${r.perEvalUs.toFixed(2)} µs  (2000-point grid)`],
+        ["—", "—"],
+        ["U-238 closure size", `${r.u.n_nuclides} nuclides`],
+        ["U-238 hp_recommended", String(r.u.hp_recommended)],
+        ["U-238 DAG", `${r.dag.nodes.length} nodes, ${r.dag.edges.length} edges (incl. SF sink)`],
+      ]) +
+      (ok ? "" : `<p class="fail" style="padding:.5rem;border-radius:.4rem">Failures:<br>${r.failures.map(esc).join("<br>")}</p>`) +
+      `<details><summary>U-238 DAG JSON</summary><pre class="json">${esc(JSON.stringify(r.dag, null, 2))}</pre></details>` +
+      `<details><summary>Cs-137 solve metadata</summary><pre class="json">${esc(JSON.stringify(r.cs, null, 2))}</pre></details>`;
+
+    bannerEl.className = ok ? "pass" : "fail";
+    bannerEl.textContent = ok
+      ? `✅ M1 PASS — engine bridge runs in Pyodide (per-eval ${r.perEvalUs.toFixed(2)} µs).`
+      : "❌ M1 FAIL — see failures below.";
+    window.__M1_RESULT__ = { ok, timing, perEvalUs: r.perEvalUs, failures: r.failures };
+    window.__M1_DONE__ = true;
+  } catch (err) {
+    log("ERROR: " + (err && err.stack ? err.stack : err));
+    bannerEl.className = "fail";
+    bannerEl.textContent = "❌ M1 FAIL — exception during harness (see log).";
+    window.__M1_RESULT__ = { ok: false, error: String(err && err.stack ? err.stack : err) };
+    window.__M1_DONE__ = true;
+  }
+}
+
+const tag = document.createElement("script");
+tag.src = CDN + "pyodide.js";
+tag.onload = main;
+tag.onerror = () => {
+  bannerEl.className = "fail";
+  bannerEl.textContent = "❌ Could not load pyodide.js from the CDN (offline?).";
+  window.__M1_RESULT__ = { ok: false, error: "pyodide.js CDN load failed" };
+  window.__M1_DONE__ = true;
+};
+document.head.appendChild(tag);
+</script>
+</body>
+</html>

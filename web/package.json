@@ -1,0 +1,13 @@
+{
+  "name": "radiographer-web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "M1 in-browser engine bridge harness (Pyodide).",
+  "scripts": {
+    "harness": "node drive_browser.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.0"
+  }
+}
