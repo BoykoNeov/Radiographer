@@ -1,0 +1,40 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+*.egg-info/
+
+# --- Node / JS ---
+node_modules/
+dist/
+build/
+.parcel-cache/
+.vite/
+npm-debug.log*
+yarn-error.log*
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# --- Claude Code (commit shared CLAUDE.md / commands; ignore local-only) ---
+.claude/settings.local.json
+
+# --- Pyodide (uncomment only if you vendor the runtime instead of CDN) ---
+# pyodide/
+
+# --- Project data ---
+# The processed, bundled §7 JSON datasets ARE committed — they are the project.
+# Ignore only large RAW upstream dumps (NIST XCOM, ENSDF, ORIGEN) you process
+# into those tables.
+data/raw/
+*.tmp
