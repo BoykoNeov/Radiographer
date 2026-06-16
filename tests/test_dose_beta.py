@@ -138,16 +138,34 @@ def test_tritium_gives_zero_skin_dose():
     assert any(w.get("nuclide") == "H-3" for w in m.warnings)
 
 
-def test_skin_dose_falls_with_air_gap_and_ranges_out():
-    # Beta dose drops with source-skin distance and effectively vanishes once the air
-    # mass-thickness exceeds the beta range — the teaching contrast with γ's slow 1/d².
+def test_skin_dose_falls_monotonically_with_distance():
+    # Beta dose drops with source-skin distance: the scoring-disk solid angle f_geom(d)
+    # falls (steeply near contact, → a²/2d² far) and the air column adds absorber mass.
+    # Monotonicity is the invariant that would have caught the "0.2 cm gap → 6× increase"
+    # bug. At 2 m the fall is dominated by geometry (solid angle), not range-out.
     m = BetaSkinDoseModel(["Sr-90", "Y-90"])
     acts = {"Sr-90": 1e6, "Y-90": 1e6}
-    contact = m.dose_rate(acts, 0.0)
-    near = m.dose_rate(acts, 0.10)  # 10 cm
-    far = m.dose_rate(acts, 2.0)  # 2 m — beyond Y-90's ~0.4 g/cm² reach in air? (≈2.4 g/cm²)
-    assert contact > near > far
-    assert far < 1e-3 * contact
+    rates = [m.dose_rate(acts, d) for d in (0.0, 0.01, 0.10, 0.5, 2.0)]
+    assert all(a > b for a, b in zip(rates, rates[1:]))  # strictly decreasing
+    assert rates[-1] < 1e-3 * rates[0]  # ~1e6× geometric dilution from contact to 2 m
+
+
+def test_distance_and_cover_match_varskin_table_4_2():
+    # The ENGINE's distance+shield path (contact_dose × f_geom) — the twice-buggy physics —
+    # vs VARSKIN 5 (NUREG/CR-6918 Rev.2) Table 4-2: Sr/Y-90 point through the M1 cover
+    # (0.37 mm × 0.70 g/cm³ = 0.026 g/cm²), 1 cm², 1 h → 27.0 mGy at 0.2 cm air gap, 4.35 at
+    # 1.0 cm. M1 → pmma at matched MASS (Z is irrelevant for the beta column). The model runs
+    # ~1.5–2× VARSKIN (half-space backscatter + the air-gap approximation are high-biased,
+    # and VARSKIN sits at the low end of the ~50 %-wide beta spread); the factor-2 band is the
+    # guard, and it also catches the old "air gap increases dose" regression.
+    from engine import attenuation
+
+    t_pmma = (0.037 * 0.70) / attenuation.density("pmma")  # M1 mass as a pmma thickness (cm)
+    model = BetaSkinDoseModel(["Sr-90", "Y-90"], shield=("pmma", t_pmma))
+    acts = {"Sr-90": UCI, "Y-90": UCI}  # 1 µCi each, secular equilibrium
+    for distance_m, varskin_mGy in [(0.002, 27.0), (0.010, 4.35)]:  # 0.2 cm, 1.0 cm air gap
+        dose_mGy = model.dose_rate(acts, distance_m) * HR * 1000.0
+        assert 0.7 * varskin_mGy <= dose_mGy <= 2.3 * varskin_mGy
 
 
 def test_stable_or_non_beta_nuclide_contributes_zero():
