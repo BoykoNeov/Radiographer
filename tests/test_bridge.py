@@ -51,6 +51,54 @@ def test_full_round_trip_solve_evaluate_chain_release():
     assert "handle" in after["error"]["message"].lower()
 
 
+def test_dose_round_trip_co60_air_kerma():
+    # Solve once, then ask for a gamma dose-rate time series over the same handle.
+    res = json.loads(bridge.solve(json.dumps({"nuclides": {"Co-60": 1.0e9}, "unit": "Bq"})))
+    handle = res["handle"]
+    try:
+        out = json.loads(
+            bridge.dose(
+                handle,
+                json.dumps(
+                    {"times_s": [0.0], "quantity": "air_kerma", "distance_m": 1.0}
+                ),
+            )
+        )
+        assert out["ok"] is True
+        assert out["quantity"] == "air_kerma" and out["si_unit"] == "Gy"
+        # 1 GBq Co-60 at 1 m ≈ 0.308 mGy·m²·GBq⁻¹·h⁻¹ → ~8.5e-8 Gy/s.
+        mgy_h = out["rate_si"][0] * 1000.0 * 3600.0
+        assert mgy_h == pytest.approx(0.308, rel=0.03)
+        assert out["scoring_floor_MeV"] == 0.010
+        assert out["warnings"]  # sub-10-keV X-rays logged as skips, not errors
+    finally:
+        bridge.release(handle)
+
+
+def test_dose_no_buildup_shield_is_structured_error_not_traceback():
+    res = json.loads(bridge.solve(json.dumps({"nuclides": {"Co-60": 1.0e9}, "unit": "Bq"})))
+    handle = res["handle"]
+    try:
+        out = json.loads(
+            bridge.dose(
+                handle,
+                json.dumps(
+                    {
+                        "times_s": [0.0],
+                        "quantity": "air_kerma",
+                        "distance_m": 1.0,
+                        "shield": ["pmma", 1.0],
+                    }
+                ),
+            )
+        )
+        assert out["ok"] is False
+        assert out["error"]["type"] == "BuildupError"
+        assert out["error"]["traceback"] is None  # expected domain error, no traceback
+    finally:
+        bridge.release(handle)
+
+
 def test_hp_recommended_flag_surfaces_for_stiff_chain():
     res = json.loads(bridge.solve(json.dumps({"nuclides": {"U-238": 1.0}, "unit": "Bq"})))
     assert res["hp_recommended"] is True

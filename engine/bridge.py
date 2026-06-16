@@ -16,8 +16,26 @@ import json
 import secrets
 import traceback
 
+from engine.attenuation import AttenuationError
+from engine.buildup import BuildupError
 from engine.chain import build_dag
+from engine.conversion import ConversionError
+from engine.dose import DoseError, GammaDoseModel
+from engine.emissions import EmissionsError
 from engine.inventory import EngineError, SolvedInventory
+from engine.photon_interp import OffGridError
+
+#: Expected, structured domain errors — surfaced loudly but without a traceback (the
+#: message is the contract). An *un*expected exception still carries its traceback.
+_EXPECTED_ERRORS = (
+    EngineError,
+    DoseError,
+    OffGridError,
+    AttenuationError,
+    BuildupError,
+    ConversionError,
+    EmissionsError,
+)
 
 _REGISTRY: dict[str, SolvedInventory] = {}
 
@@ -33,8 +51,8 @@ def _err(exc: Exception) -> str:
             "error": {
                 "type": type(exc).__name__,
                 "message": str(exc),
-                # full traceback only for unexpected (non-EngineError) failures
-                "traceback": None if isinstance(exc, EngineError) else traceback.format_exc(),
+                # full traceback only for unexpected (non-domain) failures
+                "traceback": None if isinstance(exc, _EXPECTED_ERRORS) else traceback.format_exc(),
             },
         }
     )
@@ -83,6 +101,33 @@ def chain(handle: str) -> str:
     try:
         return _ok(build_dag(_get(handle)))
     except Exception as exc:  # noqa: BLE001
+        return _err(exc)
+
+
+def dose(handle: str, request_json: str) -> str:
+    """``{"times_s":[...], "quantity":"ambient_H10", "distance_m":1.0,
+        "shield":["lead",2.0] | null, "medium":"air", "geometry":null}`` ->
+    ``{ok, quantity, si_unit, per, times_s, distance_m, rate_si, scoring_floor_MeV,
+       warnings}``.
+
+    The §6 gamma dose-rate over a whole time grid, the §3 "solve once, evaluate many" way:
+    one Bateman solve (the handle), one ``GammaDoseModel`` (the per-nuclide dose coefficients
+    ``C_n``), one matvec against the activity series. The slider scrubs the returned array
+    client-side — no per-tick re-solve, no per-tick line summation."""
+    try:
+        req = json.loads(request_json)
+        solved = _get(handle)
+        activities = solved.evaluate(req["times_s"], axis="activity", unit="Bq")
+        shield = req.get("shield")
+        model = GammaDoseModel(
+            solved.names,
+            req.get("quantity", "ambient_H10"),
+            medium=req.get("medium", "air"),
+            shield=tuple(shield) if shield else None,
+            geometry=req.get("geometry"),
+        )
+        return _ok(model.dose_rate_series(activities, float(req["distance_m"])))
+    except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
         return _err(exc)
 
 

@@ -234,10 +234,12 @@ De-risk foundation and data before UI.
 ## 11. Honesty register — surface these in-app
 
 - **Not for real radiation-safety decisions.** Educational/reference only; real work needs validated codes + a qualified health physicist.
-- **Point source only (v1).** Self-absorption and finite-source geometry are not modelled; results degrade for large/dense sources.
+- **Point source only (v1).** Self-absorption and finite-source geometry are not modelled; results degrade for large/dense sources. **No intervening-medium (air) attenuation** between source and detector either — exact for penetrating gammas (662 keV transmits ~99 % through 1 m of air) but it means soft photons are not removed by the air path. v1 instead applies the 10 keV scoring floor below (a possible future refinement: model the air path explicitly, more precise for soft-photon sources at varying distances).
+- **10 keV dose-scoring floor δ (gamma, M3).** Photon lines below 10 keV are dropped from the dose sum (logged, never silent) for *all* quantities — this is the low-energy cutoff that defines the air-kerma-rate constant Γ_δ and reflects that sub-10-keV photons don't penetrate to a detector at distance. Distinct from the 1 keV attenuation-table floor (which only bounds shield μ look-ups for already-scored ≥10 keV lines).
+- **Gamma buildup uses the air-kerma (exposure) B for all three quantities (M3).** The ANS-6.4.3 exposure buildup factor is applied to H\*(10) and effective dose as well as air kerma — a documented approximation (the buildup of dose-equivalent ≠ that of air-kerma).
 - **Beta dose ≈ ±20–30%.**
 - **Neutron source terms are tabulated**, not derived; only available for prebuilt sources in v1.
-- **Layered-shield buildup uses an approximation** — name which one in tooltips.
+- **Layered-shield buildup uses an approximation** — name which one in tooltips. *(v1 ships single-layer shields only; the layered approximation is chosen before the multi-layer UI lands — §6.4 OPEN.)*
 - **H\*(10) and effective dose are different quantities** computed differently; don't compare directly.
 - **First load is heavy** (WASM scientific stack) — expected, not a bug.
 
@@ -254,7 +256,7 @@ De-risk foundation and data before UI.
 ## 13. Open decisions to resolve
 
 1. ~~uPlot vs Plotly / Cytoscape vs d3.~~ **RESOLVED:** **Plotly.js** (curves) + **Cytoscape.js** (DAG). Reasoning in §4. Also locked (all in §9): live (time-driven) DAG with switchable dagre + (N, Z) layouts; chart-of-nuclides folded into the chain view; one shared color per species across all views; prominent on-plot axis toggle (Atoms · Mass · Activity, default Activity); **time control** = single log slider, auto-ranged per inventory with half-life tick marks, numeric entry, **definable t=0 / source-age** (unified with spent-fuel cooling time), and an animate button that sweeps log-time via successive *evaluations* (not re-solves); **dose breakdown** = linear stacked bar default + grouped-log-bar toggle, live; **uncertainty** shown as fill bands on curves and whiskers on the grouped view (per-modality registers γ/β/n); **log-axis flooring** at ~12–15 decades below peak, per axis-mode, with a linear-axis option.
-2. **Layered-shield buildup approximation** (last-layer vs Harima–Kitazume).
+2. **Layered-shield buildup approximation** (last-layer vs Harima–Kitazume). **DEFERRED at M3** (see `docs/plans/M3-gamma-dose.md`): the gamma core ships **single-layer** shields only, where buildup is unambiguous; this choice is needed before the multi-layer shield UI (M6) lands, not before. Still OPEN.
 3. **Effective-dose default geometry** (ISO vs AP).
 4. **Spent-fuel (enrichment, burnup) grid** to ship.
 5. **"Bomb fragment" definitions** — confirm shipping both pit and fallout variants.
