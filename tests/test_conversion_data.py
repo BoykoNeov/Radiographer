@@ -41,9 +41,15 @@ CANON = ROOT / "data" / "conversion"
 
 EFFECTIVE_SRC = VENDOR / "icrp116_photons.txt"
 AMBIENT_SRC = VENDOR / "icrp74_photons_H10.txt"
+EFFECTIVE_SRC_N = VENDOR / "icrp116_neutrons.txt"
+AMBIENT_SRC_N = VENDOR / "icrp74_neutrons_H10.txt"
 
 GEOMETRIES = ("AP", "PA", "LLAT", "RLAT", "ROT", "ISO")
-REQUIRED = {"hstar10"} | {f"effective_{g}" for g in GEOMETRIES}
+REQUIRED = (
+    {"hstar10", "hstar10_neutron"}
+    | {f"effective_{g}" for g in GEOMETRIES}
+    | {f"effective_neutron_{g}" for g in GEOMETRIES}
+)
 ALL = sorted(p.stem for p in CANON.glob("*.json"))
 
 # --------------------------------------------------------------------------- #
@@ -271,3 +277,96 @@ def test_accessor_helpers_agree_with_load():
     assert (e1, c1) == (cv.energies("ambient_H10"), cv.coefficients_pSv_cm2("ambient_H10"))
     e2, c2 = cv.effective("AP")
     assert (e2, c2) == (cv.energies("effective", "AP"), cv.coefficients_pSv_cm2("effective", "AP"))
+
+
+# =========================================================================== #
+# NEUTRON (M5) — the same four pillars on the particle="neutron" tables.
+# The neutron effective table is CLEAN (blob-SHA == OpenMC tree); the neutron H*(10) table
+# is the DEGRADED unmerged-PR transcription. Transform integrity proves canonical == vendored
+# here; faithfulness of the H*(10) values to true ICRP-74 is the M5 ISO-8529 spectrum-averaged
+# triangle in tests/test_dose_neutron.py (the independent cross-check for the degraded table).
+# =========================================================================== #
+
+def test_neutron_effective_schema_and_sanity():
+    for g in GEOMETRIES:
+        d = cv.load("effective", g, "neutron")     # validates version/quantity/geom/units/particle
+        assert d["particle"] == "neutron"
+        e, c = d["E_MeV"], d["coeff_pSv_cm2"]
+        assert e == sorted(e) and len(set(e)) == len(e), f"{g}: E not strictly ascending"
+        # Neutron effective grid spans thermal (1e-9 MeV) → 10 GeV.
+        assert e[0] == pytest.approx(1e-9) and e[-1] == pytest.approx(10000.0), f"{g}: grid bounds"
+        for ei, ci in zip(e, c):
+            assert math.isfinite(ei) and ei > 0
+            assert math.isfinite(ci) and ci > 0
+
+
+def test_neutron_ambient_schema_and_sanity():
+    d = cv.load("ambient_H10", None, "neutron")
+    assert d["geometry"] is None and d["particle"] == "neutron"
+    e, c = d["E_MeV"], d["coeff_pSv_cm2"]
+    assert e == sorted(e) and len(set(e)) == len(e)
+    # Neutron H*(10) grid: thermal (1e-9 MeV) → 20 MeV (the ICRP-74 neutron end, below the
+    # 10 GeV effective end — the off-grid contract differs by particle, enforced by the engine).
+    assert e[0] == pytest.approx(1e-9) and e[-1] == pytest.approx(20.0), "neutron H*(10) grid 1e-9–20 MeV"
+    for ei, ci in zip(e, c):
+        assert math.isfinite(ei) and ei > 0
+        assert math.isfinite(ci) and ci > 0
+
+
+def test_neutron_effective_rows_match_independent_parse():
+    indep = _independent_table(EFFECTIVE_SRC_N)     # cols: E, AP, PA, LLAT, RLAT, ROT, ISO
+    e_indep = indep[:, 0]
+    for gi, g in enumerate(GEOMETRIES, start=1):
+        d = cv.load("effective", g, "neutron")
+        assert np.array_equal(d["E_MeV"], e_indep), f"{g}: neutron energy grid drift"
+        assert np.array_equal(d["coeff_pSv_cm2"], indep[:, gi]), (
+            f"{g}: neutron canonical coeffs differ from independent parse"
+        )
+
+
+def test_neutron_ambient_rows_match_independent_parse():
+    indep = _independent_table(AMBIENT_SRC_N)       # cols: E, H*(10)/Φ
+    d = cv.load("ambient_H10", None, "neutron")
+    assert np.array_equal(d["E_MeV"], indep[:, 0]), "neutron H*(10): energy grid drift"
+    assert np.array_equal(d["coeff_pSv_cm2"], indep[:, 1]), (
+        "neutron H*(10): canonical coeffs differ from independent parse"
+    )
+
+
+def test_particle_isolation():
+    """Photon and neutron are distinct datasets; the embedded particle field guards mixing."""
+    assert cv.energies("ambient_H10") != cv.energies("ambient_H10", None, "neutron")
+    assert cv.energies("effective", "AP") != cv.energies("effective", "AP", "neutron")
+    with pytest.raises(cv.ConversionError):
+        cv.load("ambient_H10", None, "muon")        # unknown particle
+
+
+def test_golden_neutron_h10_dip_and_fast_rise():
+    """The neutron H*(10)/Φ signature: an epithermal hump (~0.5 eV), a valley minimum in the
+    ~1–5 keV "neutron dip", a steep monotone climb to a broad ~1 MeV plateau, with fast
+    neutrons scoring tens of times higher than thermal (the w_R(E) weighting baked into the
+    coefficient). This qualitative shape distinguishes the neutron table from the photon one
+    and catches a column/particle mix-up — without asserting memorized values (faithfulness of
+    the degraded H*(10) table to true ICRP-74 is the ISO-8529 triangle's job).
+    """
+    e, h = cv.ambient_h10("neutron")
+
+    def _at(energy: float) -> float:
+        return h[min(range(len(e)), key=lambda i: abs(e[i] - energy))]
+
+    # The intermediate "neutron dip": the local minimum between the epithermal hump and the
+    # fast rise. Search the intermediate window (excludes the thermal-floor global min at 1e-9).
+    window = [(ei, hi) for ei, hi in zip(e, h) if 5e-5 <= ei <= 1e-2]
+    dip_e, dip_h = min(window, key=lambda t: t[1])
+    assert 1e-3 <= dip_e <= 5e-3, f"neutron H*(10) dip at {dip_e} MeV (expected ~1–5 keV)"
+
+    # Epithermal hump sits above both the dip and the thermal point.
+    assert _at(5e-7) > _at(2.53e-8) > dip_h, "epithermal hump > thermal > keV dip"
+
+    # Steep monotone climb from the dip up to the ~1 MeV plateau.
+    climb = [hi for ei, hi in zip(e, h) if dip_e <= ei <= 1.0]
+    assert all(climb[i] < climb[i + 1] for i in range(len(climb) - 1)), "monotone dip → 1 MeV"
+
+    # Fast neutrons score far above thermal and the dip.
+    assert _at(1.0) > 20 * _at(2.53e-8), "fast ≫ thermal"
+    assert _at(1.0) > 30 * dip_h, "fast ≫ dip"

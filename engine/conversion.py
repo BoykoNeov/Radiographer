@@ -50,6 +50,9 @@ SCHEMA_VERSION = 1
 GEOMETRIES: tuple[str, ...] = ("AP", "PA", "LLAT", "RLAT", "ROT", "ISO")
 #: Supported dose quantities.
 QUANTITIES: tuple[str, ...] = ("ambient_H10", "effective")
+#: Supported particles. ``photon`` (M2) and ``neutron`` (M5) share the schema; neutron files
+#: carry a ``_neutron`` filename suffix and a wider energy grid (thermal 1e-9 MeV upward).
+PARTICLES: tuple[str, ...] = ("photon", "neutron")
 
 _DEFAULT_ROOT = Path(__file__).resolve().parents[1] / "data" / "conversion"
 _data_root = _DEFAULT_ROOT
@@ -70,21 +73,30 @@ def data_root() -> Path:
     return _data_root
 
 
-def _filename(quantity: str, geometry: str | None) -> str:
-    """Canonical filename for a (quantity, geometry) pair, validating the combination."""
+def _filename(quantity: str, geometry: str | None, particle: str) -> str:
+    """Canonical filename for a (quantity, geometry, particle) triple, validating it.
+
+    Neutron files carry a ``_neutron`` suffix (``hstar10_neutron.json``,
+    ``effective_neutron_AP.json``); photon files keep the original unsuffixed names so every
+    M2-era call site is unaffected. This MUST stay in sync with
+    ``data/build/build_conversion.py``.
+    """
+    if particle not in PARTICLES:
+        raise ConversionError(f"unknown particle {particle!r} (expected one of {PARTICLES})")
+    suffix = "" if particle == "photon" else "_neutron"
     if quantity == "ambient_H10":
         if geometry is not None:
             raise ConversionError(
                 "ambient_H10 (H*(10)) is an operational quantity with no geometry; "
                 f"got geometry={geometry!r}. Geometry applies only to effective dose."
             )
-        return "hstar10.json"
+        return f"hstar10{suffix}.json"
     if quantity == "effective":
         if geometry not in GEOMETRIES:
             raise ConversionError(
                 f"effective dose requires a geometry in {GEOMETRIES}; got {geometry!r}"
             )
-        return f"effective_{geometry}.json"
+        return f"effective{suffix}_{geometry}.json"
     raise ConversionError(f"unknown dose quantity {quantity!r} (expected one of {QUANTITIES})")
 
 
@@ -93,19 +105,19 @@ def available() -> set[str]:
     return {p.stem for p in _data_root.glob("*.json")}
 
 
-def has(quantity: str, geometry: str | None = None) -> bool:
-    return (_data_root / _filename(quantity, geometry)).is_file()
+def has(quantity: str, geometry: str | None = None, particle: str = "photon") -> bool:
+    return (_data_root / _filename(quantity, geometry, particle)).is_file()
 
 
 @lru_cache(maxsize=None)
-def load(quantity: str, geometry: str | None = None) -> dict:
+def load(quantity: str, geometry: str | None = None, particle: str = "photon") -> dict:
     """Load and validate one canonical conversion record."""
-    name = _filename(quantity, geometry)
+    name = _filename(quantity, geometry, particle)
     path = _data_root / name
     if not path.is_file():
         raise ConversionError(
             f"no conversion data for quantity={quantity!r} geometry={geometry!r} "
-            f"(expected {path}); run `python data/build/build_conversion.py`"
+            f"particle={particle!r} (expected {path}); run `python data/build/build_conversion.py`"
         )
     data = json.loads(path.read_text(encoding="utf-8"))
     if data.get("schema_version") != SCHEMA_VERSION:
@@ -121,8 +133,10 @@ def load(quantity: str, geometry: str | None = None) -> dict:
         raise ConversionError(
             f"{name}: embedded geometry {data.get('geometry')!r} != {geometry!r}"
         )
-    if data.get("particle") != "photon":
-        raise ConversionError(f"{name}: unexpected particle {data.get('particle')!r}")
+    if data.get("particle") != particle:
+        raise ConversionError(
+            f"{name}: embedded particle {data.get('particle')!r} != {particle!r}"
+        )
     if data.get("units") != "pSv_cm2":
         raise ConversionError(f"{name}: unexpected units {data.get('units')!r}")
     e = data.get("E_MeV")
@@ -134,23 +148,25 @@ def load(quantity: str, geometry: str | None = None) -> dict:
     return data
 
 
-def energies(quantity: str, geometry: str | None = None) -> list[float]:
-    """Photon energy grid (MeV), ascending, for this quantity/geometry."""
-    return load(quantity, geometry)["E_MeV"]
+def energies(quantity: str, geometry: str | None = None, particle: str = "photon") -> list[float]:
+    """Energy grid (MeV), ascending, for this quantity/geometry/particle."""
+    return load(quantity, geometry, particle)["E_MeV"]
 
 
-def coefficients_pSv_cm2(quantity: str, geometry: str | None = None) -> list[float]:
+def coefficients_pSv_cm2(
+    quantity: str, geometry: str | None = None, particle: str = "photon"
+) -> list[float]:
     """Dose-per-fluence coefficients (pSv·cm²), aligned to :func:`energies`."""
-    return load(quantity, geometry)["coeff_pSv_cm2"]
+    return load(quantity, geometry, particle)["coeff_pSv_cm2"]
 
 
-def ambient_h10() -> tuple[list[float], list[float]]:
+def ambient_h10(particle: str = "photon") -> tuple[list[float], list[float]]:
     r"""``(E_MeV, h*(10)/Φ)`` for ambient dose equivalent H\*(10) (ICRP-74/ICRU-57)."""
-    d = load("ambient_H10")
+    d = load("ambient_H10", None, particle)
     return d["E_MeV"], d["coeff_pSv_cm2"]
 
 
-def effective(geometry: str) -> tuple[list[float], list[float]]:
+def effective(geometry: str, particle: str = "photon") -> tuple[list[float], list[float]]:
     """``(E_MeV, e/Φ)`` for effective dose E in the given geometry (ICRP-116)."""
-    d = load("effective", geometry)
+    d = load("effective", geometry, particle)
     return d["E_MeV"], d["coeff_pSv_cm2"]

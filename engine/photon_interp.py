@@ -118,16 +118,22 @@ def interp_muen_rho(material: str, E_MeV: float) -> float:
     return _interp_attenuation(material, _att.muen_rho(material), E_MeV)
 
 
-def interp_conversion(quantity: str, E_MeV: float, geometry: str | None = None) -> float:
+def interp_conversion(
+    quantity: str, E_MeV: float, geometry: str | None = None, particle: str = "photon"
+) -> float:
     """Fluence-to-dose coefficient (pSv·cm²) at ``E_MeV``, log–log.
 
-    ``quantity`` is ``ambient_H10`` or ``effective`` (the latter needs a ``geometry``).
-    These coefficients are smooth in energy (no edges), but the floors/ends differ by
-    quantity — H*(10) ends at 10 MeV, effective runs to 10 GeV.
+    ``quantity`` is ``ambient_H10`` or ``effective`` (the latter needs a ``geometry``);
+    ``particle`` is ``photon`` (default, M2) or ``neutron`` (M5). These coefficients are
+    smooth in energy (no edges), but the floors/ends differ by quantity/particle — photon
+    H*(10) ends at 10 MeV and effective at 10 GeV; neutron H*(10) ends at 20 MeV and
+    effective at 10 GeV, both flooring at the thermal 1e-9 MeV grid start. The off-grid
+    contract (BELOW_FLOOR / ABOVE_GRID) is enforced from the grid endpoints, so it adapts to
+    the particle automatically.
     """
-    e_grid = _conv.energies(quantity, geometry)
-    coeffs = _conv.coefficients_pSv_cm2(quantity, geometry)
-    label = quantity if geometry is None else f"{quantity}/{geometry}"
+    e_grid = _conv.energies(quantity, geometry, particle)
+    coeffs = _conv.coefficients_pSv_cm2(quantity, geometry, particle)
+    label = f"{particle}/{quantity}" if geometry is None else f"{particle}/{quantity}/{geometry}"
     _check_bounds(f"conversion/{label}", E_MeV, e_grid[0], e_grid[-1])
     return _loglog_on_grid(e_grid, coeffs, E_MeV)
 
