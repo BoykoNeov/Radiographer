@@ -11,16 +11,18 @@
 |---|---|
 | `emissions/<Nuclide>.json` | **Canonical** per-nuclide emission spectra (this project's schema). Generated; committed. |
 | `attenuation/<material>.json` | **Canonical** per-material μ/ρ & μ_en/ρ vs energy (this project's schema). Generated; committed. |
+| `buildup/<material>.json` | **Canonical** per-material G-P (exposure) buildup coefficients (this project's schema). Generated; committed. |
 | `vendor/icrp107/` | Raw upstream ICRP-107 JSON, vendored verbatim. See `vendor/PROVENANCE.md`. |
 | `vendor/nist_xraymac/` | Raw upstream NIST H&S pages, vendored verbatim. See `vendor/nist_xraymac/PROVENANCE.md`. |
+| `vendor/ans643/` | NUREG/CR-5740 PDF (public-domain ANS-6.4.3 buildup source) + hand-keyed transcription + B-value spot-checks. See `vendor/ans643/PROVENANCE.md`. |
 | `vendor/MANIFEST.sha256`, `vendor/nist_xraymac/MANIFEST.sha256` | Per-file hashes of each vendored source (drift guard). |
-| `build/build_emissions.py`, `build/build_attenuation.py` | Transforms: `vendor/…` → `emissions/` / `attenuation/`. Dev-time only. |
+| `build/build_emissions.py`, `build/build_attenuation.py`, `build/build_buildup.py` | Transforms: `vendor/…` → `emissions/` / `attenuation/` / `buildup/`. Dev-time only. |
 | `build/fetch_nist_xraymac.py` | One-time acquisition of the NIST pages (verbatim). Dev-time only. |
 | `LICENSE.ICRP-07` | The license governing the emission data (see below). |
 
-Datasets still to land in M2 (§7): G-P buildup (ANS-6.4.3/Harima), H\*(10) &
-effective-dose conversion coefficients, neutron source terms + fluence-to-dose,
-spent-fuel discharge vectors. (Emissions ✅, attenuation ✅.)
+Datasets still to land in M2 (§7): H\*(10) & effective-dose conversion coefficients,
+neutron source terms + fluence-to-dose, spent-fuel discharge vectors.
+(Emissions ✅, attenuation ✅, G-P buildup ✅.)
 
 ## Emissions — canonical schema (`schema_version: 1`)
 
@@ -101,12 +103,52 @@ independent re-evaluation of the underlying physics (none exists; H&S is the fie
 standard). HVL goldens here are **narrow-beam** (ln2/μ); published *broad-beam*
 HVL/TVL include buildup and are validated in M3.
 
+## Buildup — canonical schema (`schema_version: 1`)
+
+```jsonc
+{
+  "schema_version": 1,
+  "material": "lead",
+  "name": "Lead",
+  "response": "exposure",            // air-kerma; point-isotropic source, infinite medium
+  "source": "ANSI/ANS-6.4.3-1991 via NUREG/CR-5740 (Trubey 1991), G-P exposure buildup",
+  "E_MeV": [ 0.03, …, 15.0 ],        // ASCENDING; per-material grid (high-Z OMIT 0.015/0.020)
+  "gp": [ { "b": …, "c": …, "a": …, "Xk": …, "d": … }, … ]   // Harima G-P, aligned to E_MeV
+}
+```
+
+The buildup factor `B(E, x)` (x = depth in mean free paths) corrects the point-kernel for
+scattered photons: `I = I₀·B·e^(−μx)` (§6.5). Reconstructed from the five G-P coefficients
+(see `engine/buildup.py`); `B(0)=1`, `B(1 mfp)=b`. Materials: shields `lead, tungsten,
+iron, copper, aluminium, concrete` + media `water, air`. **PMMA, polyethylene, soft tissue
+have NO ANS-6.4.3 buildup** — their absence is the honest contract; the M3 dose engine
+handles it loudly, never with a silent surrogate.
+
+Design choices (M2 review — `docs/plans/M2-buildup.md`):
+
+- **Degraded provenance.** No clean machine-readable ANS-6.4.3 source exists, so the
+  values are **hand-keyed (double-entered)** from the public-domain NUREG/CR-5740 scan; the
+  verbatim re-parse integrity model (NIST/ICRP) does not apply here. See
+  `vendor/ans643/PROVENANCE.md` for the trust boundary.
+- **Exposure response only** (v1); the report's energy-absorption table is not transcribed.
+- **Per-material energy grid.** High-Z (lead) starts at 0.03 MeV; the build stores each
+  material's own grid. **No energy interpolation in the loader** — that (and the 15 keV /
+  15 MeV bound handling) is the **M3** dose engine's job, like the attenuation interpolator.
+
+### ⚠️ Trust boundary (honesty)
+Faithfulness is enforced by reconstruction: the coefficients reproduce the report's *own*
+Table 3 exposure B-values to **≤ 2.6% for all 8 materials** (37 anchors). **Iron** is
+additionally matched against an independent open-access tabulation (EPJ 2016, CC-BY) at 5
+energies. Beyond the anchored (E, mfp) points, the rest of each table is trusted to the
+double-entered transcription (mirrors the emissions golden-nuclide boundary).
+
 ## Rebuilding & validating
 
 ```sh
 python data/build/build_emissions.py        # vendor → emissions (idempotent)
 python data/build/build_attenuation.py      # vendor → attenuation (idempotent)
-python -m pytest tests/test_emissions_data.py tests/test_attenuation_data.py
+python data/build/build_buildup.py          # vendor → buildup (idempotent)
+python -m pytest tests/test_emissions_data.py tests/test_attenuation_data.py tests/test_buildup_data.py
 ```
 
 The build fails loudly on any structural surprise (unknown category, bad row,

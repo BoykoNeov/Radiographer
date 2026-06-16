@@ -1,0 +1,51 @@
+{
+  "_comment": "Spot-check exposure buildup-factor VALUES B(E, x) transcribed from NUREG/CR-5740 Table 3 (Exposure Buildup Factors), for the WITHIN-SOURCE reconstruction test (tests/test_buildup_data.py). These are an INDEPENDENT representation in the report (the moments-method/PALLAS data the G-P coefficients were FIT to), so reconstructing B from the transcribed coefficients and matching these catches systematic transcription errors (c<->a column swap, kerma/exposure mixup, formula bug) and validates the evaluator M3 will use. x = penetration depth in mean free paths. Tolerance must accommodate the GP fit residual (the report's tabulated Max.Dev, up to ~5% for lead/iron at high E) plus scan-reading error -- this is a gross/systematic-error catch, not a 1% check. Z-spanning: water (low-Z), iron (mid-Z, also coefficient-cross-checked vs EPJ), lead (high-Z, pair-production upturn).",
+  "source": "NUREG/CR-5740 (Trubey 1991) Table 3, Exposure Buildup Factors",
+  "points": [
+    {"material": "water", "pdf_page": 67, "E_MeV": 2.0, "mfp": 2.0,  "B": 2.81},
+    {"material": "water", "pdf_page": 67, "E_MeV": 2.0, "mfp": 4.0,  "B": 4.98},
+    {"material": "water", "pdf_page": 67, "E_MeV": 2.0, "mfp": 7.0,  "B": 8.65},
+    {"material": "water", "pdf_page": 67, "E_MeV": 2.0, "mfp": 10.0, "B": 12.7},
+    {"material": "water", "pdf_page": 67, "E_MeV": 3.0, "mfp": 4.0,  "B": 4.00},
+    {"material": "water", "pdf_page": 67, "E_MeV": 3.0, "mfp": 10.0, "B": 8.97},
+    {"material": "water", "pdf_page": 67, "E_MeV": 1.5, "mfp": 4.0,  "B": 5.88},
+    {"material": "water", "pdf_page": 67, "E_MeV": 1.5, "mfp": 10.0, "B": 16.7},
+
+    {"material": "iron", "pdf_page": 58, "E_MeV": 2.0, "mfp": 2.0,  "B": 2.49},
+    {"material": "iron", "pdf_page": 58, "E_MeV": 2.0, "mfp": 4.0,  "B": 4.25},
+    {"material": "iron", "pdf_page": 58, "E_MeV": 2.0, "mfp": 6.0,  "B": 6.25},
+    {"material": "iron", "pdf_page": 58, "E_MeV": 2.0, "mfp": 10.0, "B": 10.8},
+    {"material": "iron", "pdf_page": 58, "E_MeV": 1.5, "mfp": 4.0,  "B": 4.65},
+    {"material": "iron", "pdf_page": 58, "E_MeV": 6.0, "mfp": 4.0,  "B": 2.76},
+    {"material": "iron", "pdf_page": 58, "E_MeV": 6.0, "mfp": 10.0, "B": 6.18},
+
+    {"material": "lead", "pdf_page": 65, "E_MeV": 2.0,  "mfp": 2.0,  "B": 1.76},
+    {"material": "lead", "pdf_page": 65, "E_MeV": 2.0,  "mfp": 4.0,  "B": 2.47},
+    {"material": "lead", "pdf_page": 65, "E_MeV": 2.0,  "mfp": 6.0,  "B": 3.20},
+    {"material": "lead", "pdf_page": 65, "E_MeV": 2.0,  "mfp": 10.0, "B": 4.76},
+    {"material": "lead", "pdf_page": 65, "E_MeV": 1.5,  "mfp": 4.0,  "B": 2.34},
+    {"material": "lead", "pdf_page": 65, "E_MeV": 6.0,  "mfp": 4.0,  "B": 2.51},
+    {"material": "lead", "pdf_page": 65, "E_MeV": 6.0,  "mfp": 10.0, "B": 6.64},
+    {"material": "lead", "pdf_page": 65, "E_MeV": 15.0, "mfp": 10.0, "B": 32.8},
+
+    {"material": "aluminium", "pdf_page": 51, "E_MeV": 2.0, "mfp": 2.0, "B": 2.66},
+    {"material": "aluminium", "pdf_page": 51, "E_MeV": 2.0, "mfp": 4.0, "B": 4.64},
+    {"material": "aluminium", "pdf_page": 51, "E_MeV": 2.0, "mfp": 8.0, "B": 9.28},
+
+    {"material": "copper", "pdf_page": 59, "E_MeV": 2.0, "mfp": 2.0, "B": 2.46},
+    {"material": "copper", "pdf_page": 59, "E_MeV": 2.0, "mfp": 4.0, "B": 4.17},
+    {"material": "copper", "pdf_page": 59, "E_MeV": 2.0, "mfp": 8.0, "B": 8.24},
+
+    {"material": "tungsten", "pdf_page": 64, "E_MeV": 2.0,  "mfp": 2.0, "B": 1.88},
+    {"material": "tungsten", "pdf_page": 64, "E_MeV": 2.0,  "mfp": 4.0, "B": 2.73},
+    {"material": "tungsten", "pdf_page": 64, "E_MeV": 15.0, "mfp": 4.0, "B": 4.55},
+
+    {"material": "concrete", "pdf_page": 69, "E_MeV": 2.0, "mfp": 2.0, "B": 2.65},
+    {"material": "concrete", "pdf_page": 69, "E_MeV": 2.0, "mfp": 4.0, "B": 4.61},
+    {"material": "concrete", "pdf_page": 69, "E_MeV": 2.0, "mfp": 8.0, "B": 9.18},
+
+    {"_note": "Air anchors come from the report's AIR EXPOSURE B-table (p68) -- validating that air's coefficients (taken from its energy-absorption table, the only one given) reproduce the air EXPOSURE B-values. They do (B(1mfp,2MeV)=1.83=b), confirming exposure==energy-absorption for the air medium.",
+     "material": "air", "pdf_page": 68, "E_MeV": 2.0, "mfp": 2.0, "B": 2.81},
+    {"material": "air", "pdf_page": 68, "E_MeV": 2.0, "mfp": 4.0, "B": 4.96}
+  ]
+}
