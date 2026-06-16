@@ -12,17 +12,19 @@
 | `emissions/<Nuclide>.json` | **Canonical** per-nuclide emission spectra (this project's schema). Generated; committed. |
 | `attenuation/<material>.json` | **Canonical** per-material μ/ρ & μ_en/ρ vs energy (this project's schema). Generated; committed. |
 | `buildup/<material>.json` | **Canonical** per-material G-P (exposure) buildup coefficients (this project's schema). Generated; committed. |
+| `conversion/{hstar10,effective_<geom>}.json` | **Canonical** photon fluence-to-dose coefficients — H\*(10) + effective dose per geometry (this project's schema). Generated; committed. |
 | `vendor/icrp107/` | Raw upstream ICRP-107 JSON, vendored verbatim. See `vendor/PROVENANCE.md`. |
 | `vendor/nist_xraymac/` | Raw upstream NIST H&S pages, vendored verbatim. See `vendor/nist_xraymac/PROVENANCE.md`. |
 | `vendor/ans643/` | NUREG/CR-5740 PDF (public-domain ANS-6.4.3 buildup source) + hand-keyed transcription + B-value spot-checks. See `vendor/ans643/PROVENANCE.md`. |
-| `vendor/MANIFEST.sha256`, `vendor/nist_xraymac/MANIFEST.sha256` | Per-file hashes of each vendored source (drift guard). |
-| `build/build_emissions.py`, `build/build_attenuation.py`, `build/build_buildup.py` | Transforms: `vendor/…` → `emissions/` / `attenuation/` / `buildup/`. Dev-time only. |
+| `vendor/openmc_dose/` | OpenMC dose tables: ICRP-116 effective dose (verbatim) + ICRP-74 H\*(10) (unmerged PR). See `vendor/openmc_dose/PROVENANCE.md`. |
+| `vendor/MANIFEST.sha256`, `vendor/nist_xraymac/MANIFEST.sha256`, `vendor/openmc_dose/MANIFEST.sha256` | Per-file hashes of each vendored source (drift guard). |
+| `build/build_emissions.py`, `build/build_attenuation.py`, `build/build_buildup.py`, `build/build_conversion.py` | Transforms: `vendor/…` → `emissions/` / `attenuation/` / `buildup/` / `conversion/`. Dev-time only. |
 | `build/fetch_nist_xraymac.py` | One-time acquisition of the NIST pages (verbatim). Dev-time only. |
 | `LICENSE.ICRP-07` | The license governing the emission data (see below). |
 
-Datasets still to land in M2 (§7): H\*(10) & effective-dose conversion coefficients,
-neutron source terms + fluence-to-dose, spent-fuel discharge vectors.
-(Emissions ✅, attenuation ✅, G-P buildup ✅.)
+Datasets still to land in M2 (§7): neutron source terms + neutron fluence-to-dose,
+spent-fuel discharge vectors.
+(Emissions ✅, attenuation ✅, G-P buildup ✅, H\*(10) & effective-dose conversion ✅.)
 
 ## Emissions — canonical schema (`schema_version: 1`)
 
@@ -142,13 +144,69 @@ additionally matched against an independent open-access tabulation (EPJ 2016, CC
 energies. Beyond the anchored (E, mfp) points, the rest of each table is trusted to the
 double-entered transcription (mirrors the emissions golden-nuclide boundary).
 
+## Conversion — canonical schema (`schema_version: 1`)
+
+```jsonc
+// conversion/hstar10.json   — ambient dose equivalent H*(10), ICRP-74/ICRU-57
+// conversion/effective_<GEOM>.json — effective dose E, ICRP-116 (GEOM ∈ AP PA LLAT RLAT ROT ISO)
+{
+  "schema_version": 1,
+  "quantity": "ambient_H10",     // ambient_H10 | effective
+  "particle": "photon",
+  "geometry": null,              // null for H*(10); one of the 6 for effective
+  "units": "pSv_cm2",            // dose per fluence (pSv · cm²)
+  "source": "ICRP-74 (1996)/ICRU-57 …; via OpenMC (MIT)",
+  "E_MeV": [ 0.01, …, 10.0 ],    // ASCENDING; H*(10) 0.01–10 MeV, effective 0.01 MeV–10 GeV
+  "coeff_pSv_cm2": [ … ]         // aligned to E_MeV
+}
+```
+
+Photon **fluence-to-dose** coefficients closing the §6 dose chain: `H*(10) = Σ Φ_i ·
+h*(10)/Φ(E_i)` (operational, §6.4 default) or `E = Σ Φ_i · e/Φ(E_i, geometry)` (effective,
+per body orientation). The two are **different quantities, computed differently — never
+compare directly** (§6.4, §11). Source is **OpenMC**'s machine-readable ICRP tables (the
+coefficients are ICRP/ICRU facts; see `vendor/openmc_dose/PROVENANCE.md` and
+`docs/plans/M2-conversion.md`).
+
+Design choices (M2 review):
+
+- **Photons only.** Neutron H\*(10)/effective dose is the **separate** "neutron
+  fluence-to-dose" §7 row (lands with the neutron source terms; the schema's `particle`
+  field reserves the slot). Electrons/positrons are out — external beta is *skin dose* (M4).
+- **Two vintages, both §6.4-LOCKED.** H\*(10) = **ICRP-74/ICRU-57** (operational, ICRU
+  sphere, no geometry); E = **ICRP-116** (per geometry). A 2026 "H\*(10)" search surfaces
+  the **ICRU-95/2020** revision — *different* values; we pin the ICRP-74 vintage (its
+  sphere signature: H\*(10)/Ka peak ≈ 1.77 @ 60 keV).
+- **Per-quantity grid (no shared grid).** ICRP-74 photons stop at **10 MeV**; ICRP-116 runs
+  to **10 GeV**. **No interpolation in the loader** — log-E interpolation, the **10 keV
+  scoring floor** (higher than the 1 keV attenuation floor), and the off-grid >10 MeV /
+  >10 GeV handling are the **M3** dose engine's job, explicit + logged.
+
+### ⚠️ For M3 (gamma dose)
+A **new scoring-side 10 keV (0.01 MeV) floor** applies to *both* conversion quantities —
+photon lines below it have no coefficient and must be skipped **explicitly and logged**
+(extend the sub-keV contract). **H\*(10) above 10 MeV is off-grid** (grid end); never
+extrapolate.
+
+### ⚠️ Trust boundary (honesty)
+**Effective** is verbatim from OpenMC (incl. ICRP-116 **corrigendum** — small diffs vs other
+reproductions at corrected energies are expected, *not* errors), cross-checked against an
+*independent* ICRP-116 piecewise-poly fit (PMC6074822, ≤3 %; vendored AP matches ≤1.2 %).
+**H\*(10)** is transcribed from an **unmerged** OpenMC PR; faithfulness is
+enforced by an independent-quantity cross-check (H\*(10)/Φ ÷ OpenMC's independent ICRP-74
+Ka/Φ reproduces the ICRU-57 sphere response, anchored to the **IAEA** slab table where
+sphere == slab). The 50–200 keV interior and >3 MeV tail rest on the transcription; decay
+gammas (≤ ~2.6 MeV) sit inside the three-way-validated range.
+
 ## Rebuilding & validating
 
 ```sh
 python data/build/build_emissions.py        # vendor → emissions (idempotent)
 python data/build/build_attenuation.py      # vendor → attenuation (idempotent)
 python data/build/build_buildup.py          # vendor → buildup (idempotent)
-python -m pytest tests/test_emissions_data.py tests/test_attenuation_data.py tests/test_buildup_data.py
+python data/build/build_conversion.py       # vendor → conversion (idempotent)
+python -m pytest tests/test_emissions_data.py tests/test_attenuation_data.py \
+                 tests/test_buildup_data.py tests/test_conversion_data.py
 ```
 
 The build fails loudly on any structural surprise (unknown category, bad row,
@@ -179,3 +237,9 @@ The **attenuation** data (`attenuation/`, `vendor/nist_xraymac/`) derives from *
 SRD 126** — a U.S.-Government work, **public domain** (17 U.S.C. §105), NIST requests
 citation. It carries **no** non-commercial restriction; the repo-license constraint
 above comes solely from the ICRP-107 emission data.
+
+The **conversion** data (`conversion/`, `vendor/openmc_dose/`) is vendored from **OpenMC**
+(**MIT**, `vendor/openmc_dose/LICENSE.OpenMC`); the underlying H\*(10)/effective-dose
+coefficients are **ICRP-74/ICRU-57 and ICRP-116 facts** (not copyrightable). MIT carries
+**no** non-commercial restriction — again, only the ICRP-107 emission data constrains the
+repo license.
