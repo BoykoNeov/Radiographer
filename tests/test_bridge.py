@@ -156,8 +156,9 @@ def test_neutron_dose_round_trip_cf252():
         assert out["ok"] is True
         assert out["quantity"] == "ambient_H10" and out["si_unit"] == "Sv"
         assert out["source"] == "Cf-252" and out["parent"] == "Cf-252"
-        # Spectrum-averaged h*(10) ≈ 385 pSv·cm² (ISO 8529-2); ~2.5 mrem/h per µg at 1 m.
-        assert out["spectrum_avg_coeff_pSv_cm2"] == pytest.approx(385.0, rel=0.05)
+        # Spectrum-averaged h*(10) ≈ 373 pSv·cm² (ICRP-74, read from JANP-4-005 Table 1; fold
+        # ~383, within the few-% Maxwellian-vs-ISO-spectrum spread); ~2.5 mrem/h per µg at 1 m.
+        assert out["spectrum_avg_coeff_pSv_cm2"] == pytest.approx(373.0, rel=0.05)
         assert out["rate_si"][0] * 3.6e8 == pytest.approx(2.5, rel=0.10)  # Sv/s → mrem/h
         assert out["source_gamma"] is None  # Cf-252 prompt-fission γ unmodeled (§11)
     finally:

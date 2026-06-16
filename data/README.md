@@ -242,8 +242,9 @@ Design choices (M5 review):
 The neutron **effective** table is verbatim from OpenMC mainline (clean, blob-SHA == tree);
 the neutron **H\*(10)** table is the unmerged PR #3256 transcription (degraded). Faithfulness
 of H\*(10) is cross-checked by the **validation triangle**: the reconstructed Cf-252 spectrum
-folded against it gives 383 pSv·cm² vs the published ISO 8529-2 ~385 (<1 %) — three mutually
-independent things meeting (`tests/test_dose_neutron.py`).
+folded against it gives 383 pSv·cm², matching an independently **read** published value —
+373 pSv·cm² (ICRP-74, JANP-4-005 Table 1) to +2.7 % (the Maxwellian-vs-tabulated-spectrum gap)
+and the commonly-cited ISO 8529-2 ~385 to <1 % (`tests/test_dose_neutron.py`).
 
 ## Rebuilding & validating
 

@@ -7,10 +7,14 @@ Three mutually independent things meeting (spectrum, conversion table, fold+norm
 +geometry) validate the whole chain in one shot — and this agreement IS the independent
 cross-check for the DEGRADED (unmerged-PR) neutron H*(10) table (cf. the photon IAEA check).
 
-- **Cf-252 spectrum-averaged h*(10) ≈ 385 pSv·cm²** (ISO 8529-2:2000 / ICRP-74).
-- **Dose-rate constant ≈ 2.5 mrem/h per µg at 1 m** (the field rule; ~2.55 published) — a
-  SECOND, independently sourced anchor that also exercises the n/decay × activity × 1/4πd²
-  geometry end to end.
+- **Cf-252 spectrum-averaged h*(10) = 373 pSv·cm²** (ICRP-74) — read from Table 1 of the
+  open-access JANP-4-005 (Sabharwal et al., scholars.direct; a SEPARATE group's
+  spectrum-averaged calculation). The fold gives ~383 (+3 %, the Maxwellian vs the tabulated
+  ISO spectrum), also consistent with the commonly-cited ISO 8529-2 ~385. This is the read
+  anchor (not a self-consistent hardcode) — a unit slip or wrong column misses by far more.
+- **Dose-rate constant ≈ 2.5 mrem/h per µg at 1 m** — the well-known field magnitude, here a
+  DERIVED consequence of two sourced numbers (specific yield 2.3×10⁶ n/s/µg × h̄) that also
+  exercises the n/decay × activity × 1/4πd² geometry end to end.
 - w_R is NOT double-counted (the coefficients are already Sv/fluence); both quantities Sv;
   effective < H*(10) for Cf-252 (geometry asymmetry); solve-once/evaluate-many; gray-out gate.
 
@@ -33,16 +37,19 @@ SV_S_TO_USV_H = 3.6e9         # Sv/s → µSv/h
 # --- the validation triangle ---------------------------------------------------------
 
 def test_cf252_spectrum_averaged_h10_matches_published():
-    # Fold (reconstructed Maxwellian × vendored ICRP-74 neutron table). The published bare
-    # Cf-252 h*(10) is 385 pSv·cm² (ISO 8529-2). A unit slip or column error misses by far
-    # more than the few-% literature spread; the observed fold is ~383.
+    # Fold (reconstructed Maxwellian × vendored ICRP-74 neutron table) vs an EXTERNALLY READ
+    # value: bare Cf-252 H*(10) = 373 pSv·cm² (ICRP-74), Table 1 of the open-access JANP-4-005
+    # (a separate group's spectrum-averaged calc). The fold ~383 sits +2.7 % above it (the
+    # Maxwellian vs the tabulated ISO spectrum) and ≈ the commonly-cited ISO 8529-2 ~385 —
+    # inside the few-% inter-method spread. A unit slip / wrong column misses by far more.
     m = NeutronDoseModel("Cf-252", "ambient_H10")
-    assert m.hbar_pSv_cm2 == pytest.approx(385.0, rel=0.05)
+    assert m.hbar_pSv_cm2 == pytest.approx(373.0, rel=0.05)
 
 
 def test_cf252_dose_rate_constant_per_microgram_at_1m():
-    # 1 µg Cf-252 at 1 m, bare → H*(10) ≈ 2.5 mrem/h (the classic field rule; ~2.55 mrem/h
-    # published). Exercises n/decay × activity (λN from a real solve) × 1/4πd² end to end.
+    # 1 µg Cf-252 at 1 m, bare → H*(10) ≈ 2.5 mrem/h — the well-known field magnitude, here a
+    # DERIVED consequence of two sourced numbers (specific yield 2.3e6 n/s/µg × h̄ ≈ 379) not a
+    # separate citation. Exercises n/decay × activity (λN from a real solve) × 1/4πd² end to end.
     inv = SolvedInventory.from_spec({"Cf-252": 1.0}, "ug")
     res = inv.evaluate([0.0], axis="activity", unit="Bq")
     acts = {n: res["series"][n][0] for n in res["nuclides"]}
@@ -65,8 +72,10 @@ def test_both_quantities_are_sv_and_effective_below_h10():
     # For fast neutrons effective dose (whole-body) is below H*(10); ISO < AP (orientation).
     assert eff_iso.hbar_pSv_cm2 < h10.hbar_pSv_cm2
     assert eff_iso.hbar_pSv_cm2 < eff_ap.hbar_pSv_cm2
-    # Effective AP for the Cf-252 spectrum ~350 pSv·cm² (ICRP-116); a coarse physical anchor
-    # that catches a wrong particle/quantity wiring.
+    # Effective AP for the Cf-252 spectrum ~350 pSv·cm² — an INTERNAL regression guard on the
+    # ICRP-116 fold (that table is clean/verbatim + transform-validated in
+    # test_conversion_data). NOT anchored to JANP-4-005's eAP=309: that is ICRP-74 effective
+    # dose (ICRP-60 weights), a DIFFERENT vintage than our ICRP-116 (§6.4) — not comparable.
     assert eff_ap.hbar_pSv_cm2 == pytest.approx(350.0, rel=0.10)
 
 

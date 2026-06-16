@@ -20,22 +20,31 @@ for user-defined inventories** (§6.3).
   contract, `source_gamma_override`); `engine/bridge.py` `neutron_dose(handle, req)` with the
   source-key gray-out gate. Tests: `test_neutron_sources_data.py` (7) + `test_dose_neutron.py`
   (10) + 3 bridge tests. **Full suite 209 pass**, no M0–M4 regression.
-- **Validation triangle CLOSED:** reconstructed Cf-252 Maxwellian × the *degraded* vendored
-  ICRP-74 neutron table → **h*(10) = 383 pSv·cm²** vs published ISO 8529-2 **~385** (<1 %);
-  **dose-rate constant 2.5 mrem/h per µg at 1 m** (field rule ~2.55); mean energy 2.13 MeV;
-  effective AP ~350, ISO ~179 pSv·cm². The agreement is also the degraded-table cross-check.
+- **Validation triangle CLOSED (against a READ anchor):** reconstructed Cf-252 Maxwellian ×
+  the *degraded* vendored ICRP-74 neutron table → **h*(10) = 383 pSv·cm²**, matching the
+  independently **read** published value **373 pSv·cm²** (ICRP-74, JANP-4-005 Table 1 — a
+  separate group's spectrum-averaged calc) to +2.7 % (the Maxwellian-vs-tabulated-ISO-spectrum
+  gap), and the commonly-cited ISO 8529-2 ~385 to <1 %. **Dose-rate constant 2.5 mrem/h per
+  µg at 1 m** (derived from specific yield 2.3e6 × h̄, the known field magnitude). Mean energy
+  2.13 MeV; effective AP ~350 (ICRP-116 — *not* the ICRP-74 eAP 309, different vintage), ISO
+  ~179. The 3 %-level agreement bounds the combined spectrum-approx + degraded-table error —
+  the cross-check the degraded H\*(10) table needed. The test anchors to the read 373 (not a
+  self-consistent hardcode — the gap the advisor flagged, now closed).
 
 ### AmBe — DEFERRED (not shipped in M5)
 
 The (α,n) source was scoped for M5 (user picked Cf-252 + AmBe with a Cf-252-only fallback).
-Its ISO 8529-1 (Kluge–Weise) reference spectrum (0.1–11 MeV, mean E 4.16 MeV) could **not be
-sourced as a clean, citable, machine-readable table** — ISO 8529-1/2 are paywalled and every
-open reference is a figure, not a transcribable table. Per the project's no-fabrication
-discipline (the same call as the M4 Cross-Berger kernel), AmBe is **deferred rather than
-reconstructed from memory**. The architecture is AmBe-ready: the tabulated-spectrum schema,
-the fold engine, the bridge, and the `source_gamma` (4.438 MeV) path via `photon_override`
-all exist and are tested — adding AmBe is a data drop + a ~20-line build function once a
-clean spectrum is in hand. Recorded in HANDOFF_PLAN §11.
+Its ISO 8529-1 (Kluge–Weise) reference spectrum (0.1–11 MeV, mean E 4.16 MeV) was **not
+sourced within this session** as a clean, citable, machine-readable bin table — ISO 8529-1/2
+are paywalled and the open refs surfaced (~4 searches + 2 wrong-content PDFs) were figures.
+**Untried leads** (not exhausted): Vega-Carrillo's openly-published 60-bin ISO-AmBe
+tabulations, IAEA-TECDOC-410 / TRS-318. Per the project's no-fabrication discipline (the same
+call as the M4 Cross-Berger kernel), AmBe is **deferred rather than reconstructed from
+memory**. The architecture is AmBe-ready: the tabulated-spectrum schema, the fold engine, the
+bridge, and the `source_gamma` (4.438 MeV) path via `photon_override` all exist and are
+tested — adding AmBe is a data drop + a ~20-line build function once a clean spectrum is in
+hand. Its **validation anchor is already in hand**: AmBe H\*(10) = 391 pSv·cm² (ICRP-74,
+JANP-4-005 Table 1). Recorded in HANDOFF_PLAN §11.
 
 ## Goal
 
@@ -180,10 +189,12 @@ source. Three independent things meeting (spectrum, conversion table, fold/norma
 validates the whole chain in one shot — and **is** the independent cross-check for the
 unmerged-PR (degraded-trust) neutron H\*(10) table.
 
-- **Cf-252:** published bare h\*(10) ≈ **385 pSv·cm²** (TO VERIFY vs PNNL-19273 / ISO 8529-1
-  — not asserted from memory). Back-of-envelope: 2.55 mrem/h per µg at 1 m back-solves to
-  h ≈ 385 pSv·cm² — corroborates. Also: 1 µg (2.3×10⁶ n/s) at 1 m → ~2.6 mrem/h H\*(10).
-- **AmBe:** published h\*(10) ≈ **391 pSv·cm²** (TO VERIFY).
+- **Cf-252:** published bare h\*(10) = **373 pSv·cm²** (ICRP-74) — VERIFIED, read from
+  JANP-4-005 Table 1 (a separate group's spectrum-averaged calc). The fold gives 383 (+2.7 %,
+  Maxwellian vs tabulated ISO spectrum); also ≈ the commonly-cited ISO 8529-2 ~385 (<1 %).
+  1 µg (2.3×10⁶ n/s) at 1 m → ~2.5 mrem/h H\*(10) (derived). The test anchors to the READ 373.
+- **AmBe:** published h\*(10) = **391 pSv·cm²** (ICRP-74) — VERIFIED, JANP-4-005 Table 1 (the
+  anchor for when the AmBe spectrum is sourced; AmBe not shipped this session).
 - **n/decay anchor:** Cf-252 0.116 reproduces 2.3×10¹² n/s/g (build-time check).
 - **Guards:** off-grid contract enforced; spectrum Σφ=1; w_R not double-counted; monotone in
   1/d².
@@ -211,10 +222,12 @@ unmerged-PR (degraded-trust) neutron H\*(10) table.
 
 ## Open questions / risks
 
-- **AmBe sourcing** (gating): ISO 8529-1 spectrum reproduced across open refs (PTB,
-  scholars.direct JANP-4-005, arXiv 2111.02774); a clean machine-readable tabulation must be
-  obtained at build time. Fallback = Cf-252 only.
-- **Exact ISO/PNNL averaged coefficients (385/391)** are TO VERIFY against source, not
-  asserted — the validation anchors depend on them.
-- **Conversion `particle` refactor** must not regress the 7 photon files / their 12 tests
-  (default `particle="photon"` everywhere).
+- **AmBe spectrum** (the deferred item): need a clean machine-readable ISO 8529-1 (Kluge–Weise)
+  bin table. Untried leads: Vega-Carrillo 60-bin ISO-AmBe tabulations, IAEA-TECDOC-410/TRS-318,
+  or user-supplied ISO data. Its validation anchor (h\*(10) 391, ICRP-74) is already read.
+- **Averaged-coefficient anchors VERIFIED** (resolved): Cf-252 373 / AmBe 391 pSv·cm² read
+  from JANP-4-005 Table 1 (ICRP-74). The Cf-252 test anchors to the read 373 (fold 383, +2.7 %).
+  NB JANP's *effective* eAP (309) is ICRP-74; ours is ICRP-116 — different vintages, not a
+  cross-anchor.
+- **Conversion `particle` refactor** did not regress the 7 photon files / their 12 tests
+  (default `particle="photon"`; photon canonical output byte-identical — confirmed).
