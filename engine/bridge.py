@@ -24,6 +24,8 @@ from engine.conversion import ConversionError
 from engine.dose import DoseError, GammaDoseModel
 from engine.emissions import EmissionsError
 from engine.inventory import EngineError, SolvedInventory
+from engine.neutron_dose import NeutronDoseError, NeutronDoseModel
+from engine.neutron_source import NeutronSourceError
 from engine.photon_interp import OffGridError
 
 #: Expected, structured domain errors — surfaced loudly but without a traceback (the
@@ -32,6 +34,8 @@ _EXPECTED_ERRORS = (
     EngineError,
     DoseError,
     BetaDoseError,
+    NeutronDoseError,
+    NeutronSourceError,
     OffGridError,
     AttenuationError,
     BuildupError,
@@ -171,6 +175,50 @@ def beta_dose(handle: str, request_json: str) -> str:
                     photon_override=override,
                 )
                 out["bremsstrahlung"] = gm.dose_rate_series(activities, distance_m)
+        return _ok(out)
+    except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
+        return _err(exc)
+
+
+def neutron_dose(handle: str, request_json: str) -> str:
+    """``{"times_s":[...], "source":"Cf-252", "quantity":"ambient_H10", "distance_m":1.0,
+        "geometry":null, "include_source_gamma":true}`` ->
+    ``{ok, quantity, si_unit:"Sv", per, times_s, distance_m, source, parent,
+       neutrons_per_decay, spectrum_avg_coeff_pSv_cm2, rate_si, warnings,
+       source_gamma:{γ-dose series}|null}``.
+
+    The §6.3 external **neutron dose** for a **prebuilt source** over a time grid, the §3
+    "solve once, evaluate many" way: one Bateman solve (the handle), one ``NeutronDoseModel``
+    (the fixed per-decay coefficient ``neutrons_per_decay·h̄``), one matvec against the
+    parent's activity series. The ``"source"`` key is the §6.3 **gray-out gate** — the UI
+    only calls this for a prebuilt neutron source, never for a user-defined inventory; the
+    source's parent nuclide must be present in the handle's inventory (a missing parent is a
+    loud error, never a silent zero).
+
+    When the source carries reaction-correlated γ (e.g. AmBe 4.438 MeV — NOT in the ICRP-107
+    decay lines), it is scored through the γ engine via ``photon_override`` in the **same
+    quantity/geometry** and returned alongside, so the breakdown can show the photon
+    contribution. (Cf-252 prompt-fission γ is unmodeled in v1 — §11 — so this is null there.)
+    """
+    try:
+        req = json.loads(request_json)
+        solved = _get(handle)
+        activities = solved.evaluate(req["times_s"], axis="activity", unit="Bq")
+        quantity = req.get("quantity", "ambient_H10")
+        geometry = req.get("geometry")
+        model = NeutronDoseModel(req["source"], quantity, geometry=geometry)
+        distance_m = float(req["distance_m"])
+        out = model.dose_rate_series(activities, distance_m)
+        out["source_gamma"] = None
+        if req.get("include_source_gamma", True):
+            override = model.source_gamma_override()
+            if any(override.values()):
+                # Source-correlated γ scored in the SAME quantity/geometry as the neutron
+                # dose, so the two are directly comparable in the breakdown.
+                gm = GammaDoseModel(
+                    [model.parent], quantity, geometry=geometry, photon_override=override
+                )
+                out["source_gamma"] = gm.dose_rate_series(activities, distance_m)
         return _ok(out)
     except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
         return _err(exc)

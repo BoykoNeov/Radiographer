@@ -140,6 +140,66 @@ def test_beta_dose_tritium_zero_with_warning():
         bridge.release(handle)
 
 
+def test_neutron_dose_round_trip_cf252():
+    # Solve 1 µg Cf-252, then ask for the neutron H*(10) dose-rate series over the handle.
+    res = json.loads(bridge.solve(json.dumps({"nuclides": {"Cf-252": 1.0}, "unit": "ug"})))
+    handle = res["handle"]
+    try:
+        out = json.loads(
+            bridge.neutron_dose(
+                handle,
+                json.dumps(
+                    {"times_s": [0.0], "source": "Cf-252", "quantity": "ambient_H10", "distance_m": 1.0}
+                ),
+            )
+        )
+        assert out["ok"] is True
+        assert out["quantity"] == "ambient_H10" and out["si_unit"] == "Sv"
+        assert out["source"] == "Cf-252" and out["parent"] == "Cf-252"
+        # Spectrum-averaged h*(10) ≈ 385 pSv·cm² (ISO 8529-2); ~2.5 mrem/h per µg at 1 m.
+        assert out["spectrum_avg_coeff_pSv_cm2"] == pytest.approx(385.0, rel=0.05)
+        assert out["rate_si"][0] * 3.6e8 == pytest.approx(2.5, rel=0.10)  # Sv/s → mrem/h
+        assert out["source_gamma"] is None  # Cf-252 prompt-fission γ unmodeled (§11)
+    finally:
+        bridge.release(handle)
+
+
+def test_neutron_dose_grayed_out_when_parent_absent():
+    # The §6.3 gray-out: asking for a Cf-252 neutron dose over an inventory that does NOT
+    # contain Cf-252 is a loud structured error (never a silent zero) — the engine cannot
+    # scale the tabulated term without the parent's activity.
+    res = json.loads(bridge.solve(json.dumps({"nuclides": {"Co-60": 1.0e9}, "unit": "Bq"})))
+    handle = res["handle"]
+    try:
+        out = json.loads(
+            bridge.neutron_dose(
+                handle, json.dumps({"times_s": [0.0], "source": "Cf-252", "distance_m": 1.0})
+            )
+        )
+        assert out["ok"] is False
+        assert out["error"]["type"] == "NeutronDoseError"
+        assert out["error"]["traceback"] is None  # expected domain error, no traceback
+        assert "Cf-252" in out["error"]["message"]
+    finally:
+        bridge.release(handle)
+
+
+def test_neutron_dose_unknown_source_is_structured_error():
+    res = json.loads(bridge.solve(json.dumps({"nuclides": {"Cf-252": 1.0}, "unit": "ug"})))
+    handle = res["handle"]
+    try:
+        out = json.loads(
+            bridge.neutron_dose(
+                handle, json.dumps({"times_s": [0.0], "source": "NoSuch-999", "distance_m": 1.0})
+            )
+        )
+        assert out["ok"] is False
+        assert out["error"]["type"] == "NeutronDoseError"
+        assert out["error"]["traceback"] is None
+    finally:
+        bridge.release(handle)
+
+
 def test_hp_recommended_flag_surfaces_for_stiff_chain():
     res = json.loads(bridge.solve(json.dumps({"nuclides": {"U-238": 1.0}, "unit": "Bq"})))
     assert res["hp_recommended"] is True
