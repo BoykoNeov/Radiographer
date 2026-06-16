@@ -59,9 +59,7 @@ def test_dose_round_trip_co60_air_kerma():
         out = json.loads(
             bridge.dose(
                 handle,
-                json.dumps(
-                    {"times_s": [0.0], "quantity": "air_kerma", "distance_m": 1.0}
-                ),
+                json.dumps({"times_s": [0.0], "quantity": "air_kerma", "distance_m": 1.0}),
             )
         )
         assert out["ok"] is True
@@ -95,6 +93,49 @@ def test_dose_no_buildup_shield_is_structured_error_not_traceback():
         assert out["ok"] is False
         assert out["error"]["type"] == "BuildupError"
         assert out["error"]["traceback"] is None  # expected domain error, no traceback
+    finally:
+        bridge.release(handle)
+
+
+def test_beta_dose_round_trip_with_bremsstrahlung():
+    # Solve once, ask for the beta SKIN dose series, plus the secondary bremsstrahlung
+    # photon dose when a lead shield stops the beta (§6.2 "more lead = more dose").
+    res = json.loads(bridge.solve(json.dumps({"nuclides": {"Y-90": 1.0e9}, "unit": "Bq"})))
+    handle = res["handle"]
+    try:
+        out = json.loads(
+            bridge.beta_dose(
+                handle,
+                json.dumps(
+                    {
+                        "times_s": [0.0],
+                        "distance_m": 1.0,
+                        "shield": ["lead", 1.0],
+                        "brems_quantity": "air_kerma",
+                    }
+                ),
+            )
+        )
+        assert out["ok"] is True
+        assert out["quantity"] == "beta_skin" and out["si_unit"] == "Gy"
+        assert out["scoring_depth_mg_cm2"] == 7.0
+        assert out["bremsstrahlung"] is not None  # lead shield → secondary photon dose present
+        assert out["bremsstrahlung"]["rate_si"][0] > 0.0
+    finally:
+        bridge.release(handle)
+
+
+def test_beta_dose_tritium_zero_with_warning():
+    # H-3 betas can't reach the basal layer → zero skin dose, recorded loudly (not silent).
+    res = json.loads(bridge.solve(json.dumps({"nuclides": {"H-3": 1.0e9}, "unit": "Bq"})))
+    handle = res["handle"]
+    try:
+        out = json.loads(
+            bridge.beta_dose(handle, json.dumps({"times_s": [0.0], "distance_m": 0.0}))
+        )
+        assert out["ok"] is True
+        assert out["rate_si"][0] == 0.0
+        assert any(w.get("nuclide") == "H-3" for w in out["warnings"])
     finally:
         bridge.release(handle)
 

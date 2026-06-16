@@ -17,6 +17,7 @@ import secrets
 import traceback
 
 from engine.attenuation import AttenuationError
+from engine.beta_dose import BetaDoseError, BetaSkinDoseModel
 from engine.buildup import BuildupError
 from engine.chain import build_dag
 from engine.conversion import ConversionError
@@ -30,6 +31,7 @@ from engine.photon_interp import OffGridError
 _EXPECTED_ERRORS = (
     EngineError,
     DoseError,
+    BetaDoseError,
     OffGridError,
     AttenuationError,
     BuildupError,
@@ -127,6 +129,49 @@ def dose(handle: str, request_json: str) -> str:
             geometry=req.get("geometry"),
         )
         return _ok(model.dose_rate_series(activities, float(req["distance_m"])))
+    except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
+        return _err(exc)
+
+
+def beta_dose(handle: str, request_json: str) -> str:
+    """``{"times_s":[...], "distance_m":0.0, "shield":["pmma",1.0] | null,
+        "medium":"tissue_soft", "avg_area_cm2":1.0, "include_bremsstrahlung":true,
+        "brems_quantity":"ambient_H10", "geometry":null}`` ->
+    ``{ok, quantity:"beta_skin", si_unit:"Gy", per, times_s, distance_m,
+       scoring_depth_mg_cm2, rate_si, warnings, bremsstrahlung: {γ-dose series} | null}``.
+
+    The §6.2 external **beta skin dose** (Hp(0.07), 7 mg/cm²) over a time grid, the §3
+    "solve once, evaluate many" way: one solve, fixed per-nuclide C_n^β(d), one matvec. When
+    a shield is present, the secondary **bremsstrahlung** photon dose is scored through the
+    γ engine (a *different* quantity — penetrating photons, not skin dose) and returned
+    alongside, so the UI can show "more lead can increase dose". Brems needs a finite
+    distance (point-source γ is singular at 0)."""
+    try:
+        req = json.loads(request_json)
+        solved = _get(handle)
+        activities = solved.evaluate(req["times_s"], axis="activity", unit="Bq")
+        shield = req.get("shield")
+        model = BetaSkinDoseModel(
+            solved.names,
+            medium=req.get("medium", "tissue_soft"),
+            shield=tuple(shield) if shield else None,
+            avg_area_cm2=float(req.get("avg_area_cm2", 1.0)),
+        )
+        distance_m = float(req.get("distance_m", 0.0))
+        out = model.dose_rate_series(activities, distance_m)
+        out["bremsstrahlung"] = None
+        if shield and req.get("include_bremsstrahlung", True):
+            override = model.bremsstrahlung_override()
+            if distance_m > 0.0 and any(override.values()):
+                gm = GammaDoseModel(
+                    solved.names,
+                    req.get("brems_quantity", "ambient_H10"),
+                    shield=None,  # beta-stopping shield is photon-thin (documented, §11)
+                    geometry=req.get("geometry"),
+                    photon_override=override,
+                )
+                out["bremsstrahlung"] = gm.dose_rate_series(activities, distance_m)
+        return _ok(out)
     except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
         return _err(exc)
 

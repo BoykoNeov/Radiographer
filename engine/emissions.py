@@ -61,9 +61,7 @@ def load_emissions(nuclide: str) -> dict:
     data = json.loads(path.read_text(encoding="utf-8"))
     version = data.get("schema_version")
     if version != SCHEMA_VERSION:
-        raise EmissionsError(
-            f"{nuclide}: emission schema_version {version!r} != {SCHEMA_VERSION}"
-        )
+        raise EmissionsError(f"{nuclide}: emission schema_version {version!r} != {SCHEMA_VERSION}")
     if data.get("nuclide") != nuclide:
         raise EmissionsError(
             f"{path.name}: embedded nuclide {data.get('nuclide')!r} != {nuclide!r}"
@@ -81,8 +79,32 @@ def photons(nuclide: str) -> list[dict]:
 
 
 def betas(nuclide: str) -> list[dict]:
-    """Discrete beta lines; ``E_mean_MeV`` is the ICRP-107 *mean* energy."""
+    """Discrete beta lines; ``E_mean_MeV`` is the ICRP-107 *mean* energy.
+
+    ICRP-107 gives a per-branch **mean** energy (not an endpoint) and a single
+    continuous :func:`beta_spectra` summed over all branches — see
+    ``docs/plans/M2-emissions.md``. The M4 beta-dose engine recovers the endpoint
+    from :func:`beta_endpoint_MeV` and assigns it to the dominant branch.
+    """
     return load_emissions(nuclide)["betas"]
+
+
+def beta_spectra(nuclide: str) -> list[dict]:
+    """Continuous β⁻ spectrum ``{"E_MeV", "intensity"}`` (dN/dE), **summed over
+    branches**, normalized to ≈ 1 β per decay (∫ I dE) with ∫ E·I dE = MeV/decay.
+    Empty when the nuclide emits no betas."""
+    return load_emissions(nuclide)["beta_spectra"]
+
+
+def beta_endpoint_MeV(nuclide: str) -> float:
+    """Highest β endpoint (MeV) — the maximum energy in the summed :func:`beta_spectra`.
+
+    0.0 when the nuclide has no beta spectrum. This is the only clean endpoint
+    ICRP-107 exposes (per-branch endpoints do not exist); it belongs to the
+    highest-energy branch.
+    """
+    spec = load_emissions(nuclide)["beta_spectra"]
+    return max((float(p["E_MeV"]) for p in spec), default=0.0)
 
 
 def alphas(nuclide: str) -> list[dict]:

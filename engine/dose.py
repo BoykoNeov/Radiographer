@@ -49,9 +49,9 @@ from engine import photon_interp as pi
 QUANTITIES: tuple[str, ...] = ("air_kerma", "ambient_H10", "effective")
 
 # --- SI conversions, centralized in one place (§12: store internally in SI) ----------
-MEV_TO_J = 1.602176634e-13          # J per MeV
-CM2_PER_G_TO_M2_PER_KG = 0.1        # (cm²/g) → (m²/kg):  1e-4 m² / 1e-3 kg
-PSV_CM2_TO_SV_M2 = 1.0e-16          # (pSv·cm²) → (Sv·m²): 1e-12 Sv · 1e-4 m²
+MEV_TO_J = 1.602176634e-13  # J per MeV
+CM2_PER_G_TO_M2_PER_KG = 0.1  # (cm²/g) → (m²/kg):  1e-4 m² / 1e-3 kg
+PSV_CM2_TO_SV_M2 = 1.0e-16  # (pSv·cm²) → (Sv·m²): 1e-12 Sv · 1e-4 m²
 _FOUR_PI = 4.0 * math.pi
 
 #: Dose-**scoring** floor δ (MeV): photon lines below 10 keV are logged skips for ALL
@@ -86,9 +86,7 @@ def _normalize_shield(shield) -> Optional[tuple[str, float]]:
     try:
         material, thickness_cm = shield
     except (TypeError, ValueError) as exc:
-        raise DoseError(
-            f"shield must be None or (material, thickness_cm); got {shield!r}"
-        ) from exc
+        raise DoseError(f"shield must be None or (material, thickness_cm); got {shield!r}") from exc
     thickness_cm = float(thickness_cm)
     if thickness_cm < 0.0:
         raise DoseError(f"shield thickness must be >= 0 cm; got {thickness_cm}")
@@ -123,6 +121,7 @@ class GammaDoseModel:
         medium: str = "air",
         shield=None,
         geometry: Optional[str] = None,
+        photon_override: Optional[dict[str, list[dict]]] = None,
     ):
         if quantity not in QUANTITIES:
             raise DoseError(f"unknown dose quantity {quantity!r}; expected one of {QUANTITIES}")
@@ -138,6 +137,11 @@ class GammaDoseModel:
         self.geometry = geometry
         self.shield = _normalize_shield(shield)
         self.si_unit = _SI_UNIT[quantity]
+        #: Optional per-nuclide photon line list that **replaces** the nuclide's bundled
+        #: ICRP-107 photon spectrum — used to score a *synthetic* photon source (e.g. M4
+        #: beta-bremsstrahlung lines) through the identical per-line/quantity/scoring-floor
+        #: machinery. ``None`` ⇒ use ``emissions.photons`` as usual.
+        self.photon_override = photon_override or {}
         self.nuclides = list(nuclides)
         self.warnings: list[dict] = []
         #: Per-nuclide SI dose coefficient (J·m²/kg per decay for air_kerma; Sv·m² per
@@ -152,7 +156,9 @@ class GammaDoseModel:
     def _per_line_constant_si(self, E_MeV: float) -> float:
         """Scoring constant per photon (SI), before yield/activity. Raises OffGridError."""
         if self.quantity == "air_kerma":
-            if E_MeV < SCORING_FLOOR_MEV and not math.isclose(E_MeV, SCORING_FLOOR_MEV, rel_tol=1e-9):
+            if E_MeV < SCORING_FLOOR_MEV and not math.isclose(
+                E_MeV, SCORING_FLOOR_MEV, rel_tol=1e-9
+            ):
                 # The Γ_δ low-energy cutoff: sub-10-keV photons don't penetrate to a
                 # detector at distance. Logged skip (same severity as the conversion-grid
                 # floor that H*(10)/effective already apply), never silent.
@@ -164,9 +170,9 @@ class GammaDoseModel:
                     bound=SCORING_FLOOR_MEV,
                 )
             muen = pi.interp_muen_rho(self.medium, E_MeV) * CM2_PER_G_TO_M2_PER_KG  # m²/kg
-            return E_MeV * MEV_TO_J * muen                                          # J·m²/kg
-        coeff = pi.interp_conversion(self.quantity, E_MeV, self.geometry)           # pSv·cm²
-        return coeff * PSV_CM2_TO_SV_M2                                             # Sv·m²
+            return E_MeV * MEV_TO_J * muen  # J·m²/kg
+        coeff = pi.interp_conversion(self.quantity, E_MeV, self.geometry)  # pSv·cm²
+        return coeff * PSV_CM2_TO_SV_M2  # Sv·m²
 
     def _shield_factor(self, E_MeV: float) -> float:
         if self.shield is None:
@@ -177,11 +183,16 @@ class GammaDoseModel:
     def _coefficient_for(self, nuclide: str) -> float:
         """``C_n = Σ_lines const_i · y_i · shield_i`` (SI per decay). Stable / no-photon
         nuclides contribute 0; below-floor lines are logged skips; above-grid lines raise."""
-        if not emissions.has_emissions(nuclide):
-            return 0.0  # stable daughter — legitimately no emission, not a data hole
+        override = self.photon_override.get(nuclide)
+        if override is None:
+            if not emissions.has_emissions(nuclide):
+                return 0.0  # stable daughter — legitimately no emission, not a data hole
+            lines = emissions.photons(nuclide)
+        else:
+            lines = override  # synthetic source (e.g. bremsstrahlung); bypasses has_emissions
 
         total = 0.0
-        for line in emissions.photons(nuclide):
+        for line in lines:
             E = float(line["E_MeV"])
             y = float(line["yield"])
             if y <= 0.0:
@@ -234,9 +245,7 @@ class GammaDoseModel:
             if c_n == 0.0:
                 continue
             if nuclide not in activities_bq:
-                raise DoseError(
-                    f"no activity supplied for contributing nuclide {nuclide!r}"
-                )
+                raise DoseError(f"no activity supplied for contributing nuclide {nuclide!r}")
             total += c_n * float(activities_bq[nuclide])
         return geom * total
 
