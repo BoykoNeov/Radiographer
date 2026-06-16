@@ -1,11 +1,41 @@
 # M5 — Neutron (tabulated source terms + fluence-to-dose)
 
-**Status:** in progress
+**Status:** done ✅ (Cf-252 shipped + validated; **AmBe deferred** — see below)
 **Milestone (HANDOFF_PLAN.md §10, §6.3):** external **neutron dose** for **prebuilt
 sources only** (v1 does not derive neutron output from a loaded inventory — SF + (α,n) is
 ORIGEN/SOURCES territory). Ship **tabulated** source strength + spectrum per source, fold
 against ICRP-74 / ICRP-116 fluence-to-dose coefficients. Neutron output is **grayed out
 for user-defined inventories** (§6.3).
+
+## Results (done)
+
+- **Neutron fluence-to-dose** (commit `d93e298`): vendored OpenMC `icrp116_neutrons.txt`
+  (CLEAN, blob-SHA == tree) + `icrp74_neutrons_H10.txt` (DEGRADED PR #3256). `build_conversion.py`
+  + `engine/conversion.py` + `engine/photon_interp.py` gained a `particle` axis (default
+  `photon`, zero photon regression). 6 neutron pillars in `tests/test_conversion_data.py`.
+- **Cf-252 neutron dose core** (commit `f870758`): `data/build/build_neutron_sources.py` →
+  `data/neutron_sources/Cf-252.json` (ISO-8529 Maxwellian, n/decay 0.1165 self-validated vs
+  2.30e12 n/s/g); `engine/neutron_source.py` (loader + `NeutronSourceError`);
+  `engine/neutron_dose.py` (`NeutronDoseModel`, solve-once h̄, w_R not double-counted, off-grid
+  contract, `source_gamma_override`); `engine/bridge.py` `neutron_dose(handle, req)` with the
+  source-key gray-out gate. Tests: `test_neutron_sources_data.py` (7) + `test_dose_neutron.py`
+  (10) + 3 bridge tests. **Full suite 209 pass**, no M0–M4 regression.
+- **Validation triangle CLOSED:** reconstructed Cf-252 Maxwellian × the *degraded* vendored
+  ICRP-74 neutron table → **h*(10) = 383 pSv·cm²** vs published ISO 8529-2 **~385** (<1 %);
+  **dose-rate constant 2.5 mrem/h per µg at 1 m** (field rule ~2.55); mean energy 2.13 MeV;
+  effective AP ~350, ISO ~179 pSv·cm². The agreement is also the degraded-table cross-check.
+
+### AmBe — DEFERRED (not shipped in M5)
+
+The (α,n) source was scoped for M5 (user picked Cf-252 + AmBe with a Cf-252-only fallback).
+Its ISO 8529-1 (Kluge–Weise) reference spectrum (0.1–11 MeV, mean E 4.16 MeV) could **not be
+sourced as a clean, citable, machine-readable table** — ISO 8529-1/2 are paywalled and every
+open reference is a figure, not a transcribable table. Per the project's no-fabrication
+discipline (the same call as the M4 Cross-Berger kernel), AmBe is **deferred rather than
+reconstructed from memory**. The architecture is AmBe-ready: the tabulated-spectrum schema,
+the fold engine, the bridge, and the `source_gamma` (4.438 MeV) path via `photon_override`
+all exist and are tested — adding AmBe is a data drop + a ~20-line build function once a
+clean spectrum is in hand. Recorded in HANDOFF_PLAN §11.
 
 ## Goal
 

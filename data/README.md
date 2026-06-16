@@ -12,19 +12,22 @@
 | `emissions/<Nuclide>.json` | **Canonical** per-nuclide emission spectra (this project's schema). Generated; committed. |
 | `attenuation/<material>.json` | **Canonical** per-material μ/ρ & μ_en/ρ vs energy (this project's schema). Generated; committed. |
 | `buildup/<material>.json` | **Canonical** per-material G-P (exposure) buildup coefficients (this project's schema). Generated; committed. |
-| `conversion/{hstar10,effective_<geom>}.json` | **Canonical** photon fluence-to-dose coefficients — H\*(10) + effective dose per geometry (this project's schema). Generated; committed. |
+| `conversion/{hstar10,effective_<geom>}{,_neutron}.json` | **Canonical** fluence-to-dose coefficients — H\*(10) + effective dose per geometry, for **photon** (M2) and **neutron** (M5). Generated; committed. |
+| `neutron_sources/<source>.json` | **Canonical** tabulated neutron source terms — neutrons/decay + normalized spectrum + source-γ (this project's schema; M5). Generated; committed. |
 | `vendor/icrp107/` | Raw upstream ICRP-107 JSON, vendored verbatim. See `vendor/PROVENANCE.md`. |
 | `vendor/nist_xraymac/` | Raw upstream NIST H&S pages, vendored verbatim. See `vendor/nist_xraymac/PROVENANCE.md`. |
 | `vendor/ans643/` | NUREG/CR-5740 PDF (public-domain ANS-6.4.3 buildup source) + hand-keyed transcription + B-value spot-checks. See `vendor/ans643/PROVENANCE.md`. |
-| `vendor/openmc_dose/` | OpenMC dose tables: ICRP-116 effective dose (verbatim) + ICRP-74 H\*(10) (unmerged PR). See `vendor/openmc_dose/PROVENANCE.md`. |
+| `vendor/openmc_dose/` | OpenMC dose tables: ICRP-116 effective dose (photon+neutron, verbatim) + ICRP-74 H\*(10) (photon+neutron, unmerged PR). See `vendor/openmc_dose/PROVENANCE.md`. |
 | `vendor/MANIFEST.sha256`, `vendor/nist_xraymac/MANIFEST.sha256`, `vendor/openmc_dose/MANIFEST.sha256` | Per-file hashes of each vendored source (drift guard). |
-| `build/build_emissions.py`, `build/build_attenuation.py`, `build/build_buildup.py`, `build/build_conversion.py` | Transforms: `vendor/…` → `emissions/` / `attenuation/` / `buildup/` / `conversion/`. Dev-time only. |
+| `build/build_emissions.py`, `build/build_attenuation.py`, `build/build_buildup.py`, `build/build_conversion.py`, `build/build_neutron_sources.py` | Transforms: `vendor/…` (or analytic reconstruction) → `emissions/` / `attenuation/` / `buildup/` / `conversion/` / `neutron_sources/`. Dev-time only. |
 | `build/fetch_nist_xraymac.py` | One-time acquisition of the NIST pages (verbatim). Dev-time only. |
 | `LICENSE.ICRP-07` | The license governing the emission data (see below). |
 
-Datasets still to land in M2 (§7): neutron source terms + neutron fluence-to-dose,
-spent-fuel discharge vectors.
-(Emissions ✅, attenuation ✅, G-P buildup ✅, H\*(10) & effective-dose conversion ✅.)
+Datasets still to land (§7): spent-fuel discharge vectors (M7); the **AmBe** neutron
+source (deferred from M5 — its ISO 8529-1 spectrum was not cleanly sourceable; see
+`docs/plans/M5-neutron.md`).
+(Emissions ✅, attenuation ✅, G-P buildup ✅, H\*(10) & effective-dose conversion ✅
+[photon + neutron], Cf-252 neutron source ✅.)
 
 ## Emissions — canonical schema (`schema_version: 1`)
 
@@ -170,9 +173,10 @@ coefficients are ICRP/ICRU facts; see `vendor/openmc_dose/PROVENANCE.md` and
 
 Design choices (M2 review):
 
-- **Photons only.** Neutron H\*(10)/effective dose is the **separate** "neutron
-  fluence-to-dose" §7 row (lands with the neutron source terms; the schema's `particle`
-  field reserves the slot). Electrons/positrons are out — external beta is *skin dose* (M4).
+- **Photon + neutron** (M2 photon, M5 neutron). The `particle` field selects the table;
+  neutron files carry a `_neutron` suffix and a wider grid (thermal 1e-9 MeV → 20 MeV for
+  H\*(10), 10 GeV for effective). Electrons/positrons are out — external beta is *skin
+  dose* (M4). The loader takes `particle` (default `photon`, so M2 call sites are unchanged).
 - **Two vintages, both §6.4-LOCKED.** H\*(10) = **ICRP-74/ICRU-57** (operational, ICRU
   sphere, no geometry); E = **ICRP-116** (per geometry). A 2026 "H\*(10)" search surfaces
   the **ICRU-95/2020** revision — *different* values; we pin the ICRP-74 vintage (its
@@ -198,15 +202,60 @@ Ka/Φ reproduces the ICRU-57 sphere response, anchored to the **IAEA** slab tabl
 sphere == slab). The 50–200 keV interior and >3 MeV tail rest on the transcription; decay
 gammas (≤ ~2.6 MeV) sit inside the three-way-validated range.
 
+## Neutron sources — canonical schema (`schema_version: 1`)
+
+```jsonc
+// neutron_sources/Cf-252.json
+{
+  "schema_version": 1,
+  "source": "Cf-252",
+  "parent_nuclide": "Cf-252",          // inventory nuclide whose decay drives emission
+  "neutrons_per_decay": 0.1165,        // time-invariant; S(t) = n/decay · A_parent(t)
+  "spectrum_model": "ISO 8529-1 Maxwellian, T=1.42 MeV",
+  "mean_energy_MeV": 2.13,
+  "spectrum": { "E_lo_MeV": [ … ], "E_hi_MeV": [ … ], "fluence_frac": [ … ] },  // Σ frac = 1
+  "source_gammas": [ /* {E_MeV, yield_per_decay} */ ]   // reaction γ (photon_override); [] for Cf-252
+}
+```
+
+Tabulated neutron source terms (§6.3 — v1 does NOT derive neutron output from a loaded
+inventory). Strength = `neutrons_per_decay · A_parent(t)` (so the neutron view rides the same
+solved inventory as gamma); the dose engine folds the normalized spectrum against the
+**neutron** fluence-to-dose coefficients. See `docs/plans/M5-neutron.md`.
+
+Design choices (M5 review):
+
+- **Per-bin fluence fractions that sum to 1** — NOT per-lethargy. Neutron spectra are usually
+  tabulated per unit lethargy (φ_E·E); the build converts to per-bin fractions and asserts
+  Σ = 1 at the one place it's checkable (the §12 normalization trap).
+- **Cf-252 spectrum is reconstructed** from the ISO 8529-1 Maxwellian (T=1.42 MeV) — analytic,
+  citable, no transcription; `neutrons_per_decay` (SF branch × ν̄) is **self-validated** to
+  reproduce the canonical 2.30×10¹² n/s/g specific yield. Capped at 20 MeV (neutron H\*(10)
+  grid end); the dropped tail is ~1e-6.
+- **Source-correlated γ** (AmBe 4.438 MeV, …) are reaction γ — NOT in the ICRP-107 decay
+  lines — scored through the M3 gamma engine via `photon_override`. Cf-252 prompt-fission γ
+  (a continuum) is unmodeled in v1 (§11), so its `source_gammas` is `[]`.
+- **AmBe deferred** — its ISO 8529-1 spectrum wasn't cleanly sourceable; the schema/engine are
+  AmBe-ready. See `docs/plans/M5-neutron.md` and HANDOFF_PLAN §11.
+
+### ⚠️ Trust boundary (honesty)
+The neutron **effective** table is verbatim from OpenMC mainline (clean, blob-SHA == tree);
+the neutron **H\*(10)** table is the unmerged PR #3256 transcription (degraded). Faithfulness
+of H\*(10) is cross-checked by the **validation triangle**: the reconstructed Cf-252 spectrum
+folded against it gives 383 pSv·cm² vs the published ISO 8529-2 ~385 (<1 %) — three mutually
+independent things meeting (`tests/test_dose_neutron.py`).
+
 ## Rebuilding & validating
 
 ```sh
 python data/build/build_emissions.py        # vendor → emissions (idempotent)
 python data/build/build_attenuation.py      # vendor → attenuation (idempotent)
 python data/build/build_buildup.py          # vendor → buildup (idempotent)
-python data/build/build_conversion.py       # vendor → conversion (idempotent)
+python data/build/build_conversion.py       # vendor → conversion, photon+neutron (idempotent)
+python data/build/build_neutron_sources.py  # analytic/vendor → neutron_sources (idempotent)
 python -m pytest tests/test_emissions_data.py tests/test_attenuation_data.py \
-                 tests/test_buildup_data.py tests/test_conversion_data.py
+                 tests/test_buildup_data.py tests/test_conversion_data.py \
+                 tests/test_neutron_sources_data.py tests/test_dose_neutron.py
 ```
 
 The build fails loudly on any structural surprise (unknown category, bad row,
@@ -240,6 +289,11 @@ above comes solely from the ICRP-107 emission data.
 
 The **conversion** data (`conversion/`, `vendor/openmc_dose/`) is vendored from **OpenMC**
 (**MIT**, `vendor/openmc_dose/LICENSE.OpenMC`); the underlying H\*(10)/effective-dose
-coefficients are **ICRP-74/ICRU-57 and ICRP-116 facts** (not copyrightable). MIT carries
-**no** non-commercial restriction — again, only the ICRP-107 emission data constrains the
-repo license.
+coefficients (photon + neutron) are **ICRP-74/ICRU-57 and ICRP-116 facts** (not
+copyrightable). MIT carries **no** non-commercial restriction — again, only the ICRP-107
+emission data constrains the repo license.
+
+The **neutron source** data (`neutron_sources/`) is **reconstructed from public physics
+facts** — the ISO 8529-1 Cf-252 Maxwellian parameter and NNDC/Holden SF-branch, ν̄,
+half-life, and atomic-mass constants — not transcribed from a copyrightable table. No new
+license restriction; only the ICRP-107 emission data constrains the repo license.
