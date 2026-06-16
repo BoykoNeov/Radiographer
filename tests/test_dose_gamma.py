@@ -75,6 +75,47 @@ def test_cs137_dose_is_emitted_by_ba137m_not_cs137():
     assert m.coeff_si["Ba-137"] == 0.0  # stable daughter contributes nothing
 
 
+# --- conversion-path absolute calibration (separate machinery from μ_en/ρ) -----------
+
+def test_co60_hstar10_to_air_kerma_ratio_is_physical():
+    # H*(10) runs through a wholly separate path (interp_conversion → pSv·cm²→Sv·m²) than
+    # air_kerma (μ_en/ρ). A factor slip in that conversion (the easiest place to drop a
+    # 10²) would pass every line-sum test silently. The h*(10)/Kₐ ratio is physics: ≈1.77
+    # at 60 keV, declining to ~1.1–1.15 at Co-60's MeV lines (ICRU sphere, M2-conversion).
+    acts = {"Co-60": GBQ}
+    ka = GammaDoseModel(["Co-60"], "air_kerma").dose_rate(acts, 1.0)
+    h10 = GammaDoseModel(["Co-60"], "ambient_H10").dose_rate(acts, 1.0)
+    assert 1.05 < h10 / ka < 1.30
+
+
+def test_co60_effective_ap_to_air_kerma_ratio_is_physical():
+    # effective dose is only reachable through GammaDoseModel with a geometry; AP/Kₐ for a
+    # ~1.25 MeV field is near unity (ICRP-116). Calibrates the effective path + units.
+    acts = {"Co-60": GBQ}
+    ka = GammaDoseModel(["Co-60"], "air_kerma").dose_rate(acts, 1.0)
+    eff = GammaDoseModel(["Co-60"], "effective", geometry="AP").dose_rate(acts, 1.0)
+    assert 0.85 < eff / ka < 1.15
+
+
+# --- evaluate-many: the C_n matvec over a time grid ----------------------------------
+
+def test_dose_rate_series_is_proportional_to_activity_over_grid():
+    # The headline "solve once, evaluate many": dose at each time = (1/4πd²)·Σ C_n·A_n(t).
+    # For a single-nuclide source the rate must track the activity exactly across the whole
+    # grid — locks the per-row matvec accumulation (not just a single time point).
+    inv = SolvedInventory.from_spec({"Co-60": GBQ}, "Bq")
+    grid = [0.0, 5.0e7, 1.663e8, 5.0e8]  # spans ~Co-60's 5.27 y half-life
+    res = inv.evaluate(grid, axis="activity", unit="Bq")
+    m = GammaDoseModel(res["nuclides"], "ambient_H10")
+    out = m.dose_rate_series(res, 1.0)
+
+    assert len(out["rate_si"]) == len(grid)
+    a = res["series"]["Co-60"]
+    for j in range(len(grid)):
+        assert out["rate_si"][j] / out["rate_si"][0] == pytest.approx(a[j] / a[0], rel=1e-12)
+    assert out["si_unit"] == "Sv" and out["scoring_floor_MeV"] == 0.010
+
+
 # --- inverse-square ------------------------------------------------------------------
 
 def test_inverse_square_law_exact():
