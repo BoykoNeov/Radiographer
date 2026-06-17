@@ -199,6 +199,198 @@ async function runM6b(page) {
   return { ok: checks.every((c) => c.pass), checks };
 }
 
+// --- M6c: drive the overlay curves and assert through the RENDERED Plotly path --
+//
+// "Through the rendered app path" (M6-ui) is taken literally: every assertion reads
+// the Plotly div's own `.data`/`.layout` (what the user sees), not the store. The
+// physics anchor is the Cs-137 secular-equilibrium ratio recovered from the drawn
+// trace; the M6c invariants proven are (a) axis toggle re-evaluates but NEVER
+// re-solves (#1), and (b) per-axis flooring (a stable end-product is an honest gap
+// on Activity yet grows in on Atoms).
+
+const PLOT = '[data-testid="curves-plot"]';
+
+async function runM6c(page) {
+  const checks = [];
+  const record = (name, pass, detail) => checks.push({ name, pass, detail });
+
+  // Reset to a clean, known inventory: Cs-137 only, Activity (Bq), log y. This still
+  // flows solve → recomputeCurves → $effect → Plotly.react (the real render path).
+  await page.evaluate(async () => {
+    const app = window.__APP__;
+    await app.clear();
+    app.setAxis("activity");
+    app.setLogY(true);
+    await app.addEntry("Cs-137", 1.0e9, "Bq");
+  });
+  await page.waitForFunction(
+    "window.__APP__.status === 'solved' && window.__APP__.curve && window.__APP__.curve.axis === 'activity'",
+    null,
+    { timeout: 30_000 },
+  );
+  // Wait for Plotly to have rendered the Activity-axis traces into the div.
+  await page.waitForFunction(
+    `(() => { const el = document.querySelector('${PLOT}');
+       return el && el.data && el.data.length >= 2 &&
+         el.layout && el.layout.yaxis && el.layout.yaxis.title &&
+         el.layout.yaxis.title.text === 'Activity (Bq)'; })()`,
+    null,
+    { timeout: 30_000 },
+  );
+
+  // 1) The overlay rendered one trace per closure member, in the shared palette,
+  //    with the §12 y-axis label.
+  const drawn = await page.evaluate((sel) => {
+    const app = window.__APP__;
+    const el = document.querySelector(sel);
+    const data = el.data;
+    const names = data.map((d) => d.name);
+    const colorsMatch = data.every((d) => d.line && d.line.color === app.colors[d.name]);
+    return {
+      n: data.length,
+      names,
+      closure: app.closure,
+      colorsMatch,
+      yTitle: el.layout.yaxis.title.text,
+      xType: el.layout.xaxis.type,
+      yType: el.layout.yaxis.type,
+    };
+  }, PLOT);
+  record(
+    "overlay renders one trace per closure member, shared palette, §12 label",
+    drawn.n === drawn.closure.length &&
+      drawn.names.includes("Cs-137") &&
+      drawn.names.includes("Ba-137m") &&
+      drawn.colorsMatch &&
+      drawn.yTitle === "Activity (Bq)" &&
+      drawn.xType === "log" &&
+      drawn.yType === "log",
+    `traces=${drawn.n} [${drawn.names.join(", ")}], colorsMatch=${drawn.colorsMatch}, ` +
+      `yTitle=${JSON.stringify(drawn.yTitle)}, axes=${drawn.xType}/${drawn.yType}`,
+  );
+
+  // 2) PHYSICS through the rendered trace: Cs-137 secular equilibrium
+  //    A(Ba-137m)/A(Cs-137) ≈ 0.94399 read off the drawn curve nearest 1 d. The
+  //    plateau is flat (minutes→years) so the nearest log-grid point is within ~1%.
+  const eq = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    const byName = Object.fromEntries(el.data.map((d) => [d.name, d]));
+    const cs = byName["Cs-137"];
+    const ba = byName["Ba-137m"];
+    const xs = cs.x;
+    let j = 0;
+    let best = Infinity;
+    for (let i = 0; i < xs.length; i++) {
+      const dd = Math.abs(Math.log10(xs[i]) - Math.log10(86400));
+      if (dd < best) {
+        best = dd;
+        j = i;
+      }
+    }
+    return { t: xs[j], ratio: ba.y[j] / cs.y[j] };
+  }, PLOT);
+  record(
+    "Cs-137 secular equilibrium ≈ 0.94399 read off the RENDERED curve",
+    Math.abs(eq.ratio - 0.94399) <= 0.94399 * 0.01,
+    `ratio=${eq.ratio?.toFixed(5)} @ t≈${eq.t?.toExponential(2)} s (nearest 1 d)`,
+  );
+
+  // 3) Axis toggle = EVALUATE, never re-solve (#1). Click the rendered "Atoms"
+  //    button; the handle must be unchanged and exactly one inventory stays live.
+  const before = await page.evaluate(() => ({
+    handle: window.__APP__.handle,
+    size: (() => {
+      const s = window.__BRIDGE__.registry_size();
+      return s.ok ? s.size : -1;
+    })(),
+  }));
+  await page.getByRole("button", { name: "Atoms", exact: true }).click();
+  await page.waitForFunction(
+    `(() => { const el = document.querySelector('${PLOT}');
+       return window.__APP__.curve && window.__APP__.curve.axis === 'atoms' &&
+         el.layout.yaxis.title.text === 'Atoms'; })()`,
+    null,
+    { timeout: 30_000 },
+  );
+  const after = await page.evaluate(() => ({
+    handle: window.__APP__.handle,
+    size: (() => {
+      const s = window.__BRIDGE__.registry_size();
+      return s.ok ? s.size : -1;
+    })(),
+    axis: window.__APP__.curve.axis,
+  }));
+  record(
+    "axis toggle re-evaluates, never re-solves (#1): handle stable, 1 live",
+    after.handle === before.handle && after.size === 1 && before.size === 1 && after.axis === "atoms",
+    `handleStable=${after.handle === before.handle}, registry_size=${before.size}→${after.size}, axis=${after.axis}`,
+  );
+
+  // 4) Per-axis flooring (§9): the stable end-product (Ba-137, t½=∞) is an honest
+  //    GAP on Activity (zero activity → all null) yet GROWS IN on Atoms — same
+  //    nuclide, two axes, two visibilities. This catches a per-series-floor bug the
+  //    ratio check (Ba-137m is never floored) cannot.
+  const onAtoms = await page.evaluate((sel) => {
+    const app = window.__APP__;
+    const hl = app.solveMeta.half_lives_s;
+    const stable = app.closure.find((n) => hl[n] === null) ?? null;
+    const el = document.querySelector(sel);
+    const tr = el.data.find((d) => d.name === stable);
+    const ys = (tr ? tr.y : []).filter((v) => v !== null && Number.isFinite(v));
+    return { stable, hasGrowth: ys.length > 1 && ys[ys.length - 1] > ys[0] && ys[ys.length - 1] > 0 };
+  }, PLOT);
+  // Switch back to Activity and assert the same stable trace is fully floored out.
+  await page.getByRole("button", { name: "Activity", exact: true }).click();
+  await page.waitForFunction(
+    `(() => { const el = document.querySelector('${PLOT}');
+       return window.__APP__.curve && window.__APP__.curve.axis === 'activity' &&
+         el.layout.yaxis.title.text === 'Activity (Bq)'; })()`,
+    null,
+    { timeout: 30_000 },
+  );
+  const onActivity = await page.evaluate(
+    (args) => {
+      const [sel, stable] = args;
+      const el = document.querySelector(sel);
+      const tr = el.data.find((d) => d.name === stable);
+      const ys = tr ? tr.y : [];
+      return { allNull: ys.length > 0 && ys.every((v) => v === null) };
+    },
+    [PLOT, onAtoms.stable],
+  );
+  record(
+    "per-axis flooring: stable end-product is a gap on Activity, grows on Atoms",
+    onAtoms.stable !== null && onAtoms.hasGrowth && onActivity.allNull,
+    `stable=${onAtoms.stable}, atoms.growing=${onAtoms.hasGrowth}, activity.allNull=${onActivity.allNull}`,
+  );
+
+  // 5) Mass axis + secondary-unit SWITCH = evaluate (label tracks unit, §12), never
+  //    re-solve (#1). Closes the third toggle leg (Mass is a distinct engine branch:
+  //    N·atomic_masses/AVOGADRO) and the unit-change path the axis-only check misses.
+  const h0 = await page.evaluate(() => window.__APP__.handle);
+  await page.getByRole("button", { name: "Mass", exact: true }).click();
+  await page.waitForFunction(`document.querySelector('${PLOT}').layout.yaxis.title.text === 'Mass (g)'`, null, {
+    timeout: 30_000,
+  });
+  await page.selectOption('[data-testid="curve-unit"]', "kg");
+  await page.waitForFunction(`document.querySelector('${PLOT}').layout.yaxis.title.text === 'Mass (kg)'`, null, {
+    timeout: 30_000,
+  });
+  const mass = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    const app = window.__APP__;
+    const s = window.__BRIDGE__.registry_size();
+    return { traces: el.data.length, handle: app.handle, size: s.ok ? s.size : -1, unit: app.curve.unit };
+  }, PLOT);
+  record(
+    "mass axis + unit switch: label tracks unit (§12), evaluate not re-solve (#1)",
+    mass.traces === 3 && mass.handle === h0 && mass.size === 1 && mass.unit === "kg",
+    `traces=${mass.traces}, handleStable=${mass.handle === h0}, size=${mass.size}, unit=${mass.unit}`,
+  );
+
+  return { ok: checks.every((c) => c.pass), checks };
+}
+
 let exitCode = 1;
 let browser;
 let server;
@@ -223,10 +415,16 @@ try {
   const m6aOk = !!(m6a && m6a.ok);
 
   let m6b = { ok: false, checks: [] };
+  let m6c = { ok: false, checks: [] };
   if (m6aOk) {
     m6b = await runM6b(page);
+    if (m6b.ok) {
+      m6c = await runM6c(page);
+    } else {
+      console.log("[gate] skipping M6c — M6b checks failed");
+    }
   } else {
-    console.log("[gate] skipping M6b — boot self-check failed");
+    console.log("[gate] skipping M6b/M6c — boot self-check failed");
   }
 
   console.log("\n===== M6b inventory panel =====");
@@ -234,11 +432,16 @@ try {
     console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
   }
 
-  exitCode = m6aOk && m6b.ok ? 0 : 1;
+  console.log("\n===== M6c overlay curves =====");
+  for (const c of m6c.checks) {
+    console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
+  }
+
+  exitCode = m6aOk && m6b.ok && m6c.ok ? 0 : 1;
   console.log(
     exitCode === 0
-      ? "\n✅ M6b PASS (real browser): boot benchmarks + inventory panel + save/load"
-      : "\n❌ M6b FAIL (real browser)",
+      ? "\n✅ M6c PASS (real browser): boot benchmarks + inventory panel + overlay curves"
+      : "\n❌ M6c FAIL (real browser)",
   );
 } catch (err) {
   console.error("Driver error:", err);

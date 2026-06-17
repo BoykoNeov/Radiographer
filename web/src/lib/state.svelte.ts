@@ -21,6 +21,7 @@
 
 import {
   BridgeClient,
+  type EvaluateOk,
   type Handle,
   type SolveEntry,
   type SolveOk,
@@ -34,12 +35,32 @@ import {
   PersistError,
   type PersistableState,
 } from "./persist";
-import { DEFAULT_UNIT, type InventoryEntry, type Precision } from "./types";
+import {
+  ATOMS_UNIT,
+  DEFAULT_UNIT,
+  type Axis,
+  type InventoryEntry,
+  type Precision,
+} from "./types";
 
 export type SolveStatus = "idle" | "solving" | "solved" | "error";
 
 /** Let a "solving…" state paint before a (synchronous, main-thread) solve blocks. */
 const yieldToPaint = () => new Promise<void>((r) => setTimeout(r, 0));
+
+/**
+ * `n` log-spaced times over `[lo, hi]` (both > 0) — the per-inventory overlay grid
+ * (§9 auto-range). The slider scrubs a cursor over THIS grid in M6d; M6c omits the
+ * t=0 offset (an evaluation offset that lands with the time control, M6d).
+ */
+function logGrid(lo: number, hi: number, n: number): number[] {
+  if (!(lo > 0) || !(hi > lo) || n < 2) return [lo, hi].filter((x) => x > 0);
+  const a = Math.log10(lo);
+  const b = Math.log10(hi);
+  const out = new Array<number>(n);
+  for (let i = 0; i < n; i++) out[i] = 10 ** (a + ((b - a) * i) / (n - 1));
+  return out;
+}
 
 export class AppState {
   // -- the inventory model (source of truth) --------------------------------
@@ -56,6 +77,25 @@ export class AppState {
   colors = $state<Record<string, string>>({});
   status = $state<SolveStatus>("idle");
   errorMsg = $state<string>("");
+
+  // -- overlay-curve display state (M6c, §9) --------------------------------
+  // The quantity axis + its secondary unit are DISPLAY state: changing them
+  // re-evaluates the already-solved inventory (cheap), it NEVER re-solves (#1).
+  // It is deliberately NOT persisted in v1 (the M6b serializer covers the
+  // inventory slice; axis is a view preference — see docs/plans/M6c-curves.md).
+  axis = $state<Axis>("activity");
+  activityUnit = $state<string>("Bq");
+  massUnit = $state<string>("g");
+  /** Log y-axis (default, §9) vs linear; a pure render flag — no re-evaluate. */
+  logY = $state<boolean>(true);
+  /** The one evaluate() feeding the overlay; null when empty/stale/failed. */
+  curve = $state<EvaluateOk | null>(null);
+  /** Loud curve-path error (#3) — surfaced, never a silent blank chart. */
+  curveError = $state<string>("");
+
+  /** Overlay grid density (log-spaced). HP is sympy-per-point → keep it responsive. */
+  private readonly CURVE_POINTS = 300;
+  private readonly CURVE_POINTS_HP = 60;
 
   // -- add-by-name source (fetched once after boot) -------------------------
   availableNuclides = $state<string[]>([]);
@@ -76,6 +116,12 @@ export class AppState {
   /** The full descendant closure of the current solve (parents + daughters). */
   get closure(): string[] {
     return this.solveMeta?.nuclides ?? [];
+  }
+  /** The engine `unit` for the current axis (the secondary-unit selection, §12). */
+  get curveUnit(): string {
+    if (this.axis === "activity") return this.activityUnit;
+    if (this.axis === "mass") return this.massUnit;
+    return ATOMS_UNIT;
   }
 
   // -- wiring ---------------------------------------------------------------
@@ -156,6 +202,31 @@ export class AppState {
     this.referenceTimeS = Number.isFinite(t) ? t : 0;
   }
 
+  // -- curve display controls (each RE-EVALUATES, never re-solves; #1) -------
+
+  setAxis(a: Axis): void {
+    if (a === this.axis) return;
+    this.axis = a;
+    this.recomputeCurves();
+  }
+
+  setActivityUnit(u: string): void {
+    if (u === this.activityUnit) return;
+    this.activityUnit = u;
+    if (this.axis === "activity") this.recomputeCurves();
+  }
+
+  setMassUnit(u: string): void {
+    if (u === this.massUnit) return;
+    this.massUnit = u;
+    if (this.axis === "mass") this.recomputeCurves();
+  }
+
+  /** Log vs linear y-axis. Pure render flag — flooring happens in the renderer; no evaluate. */
+  setLogY(v: boolean): void {
+    this.logY = v;
+  }
+
   // -- the solve primitive --------------------------------------------------
 
   /**
@@ -175,6 +246,8 @@ export class AppState {
       this.handle = null;
       this.solveMeta = null;
       this.colors = {};
+      this.curve = null;
+      this.curveError = "";
       this.errorMsg = "";
       this.status = "idle";
       return;
@@ -197,6 +270,8 @@ export class AppState {
       this.handle = null;
       this.solveMeta = null;
       this.colors = {};
+      this.curve = null;
+      this.curveError = "";
       this.status = "error";
       this.errorMsg = `${res.error.type}: ${res.error.message}`;
       return;
@@ -206,10 +281,46 @@ export class AppState {
     this.solveMeta = res;
     this.colors = this.registry.assignAll(res.nuclides); // fresh reference → reactive (#4)
     this.status = "solved";
+    this.recomputeCurves(); // one evaluate over the auto-range grid (§9; "evaluate many", #1)
   }
 
   private releaseHandle(h: Handle | null): void {
     if (h && this.client) this.client.release(h);
+  }
+
+  // -- the evaluate primitive (the "evaluate many" half of #1) --------------
+
+  /**
+   * Evaluate the already-solved inventory over a log-spaced grid spanning the
+   * auto time-range, in the current axis + unit, and store it for the overlay.
+   * Pure re-evaluation — it reuses the live handle and NEVER re-solves (#1).
+   * Loud on failure: clears the curve and sets `curveError` (#3), never a blank.
+   */
+  private recomputeCurves(): void {
+    this.curveError = "";
+    const meta = this.solveMeta;
+    if (!this.client || !this.handle || !meta) {
+      this.curve = null;
+      return;
+    }
+    const range = meta.time_range_s;
+    if (!range) {
+      // Every nuclide is stable → no decay to evolve (auto_time_range is null).
+      this.curve = null;
+      return;
+    }
+    const n = this.precision === "hp" ? this.CURVE_POINTS_HP : this.CURVE_POINTS;
+    const res = this.client.evaluate(this.handle, {
+      times_s: logGrid(range[0], range[1], n),
+      axis: this.axis,
+      unit: this.curveUnit,
+    });
+    if (!res.ok) {
+      this.curve = null;
+      this.curveError = `${res.error.type}: ${res.error.message}`;
+      return;
+    }
+    this.curve = res;
   }
 
   // -- persistence (M6b: inventory slice; later chunks extend the envelope) --

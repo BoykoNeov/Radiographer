@@ -26,3 +26,21 @@ export const UNIT_OPTIONS: ReadonlyArray<{ value: string; label: string; kind: s
 ];
 
 export const DEFAULT_UNIT = "Bq";
+
+// --- curve axis (M6c, §9 "Atoms · Mass · Activity" toggle) -------------------
+
+/** The quantity axis for the overlay curves (and the dose breakdown later). */
+export type Axis = "atoms" | "mass" | "activity";
+
+/** Segmented-toggle options, in display order; default is Activity (§9). */
+export const AXIS_OPTIONS: ReadonlyArray<{ value: Axis; label: string }> = [
+  { value: "atoms", label: "Atoms" },
+  { value: "mass", label: "Mass" },
+  { value: "activity", label: "Activity" },
+];
+
+/** Secondary unit choices per axis (the `unit` arg to engine `evaluate`). */
+export const ACTIVITY_UNITS = ["Bq", "Ci"] as const;
+export const MASS_UNITS = ["g", "kg", "mg"] as const;
+/** Atoms has a single unit; kept as a constant so labels stay obsessive (§12). */
+export const ATOMS_UNIT = "atoms";
