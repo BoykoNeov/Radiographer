@@ -181,10 +181,13 @@ data) with the real app shell.
 
 ## Key files & decisions
 
-- `web/index.html` — the app shell (replaces the M1 harness contents).
-- `web/` JS modules — bridge client, app-state store, and per-view modules
-  (curves, time, chain, dose, shield). Structure depends on the framework OPEN.
-- `web/drive_browser.mjs` — extended into the per-chunk + end-to-end UI test driver.
+- `web/` — a **Vite + TypeScript + Svelte/React** project: `index.html` entry,
+  `src/` with the bridge client (typed `Handle`), the reactive app-state store,
+  and per-view components (curves, time, chain, dose, shield), `public/` holding
+  the runtime-data archive + Pyodide loader glue. The old M1 harness contents are
+  retired into this app.
+- `web/drive_browser.mjs` — extended into the per-chunk + end-to-end UI test
+  driver (Playwright against the Vite dev server / built `dist/`).
 - A small build/copy step to assemble the runtime-data archive (emissions +
   conversion + attenuation + buildup + neutron_sources; **excludes** vendor/build).
 - No change expected to `engine/` (the `set_data_root()` hatch already exists);
@@ -193,23 +196,30 @@ data) with the real app shell.
 
 ## Open questions / risks
 
-- **Framework (decide at M6a start).** §4 allows "plain HTML/CSS or a light
-  framework." The deciding constraint is **not** first-load weight (Pyodide
-  dwarfs any framework) but the **locked live/reactive requirement** (§9): one
-  slider scrub must update DAG encoding + curve cursor + dose bars together.
-  That's genuinely reactive multi-view state where pure vanilla gets painful, and
-  it's hard to reverse later. *Recommendation:* a tiny reactive lib (e.g.
-  Preact+signals or lit) with **no build step** (ESM via CDN/import-map), keeping
-  the "no build-time backend" rule. **Worth a one-line user confirm before M6a.**
-- **Packaging method (M6a).** Recommended: one archive + `unpackArchive`. Risk:
-  archive build step + 48 MB first load (cached after). Lazy per-nuclide emission
-  fetch is the fallback optimization if first load is unacceptable.
-- **Typed IDs (CLAUDE.md).** No TS build step is assumed → use **JSDoc typedefs**
-  for the branded `Handle` and nuclide IDs (or TS in check-only/no-emit mode).
-  Decide alongside the framework.
+- **Framework — RESOLVED (user, 2026-06-17): Vite + a component framework
+  (React/Svelte), with a build step.** The deciding constraint was the **locked
+  live/reactive requirement** (§9): one slider scrub must update DAG encoding +
+  curve cursor + dose bars together — genuinely reactive multi-view state, hard
+  to reverse later. *Reconciliation with "no build-time backend" (§3/§4):* a
+  **frontend** build tool only compiles to **static assets**; it is not a backend
+  and the deployed app stays 100% client-side (Pyodide does all physics in the
+  browser), so the locked all-on-device architecture is intact. Accepted cost:
+  toolchain/repo complexity. *Sub-choice React vs Svelte — pick at M6a start;
+  recommend **Svelte** (compiles away → tiny runtime, built-in reactivity fits
+  the one-signal-many-views case; bundle stays lean), React fine if ecosystem
+  familiarity is preferred.*
+- **Packaging method (M6a).** Recommended: one archive + `unpackArchive`,
+  assembled into the Vite `public/` dir as a static asset. Risk: archive build
+  step + 48 MB first load (cached after). Lazy per-nuclide emission fetch is the
+  fallback optimization if first load is unacceptable.
+- **Typed IDs — RESOLVED (follows the build step): use TypeScript.** The Vite
+  build makes real TS the natural choice (not JSDoc) for the branded `Handle` and
+  nuclide IDs (CLAUDE.md typed-IDs preference).
 - **HP path in WASM** unverified until M6a wires the "computing…" button (M1 risk).
-- **Plotly/Cytoscape loading** — CDN script tags vs ESM import-map; size budget
-  fine (§4) but confirm offline/caching behavior with Pyodide's own caching.
+- **Plotly/Cytoscape** — now **bundled npm deps** (Vite), not CDN/import-map;
+  size budget fine (§4, Pyodide dominates). Confirm tree-shaking (Plotly is
+  large — consider `plotly.js-dist-min` or a custom bundle) and that Cytoscape +
+  dagre layout are wired.
 - **Prebuilt sources are M7**, not M6 — M6f's neutron path and source-aware
   inventory model must be built source-ready but exercised with user inventories
   + (for neutron) the Cf-252 key already shipped in M5.
