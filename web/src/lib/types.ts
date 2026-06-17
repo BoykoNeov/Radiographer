@@ -119,6 +119,22 @@ export const MODALITY_COLORS = {
 } as const;
 
 /**
+ * Per-modality EPISTEMIC uncertainty registers (HANDOFF_PLAN §9/§11), made visible as
+ * fill bands on the dose-vs-distance curve and error whiskers on the grouped-log bar
+ * (M6f-2). These are NOT computed error propagation — they are the documented accuracy
+ * limits of each model: γ ≈ ±10–15 % in the buildup regime, β ≈ ±20–30 % (and published
+ * skin-dose values themselves disagree ~50 %), neutron source terms ≈ order-of-magnitude
+ * (tabulated). The whisker uses the CONSERVATIVE upper bound (`hi`) — understating
+ * uncertainty is the wrong direction for a safety-adjacent tool — while the caption shows
+ * the full range. "The tight-γ-vs-fat-n contrast is the point" (§9); n lands with the
+ * prebuilt sources (M7). */
+export const MODALITY_UNCERTAINTY: Record<"gamma" | "beta" | "neutron", { lo: number; hi: number; label: string }> = {
+  gamma: { lo: 0.1, hi: 0.15, label: "±10–15%" },
+  beta: { lo: 0.2, hi: 0.3, label: "±20–30%" },
+  neutron: { lo: 2.0, hi: 2.0, label: "order-of-magnitude" }, // ×/÷ a few — M7
+};
+
+/**
  * Format SI seconds as a short human string, auto-picking the largest unit whose
  * value is ≥ 1 (e.g. 86400 → "1 d", 153 → "2.55 min"). For tick/readout labels;
  * not round-trip-exact (display only). 0/negative render as "0 s".

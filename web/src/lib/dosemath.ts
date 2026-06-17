@@ -81,6 +81,20 @@ export function trapzWindow(xs: number[], ys: number[], a: number, b: number): T
   return { value: area, truncated };
 }
 
+/**
+ * Point-source geometric factor `1/(4π d²)` (m⁻²) — the exact mirror of the engine's
+ * `GammaDoseModel._geometric_factor` (dose.py). The γ per-line table and the dose-vs-
+ * distance curve apply it client-side to the engine's distance-free per-decay coefficients,
+ * so the cursor/distance are pure derives (§3 "evaluate many", zero bridge calls). The
+ * point-source field is singular at 0; callers pass `distance > 0` (the dose input rejects
+ * ≤0). Returns 0 for a non-positive distance rather than ∞ (a defensive guard; never hit
+ * through the validated input path).
+ */
+export function geometricFactor(distanceM: number): number {
+  if (!(distanceM > 0)) return 0;
+  return 1 / (4 * Math.PI * distanceM * distanceM);
+}
+
 // --- SI dose formatting (§12: obsessive, prefixed units) ----------------------
 
 const PREFIXES: ReadonlyArray<{ factor: number; symbol: string }> = [

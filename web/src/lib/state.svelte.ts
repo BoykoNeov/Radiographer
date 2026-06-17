@@ -22,13 +22,14 @@
 import {
   BridgeClient,
   type ChainOk,
+  type DoseLinesOk,
   type DoseOk,
   type EvaluateOk,
   type Handle,
   type SolveEntry,
   type SolveOk,
 } from "./bridge";
-import { interpAt, trapzWindow, type TrapzResult } from "./dosemath";
+import { geometricFactor, interpAt, trapzWindow, type TrapzResult } from "./dosemath";
 import { ColorRegistry } from "./palette";
 import {
   deserializeState,
@@ -144,6 +145,14 @@ export class AppState {
   gammaDoseSeries = $state<DoseOk | null>(null);
   /** β skin-dose-rate series (Gy/s, Hp(0.07)) over `curveX` — a separate quantity. */
   betaDoseSeries = $state<DoseOk | null>(null);
+  /**
+   * Per-line γ decomposition (M6f-2, §9 "the gamma slice expands to a per-line table").
+   * DISTANCE- and TIME-free per-decay coefficients fetched once per (quantity, geometry,
+   * shield) — the cursor getter `gammaLinesAtCursor` folds in `1/4πd²` and the parent's
+   * activity at the cursor, so the table is live on scrub/distance with ZERO bridge calls
+   * (Design A; §3). Its rows sum EXACTLY to `gammaRateAtCursor` (one engine assembly path).
+   */
+  gammaLines = $state<DoseLinesOk | null>(null);
   /** Loud dose-path error (#3) — surfaced, never a silent blank breakdown. */
   doseError = $state<string>("");
 
@@ -240,6 +249,42 @@ export class AppState {
     const s = this.betaDoseSeries;
     if (!s) return null;
     return trapzWindow(this.curveX, s.rate_si, this.cursorOffsetS, this.cursorOffsetS + this.exposureS);
+  }
+
+  /**
+   * The §9 per-line γ table at the cursor: each scored line's dose RATE (Sv/s) =
+   * `1/4πd² · coeff_si · A_n(cursor)` — the engine's distance-free per-decay coefficient
+   * (`gammaLines`) folded with the parent's activity at the cursor (`activityAtCursor`) and
+   * the current distance, all client-side (Design A; zero bridge calls on scrub/distance).
+   * Rows are sorted by descending contribution with `frac` of the γ total; `Σ rate_si`
+   * equals `gammaRateAtCursor` exactly (one engine assembly path, linear interp commutes).
+   *
+   * Returns null when there is no decomposition (`gammaLines` null) OR the per-nuclide
+   * activity is unavailable (`activityAtCursor` null) — the renderer shows a note rather
+   * than a blank or fabricated table (the activity coupling is an honest §11 guard, not a
+   * silent empty). The SF pseudo-sink / missing keys read as zero activity (no crash).
+   */
+  get gammaLinesAtCursor(): {
+    rows: { nuclide: string; E_MeV: number; yield: number; origin: string | null; rate_si: number; frac: number }[];
+    total: number;
+  } | null {
+    const dl = this.gammaLines;
+    if (!dl) return null;
+    const act = this.activityAtCursor;
+    if (!act) return null; // activity unavailable — caller shows a note, never a blank table
+    const geom = geometricFactor(this.doseDistanceM);
+    const rows = dl.lines.map((ln) => ({
+      nuclide: ln.nuclide,
+      E_MeV: ln.E_MeV,
+      yield: ln.yield,
+      origin: ln.origin,
+      rate_si: geom * ln.coeff_si * (act[ln.nuclide] ?? 0),
+      frac: 0,
+    }));
+    const total = rows.reduce((s, r) => s + r.rate_si, 0);
+    if (total > 0) for (const r of rows) r.frac = r.rate_si / total;
+    rows.sort((a, b) => b.rate_si - a.rate_si);
+    return { rows, total };
   }
 
   // -- per-node activity at the cursor (drives the live DAG encoding, M6e) -----
@@ -567,6 +612,7 @@ export class AppState {
     if (!this.client || !this.handle || !meta || this.curveX.length === 0) {
       this.gammaDoseSeries = null;
       this.betaDoseSeries = null;
+      this.gammaLines = null;
       return;
     }
     const t0 = this.referenceTimeS;
@@ -582,7 +628,19 @@ export class AppState {
     if (!g.ok) {
       this.gammaDoseSeries = null;
       this.betaDoseSeries = null;
+      this.gammaLines = null;
       this.doseError = `${g.error.type}: ${g.error.message}`;
+      return;
+    }
+    // The per-line γ decomposition (M6f-2): same quantity/geometry as the γ series so the
+    // table reconciles with the γ card, but distance/time-free (the cursor getter folds in
+    // 1/4πd² + activity). One fetch per recomputeDose; the cursor never re-fetches (§3).
+    const lines = this.client.dose_lines(this.handle, { quantity: this.doseQuantity, geometry });
+    if (!lines.ok) {
+      this.gammaDoseSeries = null;
+      this.betaDoseSeries = null;
+      this.gammaLines = null;
+      this.doseError = `${lines.error.type}: ${lines.error.message}`;
       return;
     }
     // β skin dose Hp(0.07): the same distance; no shield in M6f-1 (→ no bremsstrahlung),
@@ -594,17 +652,20 @@ export class AppState {
     if (!b.ok) {
       this.gammaDoseSeries = null;
       this.betaDoseSeries = null;
+      this.gammaLines = null;
       this.doseError = `${b.error.type}: ${b.error.message}`;
       return;
     }
     this.gammaDoseSeries = g;
     this.betaDoseSeries = b;
+    this.gammaLines = lines;
   }
 
   /** Clear the dose breakdown (empty / failed solve). */
   private clearDose(): void {
     this.gammaDoseSeries = null;
     this.betaDoseSeries = null;
+    this.gammaLines = null;
     this.doseError = "";
   }
 

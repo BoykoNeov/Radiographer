@@ -834,6 +834,11 @@ async function runM6e(page) {
 // γ(Sv) and β(Gy/Hp(0.07)) ride SEPARATE axes and are never summed (§6.2 LOCKED);
 // neutron is grayed for a user inventory (§6.3); and accumulated dose INTEGRATES the
 // rate, not rate×time (§11) — proven with a short-lived source over one half-life.
+//
+// M6f-2 (checks 7–9) adds the per-line γ table (rows reconcile EXACTLY with the γ card,
+// colored by parent species #4) and uncertainty made visible (§9/§11): error whiskers on
+// the grouped-log bar only, and a shaded ±band on the exact-inverse-square dose-vs-distance
+// curve — both client-side reconstructions (no bridge call on the cursor, §3).
 
 async function runM6f(page) {
   const checks = [];
@@ -844,6 +849,8 @@ async function runM6f(page) {
   const GAMMA = '[data-testid="dose-gamma"]';
   const NEUTRON = '[data-testid="dose-neutron"]';
   const DPLOT = '[data-testid="dose-plot"]';
+  const DDPLOT = '[data-testid="dose-distance-plot"]';
+  const LINES = '[data-testid="dose-lines"]';
 
   // Clean baseline: Co-60 1 GBq (the gamma-dose reference case), t₀=0, H*(10) @ 1 m,
   // cursor homed to the low end of the range so the source is ~full activity.
@@ -1034,6 +1041,139 @@ async function runM6f(page) {
     `ratio=${integ.ratio.toFixed(3)} (rate×time would be 1.000), truncated=${integ.truncated}, t½=${integ.tHalf.toFixed(1)} s`,
   );
 
+  // ===== M6f-2: per-line γ table + uncertainty viz (whiskers + dose-vs-distance band) =====
+  // Re-establish the Co-60 reference (check 6 left Tc-99m loaded): H*(10) @ 1 m, t₀=0,
+  // cursor at the range low so the source is ~full activity.
+  await page.evaluate(async () => {
+    const app = window.__APP__;
+    await app.clear();
+    app.setReferenceTimeS(0);
+    app.setDoseQuantity("ambient_H10");
+    app.setDoseDistanceM(1.0);
+    await app.addEntry("Co-60", 1.0e9, "Bq");
+    app.setCursorOffsetS(0);
+  });
+  await page.waitForFunction(
+    "window.__APP__.gammaDoseSeries && window.__APP__.gammaLines && window.__APP__.curveX.length > 0",
+    null,
+    { timeout: 30_000 },
+  );
+  await page.waitForSelector(`${LINES} tbody tr`, { timeout: 30_000 });
+
+  // 7) Per-line γ table (§9 "the γ slice expands to a per-line table"): the rows reconcile
+  //    EXACTLY with the rendered γ card (Σ rate = gammaRateAtCursor — one engine assembly
+  //    path, linear interp commutes), Co-60's two dominant lines are its ~1.17 & ~1.33 MeV
+  //    gammas, and every rendered row is colored by its PARENT SPECIES (#4).
+  const lines = await page.evaluate(() => {
+    const app = window.__APP__;
+    const gl = app.gammaLinesAtCursor;
+    const trs = [...document.querySelectorAll('[data-testid="dose-lines"] tbody tr')];
+    const domSum = trs.reduce((s, tr) => s + parseFloat(tr.getAttribute("data-rate-si")), 0);
+    // Each rendered swatch's color must equal the shared per-species color of its nuclide.
+    const tmp = document.createElement("div");
+    document.body.appendChild(tmp);
+    const colorMatch = trs.every((tr) => {
+      const n = tr.getAttribute("data-nuclide");
+      const sw = tr.querySelector(".swatch");
+      tmp.style.background = app.colors[n] || "";
+      return getComputedStyle(sw).backgroundColor === getComputedStyle(tmp).backgroundColor;
+    });
+    tmp.remove();
+    return {
+      nRows: gl ? gl.rows.length : 0,
+      domRows: trs.length,
+      total: gl ? gl.total : NaN,
+      cardRate: app.gammaRateAtCursor,
+      domSum,
+      top2E: gl ? gl.rows.slice(0, 2).map((r) => r.E_MeV) : [],
+      top2Frac: gl ? gl.rows.slice(0, 2).reduce((s, r) => s + r.frac, 0) : 0,
+      colorMatch,
+    };
+  });
+  const t2 = [...lines.top2E].sort((a, b) => a - b);
+  const twoGammas =
+    t2.length === 2 &&
+    Math.abs(t2[0] - 1.1732) < 5e-3 &&
+    Math.abs(t2[1] - 1.3325) < 5e-3 &&
+    lines.top2Frac > 0.95;
+  record(
+    "per-line γ table reconciles with the γ card (Σ=rate), Co-60 two gammas, colored by species (#4)",
+    lines.nRows === lines.domRows &&
+      lines.nRows >= 2 &&
+      Math.abs(lines.total - lines.cardRate) / lines.cardRate < 1e-6 &&
+      Math.abs(lines.domSum - lines.cardRate) / lines.cardRate < 1e-6 &&
+      twoGammas &&
+      lines.colorMatch,
+    `rows=${lines.nRows}(dom ${lines.domRows}), Σ=${lines.total?.toExponential(4)} == card=${lines.cardRate?.toExponential(4)}, ` +
+      `top2=[${t2.map((e) => e.toFixed(4)).join(", ")}] frac=${lines.top2Frac.toFixed(3)}, colorMatch=${lines.colorMatch}`,
+  );
+
+  // 8) Uncertainty whiskers (§9/§11): present on the GROUPED (log) breakdown bar, ABSENT on
+  //    the STACKED bar (cumulative segment positions make per-segment whiskers ambiguous, §9).
+  //    The whisker uses the conservative upper bound (γ 15%, β 30%).
+  const wStacked = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    return { gVis: !!(el.data[0].error_y || {}).visible, bVis: !!(el.data[1].error_y || {}).visible };
+  }, DPLOT);
+  await page.getByRole("button", { name: "Grouped (log)" }).click();
+  await page.waitForFunction(
+    (sel) => {
+      const el = document.querySelector(sel);
+      return (
+        el && el.layout && el.layout.yaxis && el.layout.yaxis.type === "log" &&
+        el.data[0].error_y && el.data[0].error_y.visible === true
+      );
+    },
+    DPLOT,
+    { timeout: 30_000 },
+  );
+  const wGrouped = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    return {
+      gVis: !!el.data[0].error_y.visible,
+      gVal: el.data[0].error_y.value,
+      bVis: !!el.data[1].error_y.visible,
+      bVal: el.data[1].error_y.value,
+    };
+  }, DPLOT);
+  await page.getByRole("button", { name: "Stacked (linear)" }).click(); // restore
+  record(
+    "uncertainty whiskers on the grouped (log) bar, absent on stacked (§9/§11)",
+    !wStacked.gVis &&
+      !wStacked.bVis &&
+      wGrouped.gVis &&
+      wGrouped.bVis &&
+      Math.abs(wGrouped.gVal - 15) < 1e-6 &&
+      Math.abs(wGrouped.bVal - 30) < 1e-6,
+    `stacked γ/β vis=${wStacked.gVis}/${wStacked.bVis}; grouped γ=${wGrouped.gVal}% β=${wGrouped.bVal}%`,
+  );
+
+  // 9) Dose-vs-distance curve (§9): exists with the shaded ±band (lower, upper-fill, center
+  //    = 3 traces); the γ center line is EXACT inverse-square (y·d² is constant across the
+  //    whole curve, v1 has no air attenuation, §11); the band brackets it by the γ register
+  //    (×0.85 / ×1.15). γ-only client reconstruction — no bridge call.
+  await page.waitForFunction(
+    (sel) => { const el = document.querySelector(sel); return el && el.data && el.data.length === 3; },
+    DDPLOT,
+    { timeout: 30_000 },
+  );
+  const dist = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    const [lower, upper, center] = el.data;
+    const inv = center.x.map((x, i) => center.y[i] * x * x); // inverse-square invariant
+    const spread = (Math.max(...inv) - Math.min(...inv)) / inv[0];
+    const k = Math.floor(center.x.length / 2);
+    return { n: el.data.length, spread, upRatio: upper.y[k] / center.y[k], loRatio: lower.y[k] / center.y[k] };
+  }, DDPLOT);
+  record(
+    "dose-vs-distance: exact inverse-square γ line (y·d²=const) + ±band brackets it (§9/§11)",
+    dist.n === 3 &&
+      dist.spread < 1e-9 &&
+      Math.abs(dist.upRatio - 1.15) < 1e-6 &&
+      Math.abs(dist.loRatio - 0.85) < 1e-6,
+    `traces=${dist.n}, inverse-square spread=${dist.spread.toExponential(2)} (want 0), band=[×${dist.loRatio.toFixed(2)}, ×${dist.upRatio.toFixed(2)}]`,
+  );
+
   return { ok: checks.every((c) => c.pass), checks };
 }
 
@@ -1119,8 +1259,8 @@ try {
   exitCode = m6aOk && m6b.ok && m6c.ok && m6d.ok && m6e.ok && m6f.ok ? 0 : 1;
   console.log(
     exitCode === 0
-      ? "\n✅ M6e PASS (real browser): boot + inventory + curves + time control + decay-chain DAG + dose"
-      : "\n❌ M6e FAIL (real browser)",
+      ? "\n✅ M6f PASS (real browser): boot + inventory + curves + time control + decay-chain DAG + dose (incl. M6f-2 per-line table + uncertainty viz)"
+      : "\n❌ M6f FAIL (real browser)",
   );
 } catch (err) {
   console.error("Driver error:", err);

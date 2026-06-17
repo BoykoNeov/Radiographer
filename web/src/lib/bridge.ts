@@ -130,6 +130,25 @@ export interface DoseOk {
   warnings: DoseWarning[];
 }
 
+/** One scored photon line for the §9 per-line γ table (M6f-2). `coeff_si` is the
+ *  DISTANCE- and TIME-free per-decay SI constant (Sv·m²/decay for H*(10)/effective);
+ *  the client applies `1/4πd²` and the parent's activity at the cursor. */
+export interface DoseLineRow {
+  nuclide: string;
+  E_MeV: number;
+  yield: number;
+  origin: string | null;
+  coeff_si: number;
+}
+
+export interface DoseLinesOk {
+  quantity: string;
+  si_unit: string;
+  lines: DoseLineRow[];
+  warnings: DoseWarning[];
+  scoring_floor_MeV: number;
+}
+
 export interface ReleaseOk {
   handle: string;
   existed: boolean;
@@ -151,6 +170,7 @@ export type RegistrySizeResponse = Result<RegistrySizeOk>;
 export type EvaluateResponse = Result<EvaluateOk>;
 export type ChainResponse = Result<ChainOk>;
 export type DoseResponse = Result<DoseOk>;
+export type DoseLinesResponse = Result<DoseLinesOk>;
 export type ReleaseResponse = Result<ReleaseOk>;
 
 // --- the client --------------------------------------------------------------
@@ -196,6 +216,12 @@ export class BridgeClient {
 
   dose(handle: Handle, req: DoseRequest): DoseResponse {
     return this.call<DoseResponse>("dose", handle, JSON.stringify(req));
+  }
+
+  /** Per-line γ decomposition for the §9 per-line table (M6f-2). Distance/time-free:
+   *  the client folds in `1/4πd²` and the cursor activity (no re-fetch on scrub). */
+  dose_lines(handle: Handle, req: { quantity?: string; geometry?: string | null; shield?: [string, number] | null; medium?: string }): DoseLinesResponse {
+    return this.call<DoseLinesResponse>("dose_lines", handle, JSON.stringify(req));
   }
 
   beta_dose(handle: Handle, req: Record<string, unknown>): DoseResponse {

@@ -1,6 +1,6 @@
 # M6f — Dose calculator + breakdown
 
-**Status:** M6f-1 in progress.
+**Status:** M6f-1 + M6f-2 done — gate green dev + built (M6a/b/c/d/e + 9 M6f checks).
 **Parent:** `docs/plans/M6-ui.md` (sixth M6 chunk; M6a boot, M6b inventory/state,
 M6c curves, M6d time control). M6e (chain DAG) is a sibling consumer of the same
 M6d contract and is **not a dependency** — M6f was taken next by user request.
@@ -80,11 +80,41 @@ evaluate** off the live handle and never re-solves.
   log toggle), H\*(10)/effective + geometry, distance + exposure inputs, accumulated
   dose by integration, neutron grayed, warnings surfaced, units labelled. Gate:
   Co-60 H\*(10)@1 m benchmark through the rendered path + pure-evaluate invariants.
-- **M6f-2:** uncertainty made visible (fill bands on dose-vs-distance; error whiskers
+- **M6f-2 (done):** uncertainty made visible (fill band on dose-vs-distance; error whiskers
   on the grouped-log bar — γ ±10–15 %, β ±20–30 %, n order-of-mag) + the **per-line
-  gamma table** (needs a new `dose_lines` bridge endpoint exposing
-  `GammaDoseModel._per_line_constant_si` × cursor activity, colored by species, #4).
-  Note: dose-vs-**thickness** is M6g (shield), not here.
+  gamma table** (`dose_lines` bridge endpoint over `GammaDoseModel.per_line_rows` × cursor
+  activity, colored by species, #4). Note: dose-vs-**thickness** is M6g (shield), not here.
+
+## M6f-2 load-bearing decisions (a fresh session must not re-derive these)
+
+7. **Per-line table = Design A (distance/time-free constants × client geom × activity-at-
+   cursor) — zero bridge calls on scrub (advisor; §3).** The refactor made
+   `GammaDoseModel` record per-line rows (`lines_si`) whose sum **is** `coeff_si[nuclide]`
+   (one assembly path — `_lines_for` builds rows, the coefficient is `sum(rows)`), so the
+   table and the total dose can never drift. `dose_lines` returns only the per-decay
+   coefficients (`coeff_si`, distance/time-free); the store's `gammaLinesAtCursor` getter
+   folds in `1/4πd²` (client `geometricFactor`) and the parent's activity at the cursor
+   (`activityAtCursor`, reused from M6e), so the table is live on scrub **and** distance
+   with **no re-fetch**. `Σ` per-line rate equals `gammaRateAtCursor` **exactly** (linear
+   interp commutes with the linear combination) — the gate asserts rel < 1e-6 through the
+   rendered DOM. **Activity-coupling guard (§11):** if `gammaLines` exists but
+   `activityAtCursor` is null, the table shows a note, never a blank/zero.
+8. **Uncertainty registers are HONESTY CONSTANTS, not propagated error (§9/§11).**
+   `MODALITY_UNCERTAINTY` (types.ts) encodes the documented model-accuracy bands — γ
+   ±10–15 %, β ±20–30 %, n order-of-magnitude. The whisker/band uses the **conservative
+   upper bound** (γ 15 %, β 30 %) — understating uncertainty is the wrong direction for a
+   safety-adjacent tool — and the caption shows the full range.
+9. **Whiskers on the GROUPED (log) bar only, never the stacked bar (§9).** Cumulative
+   stacked-segment positions make per-segment whiskers ambiguous; the gate asserts
+   `error_y` is visible in grouped mode and absent in stacked.
+10. **Dose-vs-distance is γ-only, client-side EXACT inverse-square (§11).** γ's per-decay
+    coefficient is distance-independent and v1 models no air attenuation, so
+    `rate(d) = rate(d₀)·(d₀/d)²` reconstructs the whole curve with **zero engine calls**;
+    the shaded ±band is the γ register. β is contact-dominated (non-inverse-square distance
+    model) and **excluded** from the distance curve (shown only in the bar); neutron
+    (order-of-mag) lands with the prebuilt sources (M7), where the "tight-γ-vs-fat-n"
+    contrast (§9) finally appears. The curve is a slope-−2 line — **the band is the
+    information**, and it generalizes to the non-trivial dose-vs-thickness in M6g.
 
 ## Key files
 
@@ -123,7 +153,9 @@ evaluate** off the live handle and never re-solves.
   versioned-serializer extension + the full round-trip test land in M6h (where the
   cursor restore-after-solve ordering trap is also handled). The M6b serializer is
   untouched here.
-- **Per-line gamma table + uncertainty viz → M6f-2** (decision #5).
+- ~~**Per-line gamma table + uncertainty viz → M6f-2** (decision #5).~~ **DONE** —
+  decisions #7–10 above. The per-line table satisfies invariant #4's "dose breakdown shares
+  one color per species" (lines colored by parent nuclide).
 - **Cross-quantity bar comparison is intentionally NOT offered (advisor).** The
   breakdown bar gives γ and β their own y-axes (Sv, Gy), each auto-ranging to its
   own bar — so the heights are deliberately **not** comparable across quantities
