@@ -24,7 +24,7 @@ from engine.beta_dose import BetaDoseError, BetaSkinDoseModel
 from engine.buildup import BuildupError
 from engine.chain import build_dag
 from engine.conversion import ConversionError
-from engine.dose import DoseError, GammaDoseModel
+from engine.dose import SCORING_FLOOR_MEV, DoseError, GammaDoseModel
 from engine.emissions import EmissionsError
 from engine.inventory import EngineError, SolvedInventory
 from engine.neutron_dose import NeutronDoseError, NeutronDoseModel
@@ -169,6 +169,43 @@ def dose(handle: str, request_json: str) -> str:
             geometry=req.get("geometry"),
         )
         return _ok(model.dose_rate_series(activities, float(req["distance_m"])))
+    except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
+        return _err(exc)
+
+
+def dose_lines(handle: str, request_json: str) -> str:
+    """``{"quantity":"ambient_H10", "geometry":null, "shield":["lead",2.0]|null,
+        "medium":"air"}`` -> ``{ok, quantity, si_unit, lines:[{nuclide, E_MeV, yield,
+        origin, coeff_si}], warnings, scoring_floor_MeV}``.
+
+    The §9 per-line γ breakdown ("the gamma slice expands to a per-line table"). DISTANCE-
+    and TIME-FREE on purpose: it returns only the per-line per-decay coefficients ``coeff_si``
+    (Sv·m²/decay for H*(10)/effective; J·m²/kg for air_kerma). The client applies the
+    geometric factor ``1/4πd²`` and the parent's activity ``A_n(t)`` at the cursor, so the
+    table is live on scrub/distance with no re-fetch — the §3 "solve once, evaluate many"
+    discipline the dose series already follows. ``coeff_si`` is the same per-line quantity
+    that sums to ``dose()``'s ``C_n``, so ``Σ(coeff_si·A_n)/4πd²`` reconciles EXACTLY with
+    the ``dose()`` total (one coefficient-assembly path, no second code branch to drift)."""
+    try:
+        req = json.loads(request_json)
+        solved = _get(handle)
+        shield = req.get("shield")
+        model = GammaDoseModel(
+            solved.names,
+            req.get("quantity", "ambient_H10"),
+            medium=req.get("medium", "air"),
+            shield=tuple(shield) if shield else None,
+            geometry=req.get("geometry"),
+        )
+        return _ok(
+            {
+                "quantity": model.quantity,
+                "si_unit": model.si_unit,
+                "lines": model.per_line_rows(),
+                "warnings": list(model.warnings),
+                "scoring_floor_MeV": SCORING_FLOOR_MEV,
+            }
+        )
     except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
         return _err(exc)
 

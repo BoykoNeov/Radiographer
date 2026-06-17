@@ -116,6 +116,43 @@ def test_dose_rate_series_is_proportional_to_activity_over_grid():
     assert out["si_unit"] == "Sv" and out["scoring_floor_MeV"] == 0.010
 
 
+# --- per-line decomposition (M6f-2 per-line γ table source) --------------------------
+
+def test_per_line_rows_sum_to_coefficient_exactly():
+    # The §9 per-line table and the total dose share ONE coefficient-assembly path: a
+    # nuclide's per-line rows must sum to its C_n EXACTLY (==, not approx), or the table
+    # would silently disagree with the dose it explains. Cs-137+Ba-137m exercises a
+    # multi-nuclide closure where the 0.662 line lives on the daughter.
+    m = GammaDoseModel(["Co-60", "Cs-137", "Ba-137m", "Ba-137"], "ambient_H10")
+    rows = m.per_line_rows()
+    assert rows, "expected scored photon lines"
+    for nuclide in m.nuclides:
+        per_n = [r["coeff_si"] for r in rows if r["nuclide"] == nuclide]
+        assert sum(per_n) == m.coeff_si[nuclide], f"{nuclide}: rows must sum to C_n exactly"
+    # every row carries the table columns; energies are physical and yields positive
+    for r in rows:
+        assert r["E_MeV"] > 0.0 and r["yield"] > 0.0 and r["origin"] is not None
+    # the two Co-60 gammas (1.17, 1.33 MeV) are present and dominate
+    co = sorted((r for r in rows if r["nuclide"] == "Co-60"), key=lambda r: -r["coeff_si"])
+    assert len(co) >= 2
+    assert co[0]["E_MeV"] == pytest.approx(1.3325, abs=2e-3) or co[0]["E_MeV"] == pytest.approx(
+        1.1732, abs=2e-3
+    )
+
+
+def test_per_line_rows_exclude_below_floor_lines():
+    # Below-floor (sub-10-keV) lines are LOGGED SKIPS, not zero-coefficient rows: they must
+    # be absent from the per-line table yet recorded in warnings (same skip semantics the
+    # total dose uses, so the table never lists a line the dose didn't score).
+    m = GammaDoseModel(["Co-60"], "ambient_H10")
+    rows = m.per_line_rows()
+    assert all(r["E_MeV"] >= 0.010 for r in rows), "no sub-floor line may appear as a row"
+    assert m.warnings and all(w["reason"] == BELOW_FLOOR for w in m.warnings)
+    # the skipped energies are not silently in the rows
+    skipped_E = {w["E_MeV"] for w in m.warnings}
+    assert not ({r["E_MeV"] for r in rows} & skipped_E)
+
+
 # --- inverse-square ------------------------------------------------------------------
 
 def test_inverse_square_law_exact():

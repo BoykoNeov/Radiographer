@@ -147,9 +147,20 @@ class GammaDoseModel:
         #: Per-nuclide SI dose coefficient (J·m²/kg per decay for air_kerma; Sv·m² per
         #: decay for H*(10)/effective). ``dose_rate = (1/4πd²)·Σ C_n·A_n``.
         self.coeff_si: dict[str, float] = {}
+        #: Per-nuclide, per-line scored contributions (the §9 per-line γ table source,
+        #: M6f-2). Each row ``{E_MeV, yield, origin, coeff_si}`` where ``coeff_si =
+        #: const·y·shield`` is the DISTANCE-FREE, per-decay SI per-line constant. By
+        #: construction ``sum(row.coeff_si) == coeff_si[nuclide]`` (one assembly path, no
+        #: drift), so the per-line table reconciles EXACTLY with the total dose. Below-floor
+        #: lines are absent (logged in :attr:`warnings`); above-grid lines still raise.
+        self.lines_si: dict[str, list[dict]] = {}
 
         for nuclide in self.nuclides:
-            self.coeff_si[nuclide] = self._coefficient_for(nuclide)
+            rows = self._lines_for(nuclide)
+            self.lines_si[nuclide] = rows
+            # Sequential float sum in line order — identical accumulation to the prior
+            # ``total += …`` so the M3 benchmark coefficients are bit-for-bit unchanged.
+            self.coeff_si[nuclide] = sum(r["coeff_si"] for r in rows)
 
     # -- coefficient assembly (solve once) --------------------------------
 
@@ -180,18 +191,22 @@ class GammaDoseModel:
         material, thickness_cm = self.shield
         return transmission(material, E_MeV, thickness_cm)
 
-    def _coefficient_for(self, nuclide: str) -> float:
-        """``C_n = Σ_lines const_i · y_i · shield_i`` (SI per decay). Stable / no-photon
-        nuclides contribute 0; below-floor lines are logged skips; above-grid lines raise."""
+    def _lines_for(self, nuclide: str) -> list[dict]:
+        """Scored photon lines for ``nuclide``: ``[{E_MeV, yield, origin, coeff_si}]`` where
+        ``coeff_si = const_i · y_i · shield_i`` (SI per decay, distance-free). The single
+        coefficient-assembly path: :attr:`coeff_si` is the sum of these rows and the §9
+        per-line table is the rows themselves, so the two can never drift. Stable / no-photon
+        nuclides yield ``[]``; below-floor lines are logged skips (absent from the rows);
+        above-grid lines raise (dropping a high-energy line underestimates dose — §11)."""
         override = self.photon_override.get(nuclide)
         if override is None:
             if not emissions.has_emissions(nuclide):
-                return 0.0  # stable daughter — legitimately no emission, not a data hole
+                return []  # stable daughter — legitimately no emission, not a data hole
             lines = emissions.photons(nuclide)
         else:
             lines = override  # synthetic source (e.g. bremsstrahlung); bypasses has_emissions
 
-        total = 0.0
+        rows: list[dict] = []
         for line in lines:
             E = float(line["E_MeV"])
             y = float(line["yield"])
@@ -219,8 +234,29 @@ class GammaDoseModel:
                     f"{self.quantity} grid — refusing to extrapolate ({off}).",
                     reason=off.reason,
                 ) from off
-            total += const * y * shield
-        return total
+            rows.append(
+                {
+                    "E_MeV": E,
+                    "yield": y,
+                    "origin": line.get("origin"),
+                    "coeff_si": const * y * shield,
+                }
+            )
+        return rows
+
+    def per_line_rows(self) -> list[dict]:
+        """Flatten the per-nuclide scored photon lines into one list (the §9 per-line γ
+        table source: "the gamma slice expands to a per-line table"). Each row is
+        ``{nuclide, E_MeV, yield, origin, coeff_si}`` with ``coeff_si`` the DISTANCE- and
+        TIME-FREE per-decay SI constant (Sv·m² per decay for H*(10)/effective; J·m²/kg for
+        air_kerma). The caller applies ``1/4πd²`` and the parent activity ``A_n(t)`` at the
+        cursor, so the table is live on scrub/distance with no re-fold (§3). A nuclide's rows
+        sum to :attr:`coeff_si` exactly; below-floor lines are absent (see :attr:`warnings`)."""
+        out: list[dict] = []
+        for nuclide in self.nuclides:
+            for row in self.lines_si.get(nuclide, []):
+                out.append({"nuclide": nuclide, **row})
+        return out
 
     # -- evaluation (evaluate many) ---------------------------------------
 

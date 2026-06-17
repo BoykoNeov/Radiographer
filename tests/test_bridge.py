@@ -208,6 +208,55 @@ def test_dose_no_buildup_shield_is_structured_error_not_traceback():
         bridge.release(handle)
 
 
+def test_dose_lines_reconciles_with_dose_total():
+    # The §9 per-line γ table endpoint (M6f-2): distance/time-free per-decay coefficients
+    # whose Σ(coeff_si·A_n)/4πd² must reconstruct the dose() total EXACTLY (one assembly
+    # path). The client multiplies these by the cursor activity + 1/4πd² with zero re-fetch.
+    res = json.loads(bridge.solve(json.dumps({"nuclides": {"Co-60": 1.0e9}, "unit": "Bq"})))
+    handle = res["handle"]
+    try:
+        lines = json.loads(bridge.dose_lines(handle, json.dumps({"quantity": "ambient_H10"})))
+        assert lines["ok"] is True
+        assert lines["quantity"] == "ambient_H10" and lines["si_unit"] == "Sv"
+        assert lines["scoring_floor_MeV"] == 0.010
+        assert lines["warnings"]  # sub-10-keV X-rays logged as skips (absent from rows)
+        co = [ln for ln in lines["lines"] if ln["nuclide"] == "Co-60"]
+        assert len(co) >= 2 and all(ln["E_MeV"] >= 0.010 for ln in co)
+
+        t, d = 0.0, 1.0
+        ev = json.loads(
+            bridge.evaluate(handle, json.dumps({"times_s": [t], "axis": "activity", "unit": "Bq"}))
+        )
+        acts = {n: ev["series"][n][0] for n in ev["nuclides"]}
+        geom = 1.0 / (4.0 * math.pi * d * d)
+        recon = geom * sum(ln["coeff_si"] * acts[ln["nuclide"]] for ln in lines["lines"])
+
+        total = json.loads(
+            bridge.dose(
+                handle,
+                json.dumps({"times_s": [t], "quantity": "ambient_H10", "distance_m": d}),
+            )
+        )
+        assert total["ok"] is True
+        assert recon == pytest.approx(total["rate_si"][0], rel=1e-9)
+    finally:
+        bridge.release(handle)
+
+
+def test_dose_lines_effective_requires_geometry_is_loud():
+    # effective dose has no meaning without an ICRP-116 geometry — the per-line endpoint
+    # must surface that as a structured error, never a silent default geometry.
+    res = json.loads(bridge.solve(json.dumps({"nuclides": {"Co-60": 1.0e9}, "unit": "Bq"})))
+    handle = res["handle"]
+    try:
+        out = json.loads(bridge.dose_lines(handle, json.dumps({"quantity": "effective"})))
+        assert out["ok"] is False
+        assert out["error"]["type"] == "DoseError"
+        assert out["error"]["traceback"] is None  # expected domain error
+    finally:
+        bridge.release(handle)
+
+
 def test_beta_dose_round_trip_with_bremsstrahlung():
     # Solve once, ask for the beta SKIN dose series, plus the secondary bremsstrahlung
     # photon dose when a lead shield stops the beta (§6.2 "more lead = more dose").
