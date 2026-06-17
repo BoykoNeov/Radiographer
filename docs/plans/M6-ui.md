@@ -164,7 +164,16 @@ flag cleared by `solve()`).
   equilibrium visible on the diagram). Uses the shared palette (#4).
 - SF pseudo-sink rendered as the honest "fission products" terminal (M1).
 
-### M6f — Dose calculator + breakdown  *(resolves §13 #3)*
+### M6f — Dose calculator + breakdown  *(resolves §13 #3 → **AP**)*  🚧 M6f-1 in progress
+**See `docs/plans/M6f-dose.md`.** Split M6f-1 (cursor-time γ/β breakdown +
+H\*(10)/effective+geometry + distance/exposure + accumulated-by-integration +
+neutron grayed) / M6f-2 (uncertainty viz + per-line gamma table). Two LOCKED
+honesty calls: γ(Sv) and β(Gy/Hp(0.07)) are **different quantities, never summed**
+(§6.2/#5 → same-quantity-only stack, β in its own panel); accumulated dose
+**integrates** the rate series, never rate×time (§11). Dose is solve-once /
+evaluate-many like the curves: a per-(distance,quantity,geometry) rate series over
+the curve grid, cursor-indexed (scrub/animate make zero bridge calls). **§13 #3
+resolved → AP.**
 - Inputs from inventory: distance, exposure time → dose-rate + accumulated dose.
 - **H\*(10)** (default) vs **effective** + **geometry dropdown** when effective
   (AP/PA/LLAT/RLAT/ROT/ISO) — **resolve §13 #3 default (ISO vs AP) here** and

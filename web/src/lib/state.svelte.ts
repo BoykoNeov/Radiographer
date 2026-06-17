@@ -21,11 +21,13 @@
 
 import {
   BridgeClient,
+  type DoseOk,
   type EvaluateOk,
   type Handle,
   type SolveEntry,
   type SolveOk,
 } from "./bridge";
+import { interpAt, trapzWindow, type TrapzResult } from "./dosemath";
 import { ColorRegistry } from "./palette";
 import {
   deserializeState,
@@ -37,8 +39,10 @@ import {
 } from "./persist";
 import {
   ATOMS_UNIT,
+  DEFAULT_GEOMETRY,
   DEFAULT_UNIT,
   type Axis,
+  type DoseQuantity,
   type InventoryEntry,
   type Precision,
 } from "./types";
@@ -116,6 +120,32 @@ export class AppState {
    */
   animating = $state<boolean>(false);
 
+  // -- dose calculator (M6f, §9) --------------------------------------------
+  // The dose is "solve once, evaluate many" exactly like the curves (#1): the store
+  // evaluates a γ + β dose-RATE SERIES over the SAME `curveX` display grid, once per
+  // (inventory × distance × quantity × geometry); the cursor then INDEXES that series
+  // and the accumulated dose INTEGRATES it (see the getters below) — so scrub/animate
+  // make ZERO bridge calls. Recompute triggers mirror the curves' (solve, source-age)
+  // plus the dose inputs. This path NEVER routes through solve() (gate: registry==1).
+  // See docs/plans/M6f-dose.md.
+  //
+  // γ (and neutron, M7) are Sv (H*(10)/effective); β is a DIFFERENT quantity — Gy at
+  // 7 mg/cm² (Hp(0.07), w_R=1) — kept in its own series and NEVER summed into the Sv
+  // total (invariant #5; §6.2 LOCKED). Inputs are TRANSIENT in M6f-1: their
+  // persistence + round-trip lands in M6h with the cursor (NOT a silent drop, §11).
+  doseDistanceM = $state<number>(1.0);
+  doseQuantity = $state<DoseQuantity>("ambient_H10");
+  /** ICRP-116 geometry; used only when `doseQuantity === "effective"` (§13 #3 → AP). */
+  doseGeometry = $state<string>(DEFAULT_GEOMETRY);
+  /** Exposure window length (seconds) for the accumulated-dose integral. */
+  exposureS = $state<number>(3600);
+  /** γ dose-rate series (Sv/s) over `curveX`; null when empty/stale/failed. */
+  gammaDoseSeries = $state<DoseOk | null>(null);
+  /** β skin-dose-rate series (Gy/s, Hp(0.07)) over `curveX` — a separate quantity. */
+  betaDoseSeries = $state<DoseOk | null>(null);
+  /** Loud dose-path error (#3) — surfaced, never a silent blank breakdown. */
+  doseError = $state<string>("");
+
   /** Overlay grid density (log-spaced). HP is sympy-per-point → keep it responsive. */
   private readonly CURVE_POINTS = 300;
   private readonly CURVE_POINTS_HP = 60;
@@ -163,6 +193,36 @@ export class AppState {
    */
   get currentTimeS(): number {
     return this.referenceTimeS + this.cursorOffsetS;
+  }
+
+  // -- dose at the cursor (pure client-side index into the rate series, #1/§3) --
+  // These read the precomputed dose-rate series at the cursor; moving the cursor or
+  // changing the exposure re-derives them with NO bridge call (the §3 payoff). The
+  // rate series is indexed by `curveX` (display time), so the cursor's display
+  // position `cursorOffsetS` is the query — the same coordinate as the curves.
+
+  /** γ dose-RATE (Sv/s) at the cursor; null when no γ series. */
+  get gammaRateAtCursor(): number | null {
+    const s = this.gammaDoseSeries;
+    return s ? interpAt(this.curveX, s.rate_si, this.cursorOffsetS) : null;
+  }
+  /** β skin dose-RATE (Gy/s, Hp(0.07)) at the cursor; null when no β series. */
+  get betaRateAtCursor(): number | null {
+    const s = this.betaDoseSeries;
+    return s ? interpAt(this.curveX, s.rate_si, this.cursorOffsetS) : null;
+  }
+  /** γ ACCUMULATED dose (Sv) over [cursor, cursor+exposure] — ∫rate dt, not rate×t
+   *  (#2, §11). `truncated` flags an exposure window past the modeled range. */
+  get gammaAccumulated(): TrapzResult | null {
+    const s = this.gammaDoseSeries;
+    if (!s) return null;
+    return trapzWindow(this.curveX, s.rate_si, this.cursorOffsetS, this.cursorOffsetS + this.exposureS);
+  }
+  /** β ACCUMULATED skin dose (Gy) over the same window. */
+  get betaAccumulated(): TrapzResult | null {
+    const s = this.betaDoseSeries;
+    if (!s) return null;
+    return trapzWindow(this.curveX, s.rate_si, this.cursorOffsetS, this.cursorOffsetS + this.exposureS);
   }
 
   // -- wiring ---------------------------------------------------------------
@@ -251,6 +311,7 @@ export class AppState {
     if (next === this.referenceTimeS) return;
     this.referenceTimeS = next;
     this.recomputeCurves(); // evaluate at the shifted times — never a re-solve (#1)
+    this.recomputeDose(); // and the dose series at the shifted times (same offset, #1)
   }
 
   /**
@@ -290,6 +351,38 @@ export class AppState {
     this.logY = v;
   }
 
+  // -- dose inputs (each RE-EVALUATES the rate series, never re-solves; #1) ---
+  // distance / quantity / geometry change the per-decay coefficients → recompute the
+  // dose-rate series (a cheap evaluate off the live handle). exposure & the cursor do
+  // NOT — they only move the integration window / index, re-derived by the getters.
+
+  /** Source–target distance (m). Must be > 0 (the point-source γ field is singular at
+   *  0); a non-positive value is ignored so the input can't drive a loud engine error. */
+  setDoseDistanceM(d: number): void {
+    if (!Number.isFinite(d) || d <= 0 || d === this.doseDistanceM) return;
+    this.doseDistanceM = d;
+    this.recomputeDose();
+  }
+
+  setDoseQuantity(q: DoseQuantity): void {
+    if (q === this.doseQuantity) return;
+    this.doseQuantity = q;
+    this.recomputeDose(); // H*(10) ↔ effective is a wholly different conversion table
+  }
+
+  setDoseGeometry(g: string): void {
+    if (g === this.doseGeometry) return;
+    this.doseGeometry = g;
+    if (this.doseQuantity === "effective") this.recomputeDose(); // geometry only bites E
+  }
+
+  /** Exposure window length (s) for the accumulated integral. NO recompute — the
+   *  accumulated getters re-integrate the existing rate series over the new window. */
+  setExposureS(s: number): void {
+    if (!Number.isFinite(s) || s < 0) return;
+    this.exposureS = s;
+  }
+
   // -- the solve primitive --------------------------------------------------
 
   /**
@@ -314,6 +407,7 @@ export class AppState {
       this.curveX = [];
       this.cursorOffsetS = 0;
       this.curveError = "";
+      this.clearDose();
       this.errorMsg = "";
       this.status = "idle";
       return;
@@ -340,6 +434,7 @@ export class AppState {
       this.curveX = [];
       this.cursorOffsetS = 0;
       this.curveError = "";
+      this.clearDose();
       this.status = "error";
       this.errorMsg = `${res.error.type}: ${res.error.message}`;
       return;
@@ -351,6 +446,7 @@ export class AppState {
     this.status = "solved";
     this.resetCursor(); // the range changed → home the cursor before evaluating (#2 advisor)
     this.recomputeCurves(); // one evaluate over the auto-range grid (§9; "evaluate many", #1)
+    this.recomputeDose(); // and the dose-rate series over the same grid (M6f; pure evaluate)
   }
 
   /**
@@ -410,6 +506,65 @@ export class AppState {
     }
     this.curve = res;
     this.curveX = grid;
+  }
+
+  /**
+   * Evaluate the γ + β dose-RATE series over the curve grid for the current distance /
+   * quantity / geometry, and store them for the breakdown. Pure evaluate (reuses the
+   * live handle), NEVER a re-solve (#1) — the gate asserts the registry stays at 1
+   * across a distance change. Loud on failure (#3): clears both series + sets
+   * `doseError`, never a silent blank breakdown.
+   *
+   * γ → Sv (H*(10)/effective); β → Gy (Hp(0.07)). They are kept in SEPARATE series and
+   * are never summed (invariant #5; §6.2). The series share `curveX`'s display-time
+   * coordinate (evaluated at the absolute times `referenceTimeS + curveX`), so the
+   * cursor getters index them 1:1 with the curves.
+   */
+  private recomputeDose(): void {
+    this.doseError = "";
+    const meta = this.solveMeta;
+    if (!this.client || !this.handle || !meta || this.curveX.length === 0) {
+      this.gammaDoseSeries = null;
+      this.betaDoseSeries = null;
+      return;
+    }
+    const t0 = this.referenceTimeS;
+    const times = t0 > 0 ? this.curveX.map((x) => x + t0) : this.curveX.slice();
+    const geometry = this.doseQuantity === "effective" ? this.doseGeometry : null;
+
+    const g = this.client.dose(this.handle, {
+      times_s: times,
+      quantity: this.doseQuantity,
+      distance_m: this.doseDistanceM,
+      geometry,
+    });
+    if (!g.ok) {
+      this.gammaDoseSeries = null;
+      this.betaDoseSeries = null;
+      this.doseError = `${g.error.type}: ${g.error.message}`;
+      return;
+    }
+    // β skin dose Hp(0.07): the same distance; no shield in M6f-1 (→ no bremsstrahlung),
+    // no ICRP geometry (skin dose is depth-defined, not body-orientation-defined).
+    const b = this.client.beta_dose(this.handle, {
+      times_s: times,
+      distance_m: this.doseDistanceM,
+    });
+    if (!b.ok) {
+      this.gammaDoseSeries = null;
+      this.betaDoseSeries = null;
+      this.doseError = `${b.error.type}: ${b.error.message}`;
+      return;
+    }
+    this.gammaDoseSeries = g;
+    this.betaDoseSeries = b;
+  }
+
+  /** Clear the dose breakdown (empty / failed solve). */
+  private clearDose(): void {
+    this.gammaDoseSeries = null;
+    this.betaDoseSeries = null;
+    this.doseError = "";
   }
 
   // -- persistence (M6b: inventory slice; later chunks extend the envelope) --

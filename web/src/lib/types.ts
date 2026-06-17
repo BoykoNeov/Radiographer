@@ -75,6 +75,49 @@ export function toSeconds(value: number, unit: string): number {
   return value * u.seconds;
 }
 
+// --- dose calculator (M6f, §9 dose calculator) -------------------------------
+// Two SELECTABLE dose quantities, both in Sv but NOT inter-comparable (§6.4): the
+// operational H*(10) (no geometry) and effective dose E (per ICRP-116 geometry).
+// Beta is a THIRD quantity entirely — Hp(0.07) skin dose in Gy — handled on the
+// engine side (`beta_dose`) and labelled separately; it is never one of these and
+// is never summed into an H*(10)/effective total (§6.2 LOCKED; see M6f-dose.md #1).
+
+/** The γ/n dose quantity (the bridge `quantity` string). Both render in Sv. */
+export type DoseQuantity = "ambient_H10" | "effective";
+
+export const DOSE_QUANTITY_OPTIONS: ReadonlyArray<{ value: DoseQuantity; label: string }> = [
+  { value: "ambient_H10", label: "H*(10)" },
+  { value: "effective", label: "Effective" },
+];
+
+/** The six ICRP-116 irradiation geometries (shown only when quantity = effective). */
+export const GEOMETRY_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "AP", label: "AP (front)" },
+  { value: "PA", label: "PA (back)" },
+  { value: "ISO", label: "ISO (isotropic)" },
+  { value: "LLAT", label: "LLAT (left side)" },
+  { value: "RLAT", label: "RLAT (right side)" },
+  { value: "ROT", label: "ROT (rotational)" },
+];
+
+/** §13 #3 RESOLVED → AP: a point source at distance ⇒ a person facing it (and the
+ *  conservative, highest-E ICRP-116 geometry). See HANDOFF_PLAN §13, M6f-dose.md #4. */
+export const DEFAULT_GEOMETRY = "AP";
+
+/** Human label for the γ/n quantity (for axis/readout labels, §12). γ/n render in
+ *  Sv; β skin dose is a separate Gy / Hp(0.07) quantity (never one of these). */
+export function doseQuantityLabel(quantity: DoseQuantity, geometry: string): string {
+  return quantity === "effective" ? `effective dose, ${geometry}` : "H*(10)";
+}
+
+/** Per-MODALITY colors for the γ/β/n breakdown bar (M6f-dose.md #5 — NOT the
+ *  per-species palette, which lives in the per-line gamma table, M6f-2). */
+export const MODALITY_COLORS = {
+  gamma: "#4e79a7", // blue
+  beta: "#f28e2b", // orange
+  neutron: "#59a14f", // green (grayed out for user inventories until M7)
+} as const;
+
 /**
  * Format SI seconds as a short human string, auto-picking the largest unit whose
  * value is ≥ 1 (e.g. 86400 → "1 d", 153 → "2.55 min"). For tick/readout labels;

@@ -616,6 +616,218 @@ async function runM6d(page) {
   return { ok: checks.every((c) => c.pass), checks };
 }
 
+// --- M6f: drive the dose calculator + breakdown through the rendered app path ----
+//
+// The load-bearing benchmark (advisor): Co-60 H*(10)@1 m read OFF THE RENDERED γ card
+// must equal an independent bridge dose() call AND sit in the M3 physical band — the
+// UI plumbs the validated number, not a fabricated one (§11). The honesty invariants:
+// the dose path is a PURE EVALUATE (registry stays 1 across a distance change, §3/#1);
+// γ(Sv) and β(Gy/Hp(0.07)) ride SEPARATE axes and are never summed (§6.2 LOCKED);
+// neutron is grayed for a user inventory (§6.3); and accumulated dose INTEGRATES the
+// rate, not rate×time (§11) — proven with a short-lived source over one half-life.
+
+async function runM6f(page) {
+  const checks = [];
+  const record = (name, pass, detail) => checks.push({ name, pass, detail });
+
+  const DOSE = '[data-testid="dose"]';
+  const DIST = '[data-testid="dose-distance"]';
+  const GAMMA = '[data-testid="dose-gamma"]';
+  const NEUTRON = '[data-testid="dose-neutron"]';
+  const DPLOT = '[data-testid="dose-plot"]';
+
+  // Clean baseline: Co-60 1 GBq (the gamma-dose reference case), t₀=0, H*(10) @ 1 m,
+  // cursor homed to the low end of the range so the source is ~full activity.
+  await page.evaluate(async () => {
+    const app = window.__APP__;
+    await app.clear();
+    app.setReferenceTimeS(0);
+    app.setDoseQuantity("ambient_H10");
+    app.setDoseDistanceM(1.0);
+    await app.addEntry("Co-60", 1.0e9, "Bq");
+    app.setCursorOffsetS(0); // clamps to the range lo → Co-60 ≈ 1 GBq
+  });
+  await page.waitForFunction(
+    "window.__APP__.status === 'solved' && window.__APP__.gammaDoseSeries && window.__APP__.curveX.length > 0",
+    null,
+    { timeout: 30_000 },
+  );
+  await page.waitForSelector(DOSE);
+  await page.waitForSelector(DPLOT);
+  await page.waitForFunction(
+    (sel) => {
+      const el = document.querySelector(sel);
+      return el && el.data && el.data.length === 2; // γ + β traces reacted
+    },
+    DPLOT,
+    { timeout: 30_000 },
+  );
+
+  // 1) Co-60 H*(10)@1 m benchmark THROUGH the rendered γ card. The rendered value
+  //    (data-rate-si, Sv/s) must equal an independent dose() call, and the source's
+  //    air-kerma constant must reproduce ≈0.308 mGy·m²·GBq⁻¹·h⁻¹ with H*(10)/Kₐ
+  //    physical (M3 test_dose_gamma, now live through the handle).
+  const bench = await page.evaluate(
+    (sel) => {
+      const app = window.__APP__;
+      const br = window.__BRIDGE__;
+      const t = app.currentTimeS;
+      const h = app.handle;
+      const renderedH10 = parseFloat(
+        document.querySelector(sel).getAttribute("data-rate-si"),
+      ); // Sv/s
+      const h10 = br.dose(h, { times_s: [t], quantity: "ambient_H10", distance_m: 1.0 });
+      const ka = br.dose(h, { times_s: [t], quantity: "air_kerma", distance_m: 1.0 });
+      const act = br.evaluate(h, { times_s: [t], axis: "activity", unit: "Bq" });
+      const aBq = act.ok ? act.series["Co-60"][0] : NaN;
+      const kaSi = ka.ok ? ka.rate_si[0] : NaN;
+      const h10Si = h10.ok ? h10.rate_si[0] : NaN;
+      return {
+        renderedH10,
+        h10Si,
+        kaSi,
+        ratio: h10Si / kaSi,
+        mGyh_perGBq: (kaSi * 1000 * 3600) / (aBq / 1e9),
+      };
+    },
+    GAMMA,
+  );
+  record(
+    "Co-60 H*(10)@1m benchmark off the RENDERED γ card == dose() AND in M3 band (§11)",
+    Math.abs(bench.renderedH10 - bench.h10Si) / bench.h10Si < 1e-6 &&
+      Math.abs(bench.mGyh_perGBq - 0.308) / 0.308 < 0.05 &&
+      bench.ratio > 1.05 &&
+      bench.ratio < 1.3,
+    `rendered=${bench.renderedH10.toExponential(4)} Sv/s == dose()=${bench.h10Si.toExponential(4)}, ` +
+      `Kₐ=${bench.mGyh_perGBq.toFixed(4)} mGy·m²·GBq⁻¹·h⁻¹ (want 0.308), H*(10)/Kₐ=${bench.ratio.toFixed(3)}`,
+  );
+
+  // 2) Distance 1→2 m through the rendered input: pure evaluate (handle stable,
+  //    registry stays 1, NEVER routes through solve()), and inverse-square renders
+  //    (rate drops 4×). The dose is "evaluate many" off one solve (§3/#1/#2).
+  const before = await page.evaluate((sel) => {
+    const s = window.__BRIDGE__.registry_size();
+    return {
+      handle: window.__APP__.handle,
+      size: s.ok ? s.size : -1,
+      rate: parseFloat(document.querySelector(sel).getAttribute("data-rate-si")),
+    };
+  }, GAMMA);
+  await page.fill(DIST, "2");
+  await page.press(DIST, "Enter");
+  await page.waitForFunction("window.__APP__.doseDistanceM === 2", null, { timeout: 30_000 });
+  const after = await page.evaluate((sel) => {
+    const s = window.__BRIDGE__.registry_size();
+    return {
+      handle: window.__APP__.handle,
+      size: s.ok ? s.size : -1,
+      rate: parseFloat(document.querySelector(sel).getAttribute("data-rate-si")),
+    };
+  }, GAMMA);
+  record(
+    "distance 1→2 m: pure evaluate (handle stable, registry==1), inverse-square renders 4×",
+    after.handle === before.handle &&
+      before.size === 1 &&
+      after.size === 1 &&
+      Math.abs(before.rate / after.rate - 4.0) / 4.0 < 0.01,
+    `handleStable=${after.handle === before.handle}, size=${before.size}→${after.size}, rate1/rate2=${(before.rate / after.rate).toFixed(3)} (want 4)`,
+  );
+  await page.fill(DIST, "1"); // restore for the remaining checks
+  await page.press(DIST, "Enter");
+  await page.waitForFunction("window.__APP__.doseDistanceM === 1", null, { timeout: 30_000 });
+
+  // 3) γ(Sv) and β(Gy/Hp(0.07)) are DIFFERENT quantities — separate engine series and
+  //    SEPARATE plot axes (Sv left, Gy right). Nothing sums them (§6.2 LOCKED, #1).
+  const sep = await page.evaluate((sel) => {
+    const app = window.__APP__;
+    const el = document.querySelector(sel);
+    return {
+      gUnit: app.gammaDoseSeries?.si_unit,
+      bUnit: app.betaDoseSeries?.si_unit,
+      yTitle: el.layout?.yaxis?.title?.text ?? "",
+      y2Title: el.layout?.yaxis2?.title?.text ?? "",
+    };
+  }, DPLOT);
+  record(
+    "γ(Sv) vs β(Gy, Hp(0.07)): separate series + separate axes, never summed (§6.2)",
+    sep.gUnit === "Sv" &&
+      sep.bUnit === "Gy" &&
+      sep.yTitle.includes("Sv") &&
+      sep.y2Title.includes("Gy"),
+    `γ.si_unit=${sep.gUnit}, β.si_unit=${sep.bUnit}, yaxis="${sep.yTitle}", yaxis2="${sep.y2Title}"`,
+  );
+
+  // 4) Neutron grayed out for a user inventory (no `source` key — §6.3 gate).
+  const neutron = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    return { grayed: el.classList.contains("grayed"), text: el.innerText };
+  }, NEUTRON);
+  record(
+    "neutron grayed for a user inventory (prebuilt sources only, §6.3)",
+    neutron.grayed && /N\/A/.test(neutron.text) && /prebuilt/i.test(neutron.text),
+    `grayed=${neutron.grayed}, text=${JSON.stringify(neutron.text.replace(/\s+/g, " ").trim())}`,
+  );
+
+  // 5) Effective + AP geometry (§13 #3): the dropdown appears defaulting to AP, the
+  //    dose recomputes to a DIFFERENT value, and it stays a pure evaluate (registry 1).
+  const h10Rate = await page.evaluate(
+    (sel) => parseFloat(document.querySelector(sel).getAttribute("data-rate-si")),
+    GAMMA,
+  );
+  await page.click('[data-testid="dose-quantity-effective"]');
+  await page.waitForSelector('[data-testid="dose-geometry"]');
+  await page.waitForFunction(
+    "window.__APP__.doseQuantity === 'effective' && window.__APP__.gammaDoseSeries",
+    null,
+    { timeout: 30_000 },
+  );
+  const eff = await page.evaluate((sel) => {
+    const s = window.__BRIDGE__.registry_size();
+    return {
+      geom: document.querySelector('[data-testid="dose-geometry"]').value,
+      rate: parseFloat(document.querySelector(sel).getAttribute("data-rate-si")),
+      handle: window.__APP__.handle,
+      size: s.ok ? s.size : -1,
+    };
+  }, GAMMA);
+  record(
+    "effective + AP geometry (§13 #3): dropdown=AP, recomputes, still pure evaluate",
+    eff.geom === "AP" &&
+      eff.rate !== h10Rate &&
+      eff.rate > 0 &&
+      eff.size === 1,
+    `geometry=${eff.geom}, effRate=${eff.rate.toExponential(3)} ≠ h10Rate=${h10Rate.toExponential(3)}, size=${eff.size}`,
+  );
+  await page.click('[data-testid="dose-quantity-ambient_H10"]'); // restore
+
+  // 6) Accumulated dose INTEGRATES, never rate×time (§11). Short-lived Tc-99m over one
+  //    half-life: ∫₀^t½ A₀e^(-λt)dt = 0.721·A₀·t½, so accumulated/(rate@cursor·t½) ≈
+  //    0.72 — strictly < 1 (rate×time would give exactly 1).
+  const integ = await page.evaluate(async () => {
+    const app = window.__APP__;
+    await app.clear();
+    await app.addEntry("Tc-99m", 1.0e9, "Bq");
+    app.setCursorOffsetS(0); // clamp to range lo → ~full activity at the window start
+    const tHalf = app.solveMeta.half_lives_s["Tc-99m"];
+    app.setExposureS(tHalf); // exposure window = one half-life
+    const rate = app.gammaRateAtCursor; // Sv/s at the window start
+    const acc = app.gammaAccumulated; // {value Sv, truncated}
+    return {
+      tHalf,
+      truncated: acc.truncated,
+      ratio: acc.value / (rate * tHalf), // ∫rate dt ÷ (rate×t½)
+      accum: acc.value,
+    };
+  });
+  record(
+    "accumulated dose INTEGRATES (∫rate dt), not rate×time (§11): ratio≈0.72 over one t½",
+    !integ.truncated && integ.accum > 0 && integ.ratio > 0.5 && integ.ratio < 0.85,
+    `ratio=${integ.ratio.toFixed(3)} (rate×time would be 1.000), truncated=${integ.truncated}, t½=${integ.tHalf.toFixed(1)} s`,
+  );
+
+  return { ok: checks.every((c) => c.pass), checks };
+}
+
 let exitCode = 1;
 let browser;
 let server;
@@ -642,20 +854,26 @@ try {
   let m6b = { ok: false, checks: [] };
   let m6c = { ok: false, checks: [] };
   let m6d = { ok: false, checks: [] };
+  let m6f = { ok: false, checks: [] };
   if (m6aOk) {
     m6b = await runM6b(page);
     if (m6b.ok) {
       m6c = await runM6c(page);
       if (m6c.ok) {
         m6d = await runM6d(page);
+        if (m6d.ok) {
+          m6f = await runM6f(page);
+        } else {
+          console.log("[gate] skipping M6f — M6d checks failed");
+        }
       } else {
-        console.log("[gate] skipping M6d — M6c checks failed");
+        console.log("[gate] skipping M6d/M6f — M6c checks failed");
       }
     } else {
-      console.log("[gate] skipping M6c/M6d — M6b checks failed");
+      console.log("[gate] skipping M6c/M6d/M6f — M6b checks failed");
     }
   } else {
-    console.log("[gate] skipping M6b/M6c/M6d — boot self-check failed");
+    console.log("[gate] skipping M6b/M6c/M6d/M6f — boot self-check failed");
   }
 
   console.log("\n===== M6b inventory panel =====");
@@ -673,11 +891,16 @@ try {
     console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
   }
 
-  exitCode = m6aOk && m6b.ok && m6c.ok && m6d.ok ? 0 : 1;
+  console.log("\n===== M6f dose calculator =====");
+  for (const c of m6f.checks) {
+    console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
+  }
+
+  exitCode = m6aOk && m6b.ok && m6c.ok && m6d.ok && m6f.ok ? 0 : 1;
   console.log(
     exitCode === 0
-      ? "\n✅ M6d PASS (real browser): boot benchmarks + inventory + curves + time control"
-      : "\n❌ M6d FAIL (real browser)",
+      ? "\n✅ M6f PASS (real browser): boot + inventory + curves + time control + dose calculator"
+      : "\n❌ M6f FAIL (real browser)",
   );
 } catch (err) {
   console.error("Driver error:", err);
