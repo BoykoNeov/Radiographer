@@ -155,14 +155,24 @@ flag cleared by `solve()`).
 - The slider drives a **cursor** over M6c's curves; emits the current time that
   M6e (DAG) and M6f (dose) subscribe to.
 
-### M6e — Chain view (Cytoscape DAG)
+### M6e — Chain view (Cytoscape DAG)  ✅ DONE
+**See `docs/plans/M6e-chain.md`.** Gate green dev + built (M6a/b/c/d/f + 4 M6e
+checks). The DAG owns a **dedicated activity series** (`chainActivity`, axis=Bq
+over `curveX`) so the live encoding tracks activity independent of the curve axis;
+topology (`chainDag`) is fetched **only on solve**, the cursor is a cheap batched
+`cy.style()` restyle (no re-solve), the layout toggle is **imperative** (avoids
+effect-ordering), and the **(N, Z) preset** uses fresh-copy positions to dodge
+cytoscape's in-place position-object mutation.
 - Render `chain(handle)` nodes/edges; **two layouts**: dagre (compact) and the
   **(N,Z) chart-of-nuclides preset** (nodes carry Z/A/N from M1).
-- Node tooltip: half-life, decay modes, energies; edge label: mode + branching %.
-- **Live encoding**: node size/color driven by the M6d slider-time activity →
-  scrubbing shows parent fade / daughter in-growth (secular & transient
-  equilibrium visible on the diagram). Uses the shared palette (#4).
-- SF pseudo-sink rendered as the honest "fission products" terminal (M1).
+- Node tooltip: half-life, Z/A/N, decay modes, **live activity**; edge label:
+  mode + branching %. **Per-emission energies deferred** to the M6f-2 dose per-line
+  table (`build_dag` is topology-only — see the doc; not a silent drop, §11).
+- **Live encoding**: node size/opacity driven by the M6d slider-time **activity**
+  (vs the fixed global series peak) → scrubbing shows parent fade / daughter
+  in-growth (secular & transient equilibrium visible on the diagram). Shared palette (#4).
+- SF pseudo-sink rendered as the honest "fission products" terminal (M1); its
+  visual lands with M7 prebuilt SF sources (Cf-252…).
 
 ### M6f — Dose calculator + breakdown  *(resolves §13 #3 → **AP**)*  🚧 M6f-1 in progress
 **See `docs/plans/M6f-dose.md`.** Split M6f-1 (cursor-time γ/β breakdown +

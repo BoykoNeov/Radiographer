@@ -16,6 +16,8 @@
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
     "@tsconfig/svelte": "^5.0.4",
+    "@types/cytoscape": "^3.21.9",
+    "@types/dagre": "^0.7.54",
     "@types/plotly.js": "^3.0.10",
     "fflate": "^0.8.2",
     "playwright": "^1.56.0",
@@ -25,6 +27,9 @@
     "vite": "^6.0.0"
   },
   "dependencies": {
+    "cytoscape": "^3.34.0",
+    "cytoscape-dagre": "^4.0.0",
+    "dagre": "^0.8.5",
     "plotly.js-basic-dist-min": "^3.6.0"
   }
 }

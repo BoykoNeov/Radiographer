@@ -82,14 +82,31 @@ export interface EvaluateOk {
   floor_atoms: number;
 }
 
+/** One DAG node = one closure nuclide (or the SF pseudo-sink). Shape mirrors
+ *  `engine/chain.build_dag`. `Z/A/N` are null only for the SF sink; `half_life_s`
+ *  is null for stable nodes (and the sink). Per-emission energies are NOT here —
+ *  they live in the emissions dataset, surfaced in the M6f-2 per-line dose table. */
 export interface ChainNode {
   id: string;
-  [k: string]: unknown;
+  /** Present only on the SF pseudo-sink ("spontaneous fission products"). */
+  label?: string;
+  Z: number | null;
+  A: number | null;
+  N: number | null;
+  /** Metastable state suffix ("m"/"n") or "" for the ground state. */
+  state: string;
+  half_life_s: number | null;
+  half_life_readable: string;
+  stable: boolean;
+  decay_modes: string[];
 }
 export interface ChainEdge {
   source: string;
   target: string;
-  [k: string]: unknown;
+  /** Decay mode label (α, β⁻, EC, IT, SF, …). */
+  mode: string;
+  /** Branching fraction in [0, 1]. */
+  branching: number;
 }
 export interface ChainOk {
   nodes: ChainNode[];

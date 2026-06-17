@@ -11,6 +11,10 @@
 //      ratio off the drawn trace, axis toggle = evaluate-not-resolve, per-axis floor).
 // M6d: then the time control — log slider + half-life ticks, cursor via relayout, the
 //      source-age OFFSET CONTRACT (t₀=t½ ⇒ rendered ratio 0.5), and animate.
+// M6e: then the decay-chain DAG (Cytoscape) — topology = solve closure in the shared
+//      palette, cursor-driven live encoding (cheap, no re-solve), real-activity ratio,
+//      and the dagre ↔ (N, Z) chart-of-nuclides layout toggle.
+// M6f: then the dose calculator + breakdown (γ/β separate quantities, integration, AP).
 //
 //   node drive_browser.mjs            # against the Vite dev server (fast loop)
 //   node drive_browser.mjs --built    # against `vite build` + `vite preview`
@@ -616,6 +620,211 @@ async function runM6d(page) {
   return { ok: checks.every((c) => c.pass), checks };
 }
 
+// --- M6e: drive the decay-chain DAG through the rendered Cytoscape path ----------
+//
+// Cytoscape renders to a canvas, so the gate reads the live instance (`window.__CY__`)
+// directly — node/edge data, rendered sizes, and model positions — the analogue of
+// reading Plotly's `.data`/`.layout`. The load-bearing assertions: (a) the DAG topology
+// is the solve closure verbatim in the shared palette; (b) a cursor move restyles nodes
+// via the CHEAP batched path — handle stable + registry==1, NEVER a re-solve (§3/#1);
+// (c) the encoding is driven by REAL activity (Cs-137→Ba-137m secular-eq ratio 0.944 off
+// `activityAtCursor`), not a placeholder; (d) the layout toggle switches dagre → the
+// (N, Z) chart-of-nuclides preset (node positions become the real N/Z grid).
+
+async function runM6e(page) {
+  const checks = [];
+  const record = (name, pass, detail) => checks.push({ name, pass, detail });
+
+  // Clean baseline: Cs-137 only (Cs-137 → Ba-137m → Ba-137 stable; no SF), t₀=0,
+  // Activity. Cursor homed to the geometric midpoint (deep in the secular plateau).
+  await page.evaluate(async () => {
+    const app = window.__APP__;
+    await app.clear();
+    app.setReferenceTimeS(0);
+    app.setAxis("activity");
+    await app.addEntry("Cs-137", 1.0e9, "Bq");
+  });
+  await page.waitForFunction(
+    "window.__APP__.status === 'solved' && window.__APP__.chainDag && window.__APP__.cursorRange",
+    null,
+    { timeout: 30_000 },
+  );
+  await page.waitForSelector('[data-testid="chain"]');
+  // The Cytoscape instance is built and carries one node per closure member.
+  await page.waitForFunction(
+    "window.__CY__ && window.__CY__.nodes().length === window.__APP__.closure.length",
+    null,
+    { timeout: 30_000 },
+  );
+
+  // 1) Topology = the solve closure verbatim, in the shared per-species palette, with
+  //    mode+branching% edge labels. (Cs-137 closure = 3 nuclides, ≥2 edges, no SF.)
+  const topo = await page.evaluate(() => {
+    const app = window.__APP__;
+    const cy = window.__CY__;
+    // cy collection .map() returns a plain Array → use JS array methods after.
+    const nodes = cy.nodes().map((n) => ({ id: n.id(), color: n.data("color") }));
+    const nodeIds = nodes.map((n) => n.id);
+    const colorsMatch = nodes
+      .filter((n) => n.id !== "SF")
+      .every((n) => n.color === app.colors[n.id]);
+    const edges = cy.edges().map((e) => ({ s: e.data("source"), t: e.data("target"), l: e.data("label") }));
+    const labelsOk = edges.every((e) => /%/.test(e.l) && e.l.trim().length > 1);
+    return { nodeIds, closure: app.closure, colorsMatch, nEdges: edges.length, labelsOk, edges };
+  });
+  record(
+    "DAG topology = solve closure, shared palette, mode+branching% edge labels",
+    topo.nodeIds.length === topo.closure.length &&
+      topo.closure.every((n) => topo.nodeIds.includes(n)) &&
+      topo.colorsMatch &&
+      topo.nEdges >= 2 &&
+      topo.labelsOk,
+    `nodes=[${topo.nodeIds.join(", ")}] (closure ${topo.closure.length}), colorsMatch=${topo.colorsMatch}, ` +
+      `edges=${topo.nEdges} e.g. ${JSON.stringify(topo.edges[0])}`,
+  );
+
+  // 2) Cursor move → node restyle via the CHEAP batched path, NOT a re-solve. Scrub from
+  //    the range low (Ba-137m in-growth incomplete → small) to the plateau midpoint
+  //    (Ba-137m at secular eq → grown in); the rendered Ba-137m node must GROW, while the
+  //    handle stays put and exactly one inventory is live (§3/#1/#2).
+  const beforeMove = await page.evaluate(() => {
+    const s = window.__BRIDGE__.registry_size();
+    return { handle: window.__APP__.handle, size: s.ok ? s.size : -1 };
+  });
+  const baWidth = () => page.evaluate(() => window.__CY__.getElementById("Ba-137m").width());
+  // Move to range low; wait until the rendered Ba-137m width settles to the new (smaller) value.
+  const wMid0 = await baWidth();
+  await page.evaluate(() => window.__APP__.setCursorOffsetS(window.__APP__.cursorRange[0]));
+  await page.waitForFunction(
+    (w0) => Math.abs(window.__CY__.getElementById("Ba-137m").width() - w0) > 0.5,
+    wMid0,
+    { timeout: 30_000 },
+  );
+  const wLo = await baWidth();
+  // Move back to the plateau midpoint; wait for the width to grow back.
+  await page.evaluate(() => {
+    const r = window.__APP__.cursorRange;
+    window.__APP__.setCursorOffsetS(Math.sqrt(r[0] * r[1]));
+  });
+  await page.waitForFunction(
+    (wl) => window.__CY__.getElementById("Ba-137m").width() - wl > 0.5,
+    wLo,
+    { timeout: 30_000 },
+  );
+  const afterMove = await page.evaluate(() => {
+    const s = window.__BRIDGE__.registry_size();
+    return {
+      handle: window.__APP__.handle,
+      size: s.ok ? s.size : -1,
+      wMid: window.__CY__.getElementById("Ba-137m").width(),
+    };
+  });
+  record(
+    "cursor move restyles nodes (Ba-137m grows in) via cheap batch, no re-solve (§3/#1/#2)",
+    afterMove.wMid > wLo &&
+      afterMove.handle === beforeMove.handle &&
+      beforeMove.size === 1 &&
+      afterMove.size === 1,
+    `Ba-137m width: lo=${wLo.toFixed(1)} → mid=${afterMove.wMid.toFixed(1)} (grew=${afterMove.wMid > wLo}), ` +
+      `handleStable=${afterMove.handle === beforeMove.handle}, size=${beforeMove.size}→${afterMove.size}`,
+  );
+
+  // 3) The encoding is driven by REAL activity: activityAtCursor recovers the Cs-137 →
+  //    Ba-137m secular-equilibrium ratio 0.94399 at the plateau midpoint (same physics
+  //    anchor as the M6c curve), proving node size tracks activity, not a placeholder.
+  const eq = await page.evaluate(() => {
+    const a = window.__APP__.activityAtCursor;
+    return { ratio: a ? a["Ba-137m"] / a["Cs-137"] : NaN, cs: a?.["Cs-137"], ba: a?.["Ba-137m"] };
+  });
+  record(
+    "live encoding is driven by real activity: activityAtCursor ratio ≈ 0.94399 (secular eq)",
+    Number.isFinite(eq.ratio) && Math.abs(eq.ratio - 0.94399) <= 0.94399 * 0.01,
+    `A(Ba-137m)/A(Cs-137)=${eq.ratio?.toFixed(5)} (want 0.94399), Cs=${eq.cs?.toExponential(2)} Bq`,
+  );
+
+  // 4) Layout toggle dagre → (N, Z) chart-of-nuclides preset. Clicking "Chart (N, Z)"
+  //    moves node positions onto the real N/Z grid (x ∝ N, y ∝ −Z). The check is
+  //    STRUCTURAL so it survives the preset's `fit` viewport rescale (an affine, which
+  //    preserves ordering + uniform scale): for the two GROUND-state members Cs-137
+  //    (N=82, Z=55) and Ba-137 (N=81, Z=56), ΔN=+1 and Δ(−Z)=+1, so the displacement
+  //    must be equal in x and y (the hallmark of a square N/Z lattice), positive in
+  //    both, and DISTINCT from the dagre layout (which stacks parent-above-daughter).
+  const grab = () =>
+    page.evaluate(() => {
+      const p = (id) => window.__CY__.getElementById(id).position();
+      const cs = p("Cs-137");
+      const ba = p("Ba-137");
+      const bam = p("Ba-137m");
+      return { cs, ba, bam };
+    });
+  const dagre = await grab();
+  await page.click('[data-testid="chain-layout-chart"]');
+  await page.waitForTimeout(600); // preset layout applies synchronously; small settle margin
+  const chartP = await grab();
+  const dx = chartP.cs.x - chartP.ba.x;
+  const dy = chartP.cs.y - chartP.ba.y;
+  const ddagrex = dagre.cs.x - dagre.ba.x;
+  const ddagrey = dagre.cs.y - dagre.ba.y;
+  const moved = Math.abs(dx - ddagrex) > 1 || Math.abs(dy - ddagrey) > 1;
+  record(
+    "layout toggle → (N, Z) chart preset: square N/Z lattice (Δx≈Δy>0), distinct from dagre",
+    dx > 1 && Math.abs(dx - dy) / dx < 0.05 && moved && chartP.cs.x > chartP.bam.x,
+    `chart Δ(Cs-137,Ba-137)=(${dx.toFixed(1)}, ${dy.toFixed(1)}) [want Δx≈Δy>0], ` +
+      `dagre Δ=(${ddagrex.toFixed(1)}, ${ddagrey.toFixed(1)}), moved=${moved}, Cs.x>Ba-137m.x=${chartP.cs.x > chartP.bam.x} ` +
+      `| chart cs=(${chartP.cs.x.toFixed(0)},${chartP.cs.y.toFixed(0)}) ba=(${chartP.ba.x.toFixed(0)},${chartP.ba.y.toFixed(0)})`,
+  );
+  await page.click('[data-testid="chain-layout-dagre"]'); // restore
+
+  // 5) Branch-and-reconverge — the headline DAG capability and the LOCKED reason
+  //    Cytoscape was chosen over d3 (§2/§4/§8: "chains are true DAGs that re-converge").
+  //    Bi-212 is the textbook ThC diamond: β⁻→Po-212 & α→Tl-208, both →Pb-208. The
+  //    shared daughter must be ONE node with ≥2 incoming edges (re-convergence), and
+  //    must survive the (N, Z) layout toggle (§8: a shared daughter is one coordinate).
+  await page.evaluate(async () => {
+    const app = window.__APP__;
+    await app.clear();
+    await app.addEntry("Bi-212", 1.0e9, "Bq");
+  });
+  await page.waitForFunction(
+    "window.__APP__.status === 'solved' && window.__CY__ && window.__CY__.nodes().length === window.__APP__.closure.length",
+    null,
+    { timeout: 30_000 },
+  );
+  const reconverge = (sel) =>
+    page.evaluate(() => {
+      const cy = window.__CY__;
+      const ids = cy.nodes().map((n) => n.id());
+      const intoPb = cy
+        .edges()
+        .map((e) => ({ s: e.data("source"), t: e.data("target") }))
+        .filter((e) => e.t === "Pb-208");
+      return {
+        ids,
+        pbNodes: ids.filter((id) => id === "Pb-208").length,
+        indeg: intoPb.length,
+        parents: intoPb.map((e) => e.s).sort(),
+      };
+    });
+  const dagreRc = await reconverge();
+  await page.click('[data-testid="chain-layout-chart"]'); // re-converging daughter in the (N, Z) preset
+  await page.waitForTimeout(600);
+  const chartRc = await reconverge();
+  const parentsOk =
+    dagreRc.parents.includes("Po-212") && dagreRc.parents.includes("Tl-208");
+  record(
+    "branch-and-reconverge: Bi-212 diamond → SINGLE Pb-208, ≥2 incoming, both layouts (§2/§4/§8)",
+    dagreRc.pbNodes === 1 &&
+      dagreRc.indeg >= 2 &&
+      parentsOk &&
+      chartRc.pbNodes === 1 &&
+      chartRc.indeg >= 2,
+    `closure=[${dagreRc.ids.join(", ")}], Pb-208 nodes=${dagreRc.pbNodes}, indegree=${dagreRc.indeg} from [${dagreRc.parents.join(", ")}], chart indeg=${chartRc.indeg}`,
+  );
+  await page.click('[data-testid="chain-layout-dagre"]'); // restore
+
+  return { ok: checks.every((c) => c.pass), checks };
+}
+
 // --- M6f: drive the dose calculator + breakdown through the rendered app path ----
 //
 // The load-bearing benchmark (advisor): Co-60 H*(10)@1 m read OFF THE RENDERED γ card
@@ -854,6 +1063,7 @@ try {
   let m6b = { ok: false, checks: [] };
   let m6c = { ok: false, checks: [] };
   let m6d = { ok: false, checks: [] };
+  let m6e = { ok: false, checks: [] };
   let m6f = { ok: false, checks: [] };
   if (m6aOk) {
     m6b = await runM6b(page);
@@ -862,18 +1072,23 @@ try {
       if (m6c.ok) {
         m6d = await runM6d(page);
         if (m6d.ok) {
-          m6f = await runM6f(page);
+          m6e = await runM6e(page);
+          if (m6e.ok) {
+            m6f = await runM6f(page);
+          } else {
+            console.log("[gate] skipping M6f — M6e checks failed");
+          }
         } else {
-          console.log("[gate] skipping M6f — M6d checks failed");
+          console.log("[gate] skipping M6e/M6f — M6d checks failed");
         }
       } else {
-        console.log("[gate] skipping M6d/M6f — M6c checks failed");
+        console.log("[gate] skipping M6d/M6e/M6f — M6c checks failed");
       }
     } else {
-      console.log("[gate] skipping M6c/M6d/M6f — M6b checks failed");
+      console.log("[gate] skipping M6c/M6d/M6e/M6f — M6b checks failed");
     }
   } else {
-    console.log("[gate] skipping M6b/M6c/M6d/M6f — boot self-check failed");
+    console.log("[gate] skipping M6b/M6c/M6d/M6e/M6f — boot self-check failed");
   }
 
   console.log("\n===== M6b inventory panel =====");
@@ -891,16 +1106,21 @@ try {
     console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
   }
 
+  console.log("\n===== M6e decay-chain DAG =====");
+  for (const c of m6e.checks) {
+    console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
+  }
+
   console.log("\n===== M6f dose calculator =====");
   for (const c of m6f.checks) {
     console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
   }
 
-  exitCode = m6aOk && m6b.ok && m6c.ok && m6d.ok && m6f.ok ? 0 : 1;
+  exitCode = m6aOk && m6b.ok && m6c.ok && m6d.ok && m6e.ok && m6f.ok ? 0 : 1;
   console.log(
     exitCode === 0
-      ? "\n✅ M6f PASS (real browser): boot + inventory + curves + time control + dose calculator"
-      : "\n❌ M6f FAIL (real browser)",
+      ? "\n✅ M6e PASS (real browser): boot + inventory + curves + time control + decay-chain DAG + dose"
+      : "\n❌ M6e FAIL (real browser)",
   );
 } catch (err) {
   console.error("Driver error:", err);

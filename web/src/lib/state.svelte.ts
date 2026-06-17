@@ -21,6 +21,7 @@
 
 import {
   BridgeClient,
+  type ChainOk,
   type DoseOk,
   type EvaluateOk,
   type Handle,
@@ -146,6 +147,22 @@ export class AppState {
   /** Loud dose-path error (#3) — surfaced, never a silent blank breakdown. */
   doseError = $state<string>("");
 
+  // -- chain view (M6e, §8/§9) ----------------------------------------------
+  // The decay-chain DAG. Topology (`chainDag`: nodes+edges) is TIME-INDEPENDENT —
+  // it changes only with the inventory, so it is fetched once per solve (never on a
+  // source-age / cursor change). The LIVE node encoding is driven by ACTIVITY at the
+  // cursor: a dedicated `chainActivity` rate-series (axis=activity, Bq) over the SAME
+  // `curveX` display grid (evaluated at `referenceTimeS + curveX`, the M6d offset), so
+  // the cursor INDEXES it 1:1 with the curves/dose (zero bridge calls on scrub, §3).
+  // It is its OWN series — NOT the display `curve`, which the Atoms/Mass toggle would
+  // otherwise break: the DAG always wants activity regardless of the curve axis (§5).
+  // Recompute triggers = solve + source-age only (NOT setAxis); see docs/plans/M6e-chain.md.
+  chainDag = $state<ChainOk | null>(null);
+  /** Activity (Bq) rate-series over `curveX` driving the live node encoding. */
+  chainActivity = $state<EvaluateOk | null>(null);
+  /** Loud chain-path error (#3) — surfaced, never a silently blank graph. */
+  chainError = $state<string>("");
+
   /** Overlay grid density (log-spaced). HP is sympy-per-point → keep it responsive. */
   private readonly CURVE_POINTS = 300;
   private readonly CURVE_POINTS_HP = 60;
@@ -223,6 +240,25 @@ export class AppState {
     const s = this.betaDoseSeries;
     if (!s) return null;
     return trapzWindow(this.curveX, s.rate_si, this.cursorOffsetS, this.cursorOffsetS + this.exposureS);
+  }
+
+  // -- per-node activity at the cursor (drives the live DAG encoding, M6e) -----
+  /**
+   * `{nuclide: activity_Bq}` at the cursor — the `chainActivity` series indexed at
+   * `cursorOffsetS` (display time) via `interpAt`, the same 1:1 cursor read the dose
+   * getters use. Null when there is no activity series (empty/failed/all-stable).
+   * Nuclides absent from the series (the SF sink) are simply omitted → the renderer
+   * treats a missing key as zero activity (fade, never crash; advisor #4).
+   */
+  get activityAtCursor(): Record<string, number> | null {
+    const s = this.chainActivity;
+    if (!s) return null;
+    const out: Record<string, number> = {};
+    for (const n of s.nuclides) {
+      const v = interpAt(this.curveX, s.series[n] ?? [], this.cursorOffsetS);
+      out[n] = v ?? 0;
+    }
+    return out;
   }
 
   // -- wiring ---------------------------------------------------------------
@@ -312,6 +348,7 @@ export class AppState {
     this.referenceTimeS = next;
     this.recomputeCurves(); // evaluate at the shifted times — never a re-solve (#1)
     this.recomputeDose(); // and the dose series at the shifted times (same offset, #1)
+    this.recomputeChainActivity(); // and the DAG activity series (topology unchanged, #1)
   }
 
   /**
@@ -408,6 +445,7 @@ export class AppState {
       this.cursorOffsetS = 0;
       this.curveError = "";
       this.clearDose();
+      this.clearChain();
       this.errorMsg = "";
       this.status = "idle";
       return;
@@ -435,6 +473,7 @@ export class AppState {
       this.cursorOffsetS = 0;
       this.curveError = "";
       this.clearDose();
+      this.clearChain();
       this.status = "error";
       this.errorMsg = `${res.error.type}: ${res.error.message}`;
       return;
@@ -447,6 +486,8 @@ export class AppState {
     this.resetCursor(); // the range changed → home the cursor before evaluating (#2 advisor)
     this.recomputeCurves(); // one evaluate over the auto-range grid (§9; "evaluate many", #1)
     this.recomputeDose(); // and the dose-rate series over the same grid (M6f; pure evaluate)
+    this.fetchChain(); // the DAG topology (time-independent → only here, M6e)
+    this.recomputeChainActivity(); // and its activity series over `curveX` (after recomputeCurves)
   }
 
   /**
@@ -565,6 +606,72 @@ export class AppState {
     this.gammaDoseSeries = null;
     this.betaDoseSeries = null;
     this.doseError = "";
+  }
+
+  // -- the chain DAG (M6e) --------------------------------------------------
+
+  /**
+   * Fetch the decay-chain DAG topology (nodes + edges) for the live handle. Pure
+   * topology — TIME-INDEPENDENT, so this runs ONLY on solve (never on a source-age
+   * or cursor change). Loud on failure (#3): clears the graph + sets `chainError`,
+   * never a silently blank diagram. The node set is the solve closure verbatim
+   * (engine/chain.py), so the DAG and inventory can't drift.
+   */
+  private fetchChain(): void {
+    this.chainError = "";
+    if (!this.client || !this.handle) {
+      this.chainDag = null;
+      return;
+    }
+    const res = this.client.chain(this.handle);
+    if (!res.ok) {
+      this.chainDag = null;
+      this.chainError = `${res.error.type}: ${res.error.message}`;
+      return;
+    }
+    this.chainDag = res;
+  }
+
+  /**
+   * Evaluate the ACTIVITY (Bq) series over the curve grid for the live node
+   * encoding. Its OWN series (axis=activity, unit=Bq) — independent of the curve's
+   * display axis (the DAG always wants activity, §5) — over the SAME `curveX`
+   * (evaluated at `referenceTimeS + curveX`, the M6d offset), so the cursor indexes
+   * it 1:1 with the curves/dose. Must run AFTER `recomputeCurves` (depends on
+   * `curveX`). Pure evaluate, NEVER a re-solve (#1). Loud on failure (#3).
+   */
+  private recomputeChainActivity(): void {
+    // Topology absent (failed/empty solve): nothing to encode, and a `fetchChain`
+    // error (a closure-drift bug — §11) must stay loud — bail WITHOUT touching
+    // `chainError`. When topology IS present, any prior `chainError` was an activity
+    // error, so clear it here for parity with `recomputeDose` (advisor: a recovering
+    // source-age must not leave a stale banner).
+    if (!this.chainDag) {
+      this.chainActivity = null;
+      return;
+    }
+    this.chainError = "";
+    const meta = this.solveMeta;
+    if (!this.client || !this.handle || !meta || this.curveX.length === 0) {
+      this.chainActivity = null;
+      return;
+    }
+    const t0 = this.referenceTimeS;
+    const times = t0 > 0 ? this.curveX.map((x) => x + t0) : this.curveX.slice();
+    const res = this.client.evaluate(this.handle, { times_s: times, axis: "activity", unit: "Bq" });
+    if (!res.ok) {
+      this.chainActivity = null;
+      this.chainError = `${res.error.type}: ${res.error.message}`;
+      return;
+    }
+    this.chainActivity = res;
+  }
+
+  /** Clear the chain DAG (empty / failed solve). */
+  private clearChain(): void {
+    this.chainDag = null;
+    this.chainActivity = null;
+    this.chainError = "";
   }
 
   // -- persistence (M6b: inventory slice; later chunks extend the envelope) --

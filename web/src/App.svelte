@@ -6,6 +6,7 @@
   import Inventory from "./lib/Inventory.svelte";
   import Curves from "./lib/Curves.svelte";
   import TimeControl from "./lib/TimeControl.svelte";
+  import Chain from "./lib/Chain.svelte";
   import Dose from "./lib/Dose.svelte";
 
   type Phase = "booting" | "ready" | "error";
@@ -87,6 +88,7 @@
     <Inventory />
     <Curves />
     <TimeControl />
+    <Chain />
     <Dose />
   {/if}
 
