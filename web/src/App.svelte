@@ -5,6 +5,7 @@
   import { appState } from "./lib/state.svelte";
   import Inventory from "./lib/Inventory.svelte";
   import Curves from "./lib/Curves.svelte";
+  import TimeControl from "./lib/TimeControl.svelte";
 
   type Phase = "booting" | "ready" | "error";
 
@@ -62,7 +63,7 @@
 </script>
 
 <main>
-  <h1>Radiographer <span class="muted">— decay & dose (M6c)</span></h1>
+  <h1>Radiographer <span class="muted">— decay & dose (M6d)</span></h1>
   <p class="muted">
     Fully client-side: Pyodide (WASM) runs the Python physics engine, the bundled
     ICRP-107 / dose datasets are unpacked into the in-browser filesystem, and every
@@ -84,6 +85,7 @@
   {#if phase === "ready"}
     <Inventory />
     <Curves />
+    <TimeControl />
   {/if}
 
   {#if report}

@@ -44,3 +44,51 @@ export const ACTIVITY_UNITS = ["Bq", "Ci"] as const;
 export const MASS_UNITS = ["g", "kg", "mg"] as const;
 /** Atoms has a single unit; kept as a constant so labels stay obsessive (§12). */
 export const ATOMS_UNIT = "atoms";
+
+// --- time units (M6d, §9 time control) ---------------------------------------
+// The engine speaks SI seconds everywhere (solve metadata `time_range_s`,
+// `half_lives_s`, `evaluate(times_s)`); these are the human-facing units for the
+// numeric time entry, the source-age input, and the half-life tick labels.
+
+export interface TimeUnit {
+  value: string;
+  label: string;
+  /** SI seconds per one of this unit. */
+  seconds: number;
+}
+
+/** Year = Julian year (365.25 d = 31_557_600 s) — radioactivedecay's convention. */
+export const TIME_UNITS: ReadonlyArray<TimeUnit> = [
+  { value: "s", label: "s", seconds: 1 },
+  { value: "min", label: "min", seconds: 60 },
+  { value: "h", label: "h", seconds: 3600 },
+  { value: "d", label: "d", seconds: 86400 },
+  { value: "y", label: "yr", seconds: 31_557_600 },
+];
+
+export const DEFAULT_TIME_UNIT = "s";
+
+/** Convert `(value, unit)` to SI seconds. Loud on an unknown unit (no silent 0). */
+export function toSeconds(value: number, unit: string): number {
+  const u = TIME_UNITS.find((t) => t.value === unit);
+  if (!u) throw new Error(`unknown time unit ${JSON.stringify(unit)}`);
+  return value * u.seconds;
+}
+
+/**
+ * Format SI seconds as a short human string, auto-picking the largest unit whose
+ * value is ≥ 1 (e.g. 86400 → "1 d", 153 → "2.55 min"). For tick/readout labels;
+ * not round-trip-exact (display only). 0/negative render as "0 s".
+ */
+export function humanTime(seconds: number): string {
+  if (!(seconds > 0)) return "0 s";
+  for (let i = TIME_UNITS.length - 1; i >= 0; i--) {
+    const u = TIME_UNITS[i];
+    if (seconds >= u.seconds) {
+      const v = seconds / u.seconds;
+      const s = v >= 100 ? v.toPrecision(3) : v >= 10 ? v.toFixed(1) : v.toFixed(2);
+      return `${s} ${u.label}`;
+    }
+  }
+  return `${seconds.toExponential(2)} s`;
+}

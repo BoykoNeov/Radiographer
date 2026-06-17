@@ -140,7 +140,13 @@ dispatches on `entries`) so §9's per-isotope unit is honored not silently dropp
   dive to −∞. **Linear-axis option** for the single-half-life zoom.
 - Switching axis mode re-evaluates (cheap), never re-solves.
 
-### M6d — Time control (slider + cursor)
+### M6d — Time control (slider + cursor)  ✅ DONE
+**See `docs/plans/M6d-time-control.md`.** Gate green dev + built (M6a/b/c + 4 M6d
+checks). The source-age **offset is wired at evaluate time** (`setReferenceTimeS`
+re-evaluates, never re-solves); the store exposes **`currentTimeS = referenceTimeS
++ cursorOffsetS`** — the single absolute time M6e/M6f consume. Cursor moves ride a
+cheap `Plotly.relayout` (not `react`); animate is cancellable (store `animating`
+flag cleared by `solve()`).
 - Single **log** time slider auto-ranged per inventory (from solve metadata
   `time_range_s`), with **half-life tick marks** (one per species).
 - Numeric time entry + unit dropdown; **definable t=0 / source-age**.
@@ -188,7 +194,11 @@ dispatches on `entries`) so §9's per-isotope unit is honored not silently dropp
   floor, degraded-table notes, point-source/no-air caveats — as tooltips/info
   panels next to the relevant numbers, not buried.
 - **Full app-state save/load round-trip test** (the M6b serializer + every later
-  field) — load JSON → identical views.
+  field) — load JSON → identical views. **Includes the M6d time cursor**
+  (`cursorOffsetS`, deferred from M6d as output-affecting state): mind the ordering
+  trap — `loadFromText`→`solve()`→`resetCursor()` clobbers a naively-restored
+  cursor, so restore it *after* `solve()` and clamp to the new range (see
+  `docs/plans/M6d-time-control.md` "Deferred / open").
 - End-to-end headless UI test (extend `drive_browser.mjs`): boot → load source →
   scrub → dose → shield → assert benchmark numbers and that warnings render.
 - Units sweep (§12), loading/error polish, first-load caching (service worker is a

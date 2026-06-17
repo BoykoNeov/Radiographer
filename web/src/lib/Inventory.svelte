@@ -167,15 +167,7 @@
         >⚠ stiff chain — high precision recommended (double may suffer cancellation)</span
       >
     {/if}
-    <label title="Reference time / source age (t=0). M6b stores it; the time control lands in M6d.">
-      Reference time t₀ (s):
-      <input
-        type="number"
-        step="any"
-        value={appState.referenceTimeS}
-        onchange={(ev) => appState.setReferenceTimeS((ev.target as HTMLInputElement).valueAsNumber)}
-      />
-    </label>
+    <!-- Reference time / source-age (t₀) now lives in the time control (M6d). -->
   </div>
 
   <!-- Save / load -->

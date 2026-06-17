@@ -6,7 +6,7 @@
   // (cheap), never re-solve (#1). Plotly is an imperative library, so a $effect
   // syncs the store's curve into it via Plotly.react().
   import Plotly from "plotly.js-basic-dist-min";
-  import { onDestroy } from "svelte";
+  import { onDestroy, untrack } from "svelte";
   import { appState } from "./state.svelte";
   import { ACTIVITY_UNITS, AXIS_OPTIONS, MASS_UNITS } from "./types";
 
@@ -43,6 +43,9 @@
   function buildTraces(): Partial<Plotly.PlotData>[] {
     const c = appState.curve;
     if (!c) return [];
+    // x is the DISPLAY grid (time since the reference origin); the series were
+    // evaluated at the absolute times `t₀ + curveX` (the M6d offset, in the store).
+    const x = appState.curveX;
     const peak = globalPeak(c.series, c.nuclides);
     const floor = appState.logY ? peak / 10 ** FLOOR_DECADES : 0;
     return c.nuclides.map((name) => {
@@ -54,12 +57,33 @@
         type: "scatter",
         mode: "lines",
         name,
-        x: c.times_s,
+        x,
         y,
         line: { color: appState.colors[name] ?? "#888", width: 2 },
         hovertemplate: `${name}: %{y:.3e} @ %{x:.3e} s<extra></extra>`,
       } as Partial<Plotly.PlotData>;
     });
+  }
+
+  // The time cursor (M6d): a vertical line at the slider's display-time position,
+  // spanning the full plot height (yref:"paper" so it works on log or linear y).
+  // Moving it is a cheap Plotly.relayout — never a trace rebuild (see the effects).
+  function cursorShapes(): Partial<Plotly.Shape>[] {
+    const x = appState.cursorOffsetS;
+    if (!appState.curve || !(x > 0)) return [];
+    return [
+      {
+        type: "line",
+        xref: "x",
+        yref: "paper",
+        x0: x,
+        x1: x,
+        y0: 0,
+        y1: 1,
+        line: { color: "#e15759", width: 1.5, dash: "dot" },
+        layer: "above",
+      } as Partial<Plotly.Shape>,
+    ];
   }
 
   function layout(): Partial<Plotly.Layout> {
@@ -81,21 +105,38 @@
     };
   }
 
-  // Imperative sync: re-render Plotly whenever the curve, colors, or log/linear
-  // toggle change. react() both creates (first call) and updates cheaply — the
-  // latter is what M6d's cursor will ride on.
+  // Imperative sync (traces): rebuild the plot whenever the curve, display grid,
+  // colors, or log/linear toggle change. react() both creates (first call) and
+  // diff-updates. The cursor is read with untrack() here so a cursor MOVE does NOT
+  // re-run this (expensive) trace rebuild — it rides the cheap relayout effect
+  // below instead. This split is the "smooth slider" payoff of solve-once (§3).
   $effect(() => {
-    // Touch the reactive deps explicitly so the effect re-runs on any of them.
     const c = appState.curve;
     void appState.logY;
     void appState.colors;
+    void appState.curveX;
     const el = plotEl;
     if (!el) return;
     if (!c) {
       Plotly.purge(el);
       return;
     }
-    Plotly.react(el, buildTraces(), layout(), { responsive: true, displaylogo: false });
+    const lay = layout();
+    lay.shapes = untrack(() => cursorShapes()); // include the current cursor, untracked
+    Plotly.react(el, buildTraces(), lay, { responsive: true, displaylogo: false });
+  });
+
+  // Imperative sync (cursor only): a cursor move is a cheap shapes-only relayout,
+  // not a trace rebuild. Guarded on the plot already existing (effects may run
+  // before the trace effect's first react() on mount — then the cursor is drawn
+  // by that react() via the untracked read above).
+  $effect(() => {
+    const x = appState.cursorOffsetS; // the one tracked dep — re-run on cursor move
+    void x;
+    const el = plotEl;
+    if (!el || !appState.curve) return;
+    if (!(el as unknown as { data?: unknown[] }).data) return; // not plotted yet
+    Plotly.relayout(el, { shapes: cursorShapes() });
   });
 
   onDestroy(() => {
@@ -171,10 +212,11 @@
   <div class="plot" data-testid="curves-plot" class:empty={!hasCurve} bind:this={plotEl}></div>
 
   <p class="hint muted">
-    Log-log overlay, one Bateman solve per inventory (the slider scrubs a cursor in
-    M6d — no re-solve, §3). The Activity axis omits stable end-products (zero
-    activity); switch to Atoms/Mass to see them grow in. Curves below ~{FLOOR_DECADES}
-    decades under the peak are clipped to an honest gap, not drawn toward −∞ (§9).
+    Log-log overlay, one Bateman solve per inventory; the time slider below scrubs a
+    cursor over these curves — no re-solve (§3). The Activity axis omits stable
+    end-products (zero activity); switch to Atoms/Mass to see them grow in. Curves
+    below ~{FLOOR_DECADES} decades under the peak are clipped to an honest gap, not
+    drawn toward −∞ (§9).
   </p>
 </section>
 

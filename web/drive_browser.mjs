@@ -7,6 +7,10 @@
 //      the shared-palette legend renders, save/load round-trips EXACTLY, and the
 //      no-silent-error contract holds at the UI layer (unknown nuclide → visible
 //      error, no handle minted/leaked).
+// M6c: then the overlay curves through the rendered Plotly path (secular-equilibrium
+//      ratio off the drawn trace, axis toggle = evaluate-not-resolve, per-axis floor).
+// M6d: then the time control — log slider + half-life ticks, cursor via relayout, the
+//      source-age OFFSET CONTRACT (t₀=t½ ⇒ rendered ratio 0.5), and animate.
 //
 //   node drive_browser.mjs            # against the Vite dev server (fast loop)
 //   node drive_browser.mjs --built    # against `vite build` + `vite preview`
@@ -219,6 +223,7 @@ async function runM6c(page) {
   await page.evaluate(async () => {
     const app = window.__APP__;
     await app.clear();
+    app.setReferenceTimeS(0); // M6b's round-trip left t₀=5 yr; reset for a clean baseline
     app.setAxis("activity");
     app.setLogY(true);
     await app.addEntry("Cs-137", 1.0e9, "Bq");
@@ -391,6 +396,226 @@ async function runM6c(page) {
   return { ok: checks.every((c) => c.pass), checks };
 }
 
+// --- M6d: drive the time control (slider + cursor + source-age offset + animate) -
+//
+// The load-bearing assertion is the OFFSET CONTRACT (advisor): the source-age t₀ is
+// added at evaluate time, so the rendered curve is the source decayed by t₀. We set
+// t₀ = Cs-137's half-life and read the SAME display-time point with t₀=0 vs t₀=t½:
+// A(t₀+x)/A(x) = exp(-λt₀) = 0.5 EXACTLY (the display point x cancels). This is what
+// de-risks M6f's dose calc, which reads `currentTimeS = referenceTimeS + cursorOffsetS`.
+// The cursor-move check proves it's a Plotly relayout (handle stable, 1 live), not a
+// re-solve; animate proves the sweep advances, stops, and leaks no handle.
+
+async function runM6d(page) {
+  const checks = [];
+  const record = (name, pass, detail) => checks.push({ name, pass, detail });
+
+  // Clean baseline: Cs-137 only, Activity, log y, t₀=0. (Cs-137→Ba-137m→Ba-137:
+  // two finite-half-life species + one stable end-product.)
+  await page.evaluate(async () => {
+    const app = window.__APP__;
+    await app.clear();
+    app.setReferenceTimeS(0);
+    app.setAxis("activity");
+    app.setLogY(true);
+    await app.addEntry("Cs-137", 1.0e9, "Bq");
+  });
+  await page.waitForFunction(
+    "window.__APP__.status === 'solved' && window.__APP__.curve && window.__APP__.cursorRange",
+    null,
+    { timeout: 30_000 },
+  );
+  await page.waitForSelector('[data-testid="time-control"]');
+  await page.waitForSelector('[data-testid="time-slider"]');
+
+  // 1) Slider spans the display auto-range; one half-life tick per finite species.
+  const slider = await page.evaluate(() => {
+    const app = window.__APP__;
+    const el = document.querySelector('[data-testid="time-slider"]');
+    const ticks = document.querySelectorAll('[data-testid="halflife-ticks"] .tick');
+    const r = app.cursorRange;
+    return {
+      min: parseFloat(el.min),
+      max: parseFloat(el.max),
+      wantMin: Math.log10(r[0]),
+      wantMax: Math.log10(r[1]),
+      nTicks: ticks.length,
+      closure: app.closure,
+    };
+  });
+  record(
+    "log slider spans the display auto-range; one half-life tick per finite species",
+    Math.abs(slider.min - slider.wantMin) < 1e-6 &&
+      Math.abs(slider.max - slider.wantMax) < 1e-6 &&
+      slider.nTicks === 2, // Cs-137 + Ba-137m finite; Ba-137 stable → no tick
+    `slider=[${slider.min.toFixed(2)},${slider.max.toFixed(2)}] want=[${slider.wantMin.toFixed(2)},${slider.wantMax.toFixed(2)}], ticks=${slider.nTicks} of closure [${slider.closure.join(", ")}]`,
+  );
+
+  // 2) The cursor is a Plotly relayout, NOT a re-solve. Move the slider through the
+  //    rendered DOM; assert the vline shape follows (read layout.shapes), the handle
+  //    is unchanged and exactly one inventory stays live (#1/#2).
+  const beforeMove = await page.evaluate(() => ({
+    handle: window.__APP__.handle,
+    size: (() => {
+      const s = window.__BRIDGE__.registry_size();
+      return s.ok ? s.size : -1;
+    })(),
+  }));
+  const target = await page.evaluate(() => {
+    const r = window.__APP__.cursorRange;
+    return Math.sqrt(r[0] * r[1]) * 5; // a point distinct from the default home
+  });
+  await page.$eval(
+    '[data-testid="time-slider"]',
+    (el, logv) => {
+      el.value = String(logv);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    },
+    Math.log10(target),
+  );
+  await page.waitForFunction(
+    (t) => {
+      const el = document.querySelector('[data-testid="curves-plot"]');
+      const sh = el && el.layout && el.layout.shapes;
+      return sh && sh.length >= 1 && Math.abs(sh[0].x0 - t) / t < 0.02;
+    },
+    target,
+    { timeout: 30_000 },
+  );
+  const afterMove = await page.evaluate(() => {
+    const el = document.querySelector('[data-testid="curves-plot"]');
+    return {
+      cursor: window.__APP__.cursorOffsetS,
+      shapeX: el.layout.shapes[0].x0,
+      handle: window.__APP__.handle,
+      size: (() => {
+        const s = window.__BRIDGE__.registry_size();
+        return s.ok ? s.size : -1;
+      })(),
+    };
+  });
+  record(
+    "cursor moves via Plotly relayout (vline follows), no re-solve (#1/#2)",
+    Math.abs(afterMove.cursor - target) / target < 0.02 &&
+      Math.abs(afterMove.shapeX - afterMove.cursor) / afterMove.cursor < 1e-6 &&
+      afterMove.handle === beforeMove.handle &&
+      beforeMove.size === 1 &&
+      afterMove.size === 1,
+    `cursor=${afterMove.cursor.toExponential(2)}≈target=${target.toExponential(2)}, shapeX==cursor, handleStable=${afterMove.handle === beforeMove.handle}, size=${beforeMove.size}→${afterMove.size}`,
+  );
+
+  // 3) THE OFFSET CONTRACT (M6f de-risk): t₀ is added at evaluate time, so the curve
+  //    is the source aged by t₀. Read Cs-137's RENDERED y at a fixed display point
+  //    with t₀=0, then t₀=t½(Cs-137); the ratio must be exp(-λt½)=0.5 exactly. Also
+  //    assert currentTimeS = referenceTimeS + cursorOffsetS and it's an evaluate, not
+  //    a re-solve.
+  const PLOT_SEL = '[data-testid="curves-plot"]';
+  const readCsAtDay = () =>
+    page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      const cs = el.data.find((d) => d.name === "Cs-137");
+      const xs = cs.x; // display grid (curveX)
+      let j = 0,
+        best = Infinity;
+      for (let i = 0; i < xs.length; i++) {
+        const dd = Math.abs(Math.log10(xs[i]) - Math.log10(86400));
+        if (dd < best) {
+          best = dd;
+          j = i;
+        }
+      }
+      return { y: cs.y[j], x: xs[j] };
+    }, PLOT_SEL);
+
+  const y0 = await readCsAtDay(); // t₀ = 0
+  const offsetState = await page.evaluate(() => {
+    const app = window.__APP__;
+    const halfLife = app.solveMeta.half_lives_s["Cs-137"]; // exact rd seconds
+    const beforeHandle = app.handle;
+    const beforeSize = (() => {
+      const s = window.__BRIDGE__.registry_size();
+      return s.ok ? s.size : -1;
+    })();
+    app.setReferenceTimeS(halfLife);
+    return {
+      halfLife,
+      beforeHandle,
+      beforeSize,
+      afterHandle: app.handle,
+      afterSize: (() => {
+        const s = window.__BRIDGE__.registry_size();
+        return s.ok ? s.size : -1;
+      })(),
+      currentTimeS: app.currentTimeS,
+      sumCheck: app.referenceTimeS + app.cursorOffsetS,
+    };
+  });
+  await page.waitForFunction(
+    "window.__APP__.curve && window.__APP__.referenceTimeS > 0",
+    null,
+    { timeout: 30_000 },
+  );
+  const y1 = await readCsAtDay(); // t₀ = t½
+  const ratio = y1.y / y0.y;
+  record(
+    "OFFSET CONTRACT: t₀=t½ ⇒ rendered A(t₀+x)/A(x)=exp(-λt½)=0.5 (source aged by t₀)",
+    Math.abs(ratio - 0.5) < 1e-3 &&
+      Math.abs(offsetState.currentTimeS - offsetState.sumCheck) < 1e-6 &&
+      offsetState.afterHandle === offsetState.beforeHandle &&
+      offsetState.beforeSize === 1 &&
+      offsetState.afterSize === 1,
+    `ratio=${ratio.toFixed(5)} (want 0.5), currentTimeS=referenceTimeS+cursorOffsetS=${offsetState.currentTimeS.toExponential(3)}, offset is evaluate not re-solve (handleStable=${offsetState.afterHandle === offsetState.beforeHandle}, size=${offsetState.beforeSize}→${offsetState.afterSize})`,
+  );
+
+  // Reset t₀ back to 0 for the animate check.
+  await page.evaluate(() => window.__APP__.setReferenceTimeS(0));
+
+  // 4) Animate sweeps the cursor (an evaluate-free relayout loop), then stops with no
+  //    handle leak. Each frame is a cursor move, NOT a re-solve (§3); pausing tears
+  //    the loop down (advisor: an orphaned loop is a silent-error vector).
+  const animBefore = await page.evaluate(() => ({
+    handle: window.__APP__.handle,
+    cursor: window.__APP__.cursorOffsetS,
+    size: (() => {
+      const s = window.__BRIDGE__.registry_size();
+      return s.ok ? s.size : -1;
+    })(),
+  }));
+  await page.click('[data-testid="time-play"]');
+  // Let several frames run (40 ms each), then confirm the cursor advanced.
+  await page.waitForFunction(
+    (c0) => window.__APP__.animating === true && window.__APP__.cursorOffsetS > c0,
+    animBefore.cursor,
+    { timeout: 30_000 },
+  );
+  const animMid = await page.evaluate(() => ({
+    animating: window.__APP__.animating,
+    cursor: window.__APP__.cursorOffsetS,
+  }));
+  await page.click('[data-testid="time-play"]'); // pause
+  await page.waitForFunction("window.__APP__.animating === false", null, { timeout: 30_000 });
+  const animAfter = await page.evaluate(() => ({
+    animating: window.__APP__.animating,
+    cursor: window.__APP__.cursorOffsetS,
+    handle: window.__APP__.handle,
+    size: (() => {
+      const s = window.__BRIDGE__.registry_size();
+      return s.ok ? s.size : -1;
+    })(),
+  }));
+  record(
+    "animate sweeps the cursor then stops, no re-solve, no handle leak (§3/#2)",
+    animMid.animating === true &&
+      animMid.cursor > animBefore.cursor &&
+      animAfter.animating === false &&
+      animAfter.handle === animBefore.handle &&
+      animAfter.size === 1,
+    `advanced ${animBefore.cursor.toExponential(2)}→${animMid.cursor.toExponential(2)}, stopped=${!animAfter.animating}, handleStable=${animAfter.handle === animBefore.handle}, size=${animAfter.size}`,
+  );
+
+  return { ok: checks.every((c) => c.pass), checks };
+}
+
 let exitCode = 1;
 let browser;
 let server;
@@ -416,15 +641,21 @@ try {
 
   let m6b = { ok: false, checks: [] };
   let m6c = { ok: false, checks: [] };
+  let m6d = { ok: false, checks: [] };
   if (m6aOk) {
     m6b = await runM6b(page);
     if (m6b.ok) {
       m6c = await runM6c(page);
+      if (m6c.ok) {
+        m6d = await runM6d(page);
+      } else {
+        console.log("[gate] skipping M6d — M6c checks failed");
+      }
     } else {
-      console.log("[gate] skipping M6c — M6b checks failed");
+      console.log("[gate] skipping M6c/M6d — M6b checks failed");
     }
   } else {
-    console.log("[gate] skipping M6b/M6c — boot self-check failed");
+    console.log("[gate] skipping M6b/M6c/M6d — boot self-check failed");
   }
 
   console.log("\n===== M6b inventory panel =====");
@@ -437,11 +668,16 @@ try {
     console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
   }
 
-  exitCode = m6aOk && m6b.ok && m6c.ok ? 0 : 1;
+  console.log("\n===== M6d time control =====");
+  for (const c of m6d.checks) {
+    console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
+  }
+
+  exitCode = m6aOk && m6b.ok && m6c.ok && m6d.ok ? 0 : 1;
   console.log(
     exitCode === 0
-      ? "\n✅ M6c PASS (real browser): boot benchmarks + inventory panel + overlay curves"
-      : "\n❌ M6c FAIL (real browser)",
+      ? "\n✅ M6d PASS (real browser): boot benchmarks + inventory + curves + time control"
+      : "\n❌ M6d FAIL (real browser)",
   );
 } catch (err) {
   console.error("Driver error:", err);

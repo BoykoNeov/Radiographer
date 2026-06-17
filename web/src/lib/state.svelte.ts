@@ -90,8 +90,31 @@ export class AppState {
   logY = $state<boolean>(true);
   /** The one evaluate() feeding the overlay; null when empty/stale/failed. */
   curve = $state<EvaluateOk | null>(null);
+  /**
+   * The DISPLAY-time grid the curves are plotted against (seconds since the
+   * reference origin / source-age, §9). The overlay is evaluated at the ABSOLUTE
+   * decay times `referenceTimeS + curveX` (M6d offset; see `recomputeCurves`), but
+   * plotted against `curveX` so the x-axis, cursor, and half-life ticks all live
+   * in one coordinate and are identical to M6c when `referenceTimeS === 0`.
+   */
+  curveX = $state<number[]>([]);
   /** Loud curve-path error (#3) — surfaced, never a silent blank chart. */
   curveError = $state<string>("");
+
+  // -- time control (M6d, §9) -----------------------------------------------
+  // The slider/cursor scrubs a position over the already-drawn curves; it is a
+  // pure client-side cursor — moving it NEVER re-evaluates and NEVER re-solves
+  // (#1). `cursorOffsetS` is DISPLAY time (seconds since the reference origin);
+  // the absolute decay time fed to evaluate/dose/chain is `currentTimeS` below.
+  cursorOffsetS = $state<number>(0);
+  /**
+   * True while the time control is sweeping the cursor (the §9 animate). Owned
+   * here so it is observable and, crucially, **cancellable on any inventory
+   * change**: `solve()` clears it, so a running sweep can never keep evaluating
+   * against a released handle (advisor: an orphaned loop is a silent-error vector).
+   * The frame loop itself lives in `TimeControl.svelte` and bails when this is false.
+   */
+  animating = $state<boolean>(false);
 
   /** Overlay grid density (log-spaced). HP is sympy-per-point → keep it responsive. */
   private readonly CURVE_POINTS = 300;
@@ -122,6 +145,24 @@ export class AppState {
     if (this.axis === "activity") return this.activityUnit;
     if (this.axis === "mass") return this.massUnit;
     return ATOMS_UNIT;
+  }
+  /**
+   * The DISPLAY-time slider envelope `[lo, hi]` (seconds since the reference
+   * origin) = the solve's auto-range; null when every nuclide is stable (no
+   * evolution to scrub). The slider/ticks live in this coordinate.
+   */
+  get cursorRange(): [number, number] | null {
+    const r = this.solveMeta?.time_range_s;
+    return r ? [r[0], r[1]] : null;
+  }
+  /**
+   * The ABSOLUTE decay time (seconds since the solve origin) at the cursor — the
+   * single value M6e (DAG) and M6f (dose) consume: `referenceTimeS` (source-age)
+   * + `cursorOffsetS` (slider position). This is the offset wired at evaluate time
+   * (the M6b deferral; §8/§9 "forward decay is free"). At t₀=0 it equals the cursor.
+   */
+  get currentTimeS(): number {
+    return this.referenceTimeS + this.cursorOffsetS;
   }
 
   // -- wiring ---------------------------------------------------------------
@@ -197,9 +238,31 @@ export class AppState {
     await this.solve();
   }
 
-  /** Reference time / source-age. NOT a re-solve trigger in M6b (#1). */
+  /**
+   * Reference time / source-age (t₀), seconds, clamped ≥ 0. NOT a re-solve (#1):
+   * §8/§9 treat source-age as an evaluation offset (forward decay is free), so
+   * this RE-EVALUATES the already-solved inventory at the shifted absolute times
+   * (`referenceTimeS + curveX`). This is the M6d wiring of the M6b-stored offset.
+   * The cursor's display position (`cursorOffsetS`) is unchanged — only the
+   * absolute `currentTimeS` shifts.
+   */
   setReferenceTimeS(t: number): void {
-    this.referenceTimeS = Number.isFinite(t) ? t : 0;
+    const next = Number.isFinite(t) ? Math.max(0, t) : 0;
+    if (next === this.referenceTimeS) return;
+    this.referenceTimeS = next;
+    this.recomputeCurves(); // evaluate at the shifted times — never a re-solve (#1)
+  }
+
+  /**
+   * Move the time cursor to `t` seconds (display time, since the reference
+   * origin), clamped to the slider envelope. A pure cursor move: it changes
+   * `currentTimeS` (what the DAG/dose read) but NEVER re-evaluates or re-solves
+   * (#1) — the curves already span the whole range; the cursor is just a marker.
+   */
+  setCursorOffsetS(t: number): void {
+    if (!Number.isFinite(t)) return;
+    const r = this.cursorRange;
+    this.cursorOffsetS = r ? Math.min(Math.max(t, r[0]), r[1]) : Math.max(0, t);
   }
 
   // -- curve display controls (each RE-EVALUATES, never re-solves; #1) -------
@@ -239,6 +302,7 @@ export class AppState {
       this.errorMsg = "engine not ready";
       return;
     }
+    this.animating = false; // cancel any running sweep — the handle is about to change (#2)
     const old = this.handle;
 
     if (this.entries.length === 0) {
@@ -247,6 +311,8 @@ export class AppState {
       this.solveMeta = null;
       this.colors = {};
       this.curve = null;
+      this.curveX = [];
+      this.cursorOffsetS = 0;
       this.curveError = "";
       this.errorMsg = "";
       this.status = "idle";
@@ -271,6 +337,8 @@ export class AppState {
       this.solveMeta = null;
       this.colors = {};
       this.curve = null;
+      this.curveX = [];
+      this.cursorOffsetS = 0;
       this.curveError = "";
       this.status = "error";
       this.errorMsg = `${res.error.type}: ${res.error.message}`;
@@ -281,7 +349,19 @@ export class AppState {
     this.solveMeta = res;
     this.colors = this.registry.assignAll(res.nuclides); // fresh reference → reactive (#4)
     this.status = "solved";
+    this.resetCursor(); // the range changed → home the cursor before evaluating (#2 advisor)
     this.recomputeCurves(); // one evaluate over the auto-range grid (§9; "evaluate many", #1)
+  }
+
+  /**
+   * Home the time cursor whenever the inventory (hence the auto-range) changes —
+   * a stale cursor from a previous inventory would point off-range (advisor blind
+   * spot). Default to the geometric midpoint of the log envelope (a representative
+   * mid-evolution point); 0 when there is no range (all-stable, slider disabled).
+   */
+  private resetCursor(): void {
+    const r = this.cursorRange;
+    this.cursorOffsetS = r ? Math.sqrt(r[0] * r[1]) : 0;
   }
 
   private releaseHandle(h: Handle | null): void {
@@ -301,26 +381,35 @@ export class AppState {
     const meta = this.solveMeta;
     if (!this.client || !this.handle || !meta) {
       this.curve = null;
+      this.curveX = [];
       return;
     }
     const range = meta.time_range_s;
     if (!range) {
       // Every nuclide is stable → no decay to evolve (auto_time_range is null).
       this.curve = null;
+      this.curveX = [];
       return;
     }
     const n = this.precision === "hp" ? this.CURVE_POINTS_HP : this.CURVE_POINTS;
+    // The DISPLAY grid (plotted x); the evaluate happens at the ABSOLUTE decay
+    // times `referenceTimeS + grid` (the M6d source-age offset; "forward decay is
+    // free", §8/§9). At t₀=0 these coincide → identical to M6c.
+    const grid = logGrid(range[0], range[1], n);
+    const t0 = this.referenceTimeS;
     const res = this.client.evaluate(this.handle, {
-      times_s: logGrid(range[0], range[1], n),
+      times_s: t0 > 0 ? grid.map((x) => x + t0) : grid,
       axis: this.axis,
       unit: this.curveUnit,
     });
     if (!res.ok) {
       this.curve = null;
+      this.curveX = [];
       this.curveError = `${res.error.type}: ${res.error.message}`;
       return;
     }
     this.curve = res;
+    this.curveX = grid;
   }
 
   // -- persistence (M6b: inventory slice; later chunks extend the envelope) --
