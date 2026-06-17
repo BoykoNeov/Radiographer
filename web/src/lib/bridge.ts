@@ -20,12 +20,28 @@ type Result<T> = (T & { ok: true }) | Fail;
 
 // --- requests ----------------------------------------------------------------
 
-export interface SolveSpec {
-  nuclides: Record<string, number>;
-  /** Bq (default), Ci, atoms, g, kg, ug, ... — see inventory.from_spec. */
-  unit?: string;
-  precision?: "double" | "hp";
+/** One isotope line for the per-entry-units solve form (§9 inventory panel). */
+export interface SolveEntry {
+  name: string;
+  quantity: number;
+  /** An rd input unit: Bq, Ci, atoms, g, kg, mg, ug, ... */
+  unit: string;
 }
+
+/**
+ * Two accepted forms (the bridge dispatches on `entries`):
+ *  - single-unit:   `{ nuclides, unit, precision }`
+ *  - per-entry units: `{ entries: [{name,quantity,unit}], precision }`
+ * The inventory panel always uses the entries form; selfcheck/tests use the older one.
+ */
+export type SolveSpec =
+  | { entries: SolveEntry[]; precision?: "double" | "hp" }
+  | {
+      nuclides: Record<string, number>;
+      /** Bq (default), Ci, atoms, g, kg, ug, ... — see inventory.from_spec. */
+      unit?: string;
+      precision?: "double" | "hp";
+    };
 
 export type DoseAxis = "atoms" | "mass" | "activity";
 
@@ -102,7 +118,19 @@ export interface ReleaseOk {
   existed: boolean;
 }
 
+export interface NuclidesOk {
+  /** Every nuclide the engine can solve (rd dataset), natural-sorted, names only. */
+  nuclides: string[];
+}
+
+export interface RegistrySizeOk {
+  /** Number of live solved inventories (handle-leak canary for invariant #2). */
+  size: number;
+}
+
 export type SolveResponse = Result<SolveOk>;
+export type NuclidesResponse = Result<NuclidesOk>;
+export type RegistrySizeResponse = Result<RegistrySizeOk>;
 export type EvaluateResponse = Result<EvaluateOk>;
 export type ChainResponse = Result<ChainOk>;
 export type DoseResponse = Result<DoseOk>;
@@ -132,6 +160,11 @@ export class BridgeClient {
     return JSON.parse(out) as T;
   }
 
+  /** The add-by-name source for the inventory panel; one fetch, cached by the caller. */
+  nuclides(): NuclidesResponse {
+    return this.call<NuclidesResponse>("nuclides");
+  }
+
   solve(spec: SolveSpec): SolveResponse {
     return this.call<SolveResponse>("solve", JSON.stringify(spec));
   }
@@ -158,5 +191,10 @@ export class BridgeClient {
 
   release(handle: Handle): ReleaseResponse {
     return this.call<ReleaseResponse>("release", handle);
+  }
+
+  /** Live-handle count — the leak canary the gate asserts is 1 across re-solves. */
+  registry_size(): RegistrySizeResponse {
+    return this.call<RegistrySizeResponse>("registry_size");
   }
 }

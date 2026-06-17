@@ -175,6 +175,31 @@ class SolvedInventory:
         contents_atoms = {str(k): float(v) for k, v in inv.contents.items()}
         return cls(contents_atoms, inv.decay_data, precision)
 
+    @classmethod
+    def from_entries(cls, entries: Sequence[dict], precision: str = "double") -> "SolvedInventory":
+        """Build from per-entry units (the §9 inventory panel form): a list of
+        ``{name, quantity, unit}`` where each entry may use a *different* unit.
+
+        Each entry is converted to atoms by ``rd`` (reusing its validated unit
+        conversions) and **summed** into the contents — so the same nuclide loaded
+        in two units (e.g. Co-60 in Bq and Ci) is the physically-correct sum of
+        atoms. One Bateman solve then runs over the union. Loud on an unknown
+        nuclide or an empty list, exactly like :meth:`from_spec`."""
+        if not entries:
+            raise EngineError("no nuclides supplied")
+        contents_atoms: dict[str, float] = {}
+        for e in entries:
+            name = e["name"]
+            try:
+                rd.Nuclide(name)
+            except Exception as exc:  # noqa: BLE001 - re-raise loudly, don't swallow
+                raise EngineError(f"unknown nuclide {name!r}: {exc}") from exc
+            inv = rd.Inventory({name: float(e["quantity"])}, _rd_input_unit(e["unit"]))
+            for k, v in inv.contents.items():
+                contents_atoms[str(k)] = contents_atoms.get(str(k), 0.0) + float(v)
+        # decay_data defaults to rd.DEFAULTDATA in __init__ — all entries share it.
+        return cls(contents_atoms, None, precision)
+
     # -- evaluation -------------------------------------------------------
 
     def _evaluate_double_atoms(self, t: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

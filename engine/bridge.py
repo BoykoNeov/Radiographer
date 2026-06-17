@@ -13,8 +13,11 @@ no-silent-errors). Success responses carry ``"ok": true``.
 from __future__ import annotations
 
 import json
+import re
 import secrets
 import traceback
+
+import radioactivedecay as rd
 
 from engine.attenuation import AttenuationError
 from engine.beta_dose import BetaDoseError, BetaSkinDoseModel
@@ -69,6 +72,32 @@ def _solve_obj(nuclides: dict, unit: str = "Bq", precision: str = "double") -> S
     return SolvedInventory.from_spec(nuclides, unit, precision)
 
 
+_NUCLIDE_RE = re.compile(r"^([A-Za-z]+)-(\d+)([a-z]*)$")
+
+
+def _nuclide_sort_key(name: str) -> tuple:
+    """Natural (element, mass, isomeric-state) order so the picker lists Co-58
+    before Co-60 before Cs-137 — not naive string order (where 'Co-60' < 'Co-58').
+    Names that don't parse fall back to lexical order, kept (never dropped)."""
+    m = _NUCLIDE_RE.match(name)
+    if not m:
+        return (1, name, 0, "")
+    element, mass, state = m.groups()
+    return (0, element, int(mass), state)
+
+
+def nuclides() -> str:
+    """``-> {ok, nuclides: [...]}`` — every nuclide the engine can solve (rd's full
+    dataset), the add-by-name source for the M6b inventory panel. Names only, sorted
+    and de-duplicated; emission availability is a *dose*-time concern (M6f), not here,
+    so an emission-less but solvable nuclide is intentionally listed."""
+    try:
+        names = sorted({str(n) for n in rd.DEFAULTDATA.nuclides}, key=_nuclide_sort_key)
+        return _ok({"nuclides": names})
+    except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
+        return _err(exc)
+
+
 def _get(handle: str) -> SolvedInventory:
     solved = _REGISTRY.get(handle)
     if solved is None:
@@ -77,13 +106,20 @@ def _get(handle: str) -> SolvedInventory:
 
 
 def solve(spec_json: str) -> str:
-    """``{"nuclides": {name: value}, "unit": "Bq", "precision": "double"}`` ->
-    ``{ok, handle, nuclides, half_lives_s, time_range_s, hp_recommended, ...}``."""
+    """Two accepted forms (dispatched on the presence of ``entries``):
+
+    * single-unit: ``{"nuclides": {name: value}, "unit": "Bq", "precision": "double"}``
+    * per-entry units (the §9 inventory panel): ``{"entries": [{"name","quantity","unit"}],
+      "precision": "double"}`` — each entry may use a different unit, summed in atoms.
+
+    -> ``{ok, handle, nuclides, half_lives_s, time_range_s, hp_recommended, ...}``."""
     try:
         spec = json.loads(spec_json)
-        solved = _solve_obj(
-            spec["nuclides"], spec.get("unit", "Bq"), spec.get("precision", "double")
-        )
+        precision = spec.get("precision", "double")
+        if "entries" in spec:
+            solved = SolvedInventory.from_entries(spec["entries"], precision)
+        else:
+            solved = _solve_obj(spec["nuclides"], spec.get("unit", "Bq"), precision)
         handle = "inv_" + secrets.token_hex(8)
         _REGISTRY[handle] = solved
         return _ok({"handle": handle, **solved.metadata()})
@@ -221,6 +257,16 @@ def neutron_dose(handle: str, request_json: str) -> str:
                 out["source_gamma"] = gm.dose_rate_series(activities, distance_m)
         return _ok(out)
     except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
+        return _err(exc)
+
+
+def registry_size() -> str:
+    """``-> {ok, size}`` — number of live solved inventories. The handle-leak canary
+    for invariant #2 (solve-once / release-old): the UI keeps at most one live handle,
+    so this stays at 1 across re-solves and 0 when the inventory is cleared."""
+    try:
+        return _ok({"size": len(_REGISTRY)})
+    except Exception as exc:  # noqa: BLE001
         return _err(exc)
 
 

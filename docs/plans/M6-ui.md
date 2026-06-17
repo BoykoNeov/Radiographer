@@ -110,16 +110,26 @@ data) with the real app shell.
   round-trips through the bridge** (Co-60 air-kerma @ 1 m, or a Cs-137 M3
   value) — not just "page loaded."
 
-### M6b — Inventory panel + central app-state model
+### M6b — Inventory panel + central app-state model  ✅ DONE
+**See `docs/plans/M6b-inventory-state.md`.** Gate green dev + built (M6a benchmarks
++ 6 panel checks). The `state.svelte.ts` runes singleton is the source of truth;
+the engine gained a **per-entry-units solve form** (`from_entries`; `solve`
+dispatches on `entries`) so §9's per-isotope unit is honored not silently dropped.
 - The single source-of-truth state object: loaded nuclides {name, quantity, unit},
   precision, reference time/source-age (t=0). All views read from it.
-- Add-by-name (validate against the engine) + quantity + unit (atoms/mass/Bq/Ci);
-  remove; edit → triggers re-solve (invariant #1/#2: new handle, release old).
-- **Shared color palette** assigned here on solve (invariant #4).
+- Add-by-name (validated against the new `bridge.nuclides()`) + quantity + per-entry
+  unit (atoms/mass/Bq/Ci); remove; edit → re-solves (invariant #1/#2: new handle,
+  release old).
+- **Shared color palette** assigned here on solve (invariant #4): `ColorRegistry`,
+  stable per nuclide across re-solves, reassigned as a fresh `Record` each solve.
 - **Save/load — scoped to inventory state in this chunk.** Full app state (distance,
   shield, geometry, time cursor) is born in M6d/f/g; the serializer is **versioned
   and extended by each later chunk**, with the full round-trip test in M6h. (Do not
   ship a half-serializer that silently drops later fields — §11.)
+- **Invariant #1 correction (resolved here):** invariant #1 lists **t=0** as a
+  re-solve trigger, but §8/§9 treat source-age as a free **evaluation offset**.
+  M6b only *stores* `referenceTimeS` and does **not** re-solve on it; M6d wires the
+  offset at `evaluate` time. (So invariant #1's t=0 clause is superseded.)
 
 ### M6c — Time-evolution overlay curves (Plotly)
 - One `evaluate()` over the auto-range grid → multi-species overlay on log-log.

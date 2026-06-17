@@ -23,9 +23,14 @@ declare global {
 
   interface Window {
     loadPyodide?: (config: { indexURL: string }) => Promise<PyodideInterface>;
-    // Headless-driver contract (set by App.svelte once the M6a gate resolves).
+    // Headless-driver contract. Boot always sets __BOOT_DONE__; the M6a boot
+    // self-check (run only under ?selfcheck=1) sets __M6A_RESULT__. The M6b gate
+    // drives the DOM and reads __APP__ (the live store) for palette + round-trip.
+    __BOOT_DONE__?: boolean;
     __M6A_DONE__?: boolean;
     __M6A_RESULT__?: unknown;
+    __APP__?: unknown;
+    __BRIDGE__?: unknown;
   }
 }
 

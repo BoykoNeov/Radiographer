@@ -2,14 +2,23 @@
   import { onMount } from "svelte";
   import { boot, type BootProgress } from "./lib/pyodide-boot";
   import { runSelfCheck, type SelfCheckReport } from "./lib/selfcheck";
+  import { appState } from "./lib/state.svelte";
+  import Inventory from "./lib/Inventory.svelte";
 
-  type Phase = "booting" | "checking" | "done" | "error";
+  type Phase = "booting" | "ready" | "error";
 
   let phase = $state<Phase>("booting");
   let progress = $state<string[]>([]);
   let report = $state<SelfCheckReport | null>(null);
   let errorMsg = $state<string>("");
   let errorStack = $state<string>("");
+
+  // The kill-early boot self-check (M6a) is heavy (it runs the multi-second U-238 HP
+  // path). It is no longer the app's job on every load — only the headless gate needs
+  // it — so it runs only under ?selfcheck=1 (set by drive_browser.mjs). Production boot
+  // stays fast.
+  const wantSelfCheck =
+    typeof location !== "undefined" && new URLSearchParams(location.search).has("selfcheck");
 
   function onProgress(p: BootProgress) {
     progress = [...progress, p.detail ? `${p.stage}: ${p.detail}` : p.stage];
@@ -18,12 +27,17 @@
   onMount(async () => {
     try {
       const client = await boot(onProgress);
-      phase = "checking";
-      onProgress({ stage: "ready", detail: "running self-check…" });
-      const r = runSelfCheck(client);
-      report = r;
-      phase = "done";
-      window.__M6A_RESULT__ = { ok: r.ok, checks: r.checks };
+      appState.setClient(client);
+      window.__APP__ = appState;
+      window.__BRIDGE__ = client; // gate: assert released handles are dead + no leak
+      phase = "ready";
+
+      if (wantSelfCheck) {
+        onProgress({ stage: "ready", detail: "running boot self-check…" });
+        const r = runSelfCheck(client);
+        report = r;
+        window.__M6A_RESULT__ = { ok: r.ok, checks: r.checks };
+      }
     } catch (err) {
       phase = "error";
       const e = err as Error;
@@ -31,35 +45,27 @@
       errorStack = e?.stack ?? "";
       window.__M6A_RESULT__ = { ok: false, error: errorMsg, stack: errorStack };
     } finally {
-      window.__M6A_DONE__ = true;
+      window.__BOOT_DONE__ = true;
+      window.__M6A_DONE__ = true; // back-compat with the existing gate name
     }
   });
 
-  const bannerClass = $derived(
-    phase === "error" || (phase === "done" && report && !report.ok)
-      ? "fail"
-      : phase === "done"
-        ? "pass"
-        : "pending",
-  );
-
+  const bannerClass = $derived(phase === "error" ? "fail" : phase === "ready" ? "pass" : "pending");
   const bannerText = $derived(
     phase === "error"
       ? "❌ Boot failed — see the error below."
-      : phase === "done"
-        ? report && report.ok
-          ? "✅ M6a PASS — engine + full dataset boot in the browser; benchmarks round-trip."
-          : "❌ M6a FAIL — see failing checks below."
+      : phase === "ready"
+        ? "✅ Engine + full dataset booted in the browser — on-device physics ready."
         : "⏳ Booting Pyodide + engine + datasets (first load pulls the WASM stack + ~tens of MB)…",
   );
 </script>
 
 <main>
-  <h1>Radiographer <span class="muted">— M6a bootstrap</span></h1>
+  <h1>Radiographer <span class="muted">— decay & dose (M6b)</span></h1>
   <p class="muted">
     Fully client-side: Pyodide (WASM) runs the Python physics engine, the bundled
     ICRP-107 / dose datasets are unpacked into the in-browser filesystem, and every
-    number below is computed on-device. <strong>Not for safety decisions</strong> (§11).
+    number is computed on-device. <strong>Not for safety decisions</strong> (§11).
   </p>
 
   <div class="banner {bannerClass}">{bannerText}</div>
@@ -74,9 +80,13 @@
     </section>
   {/if}
 
+  {#if phase === "ready"}
+    <Inventory />
+  {/if}
+
   {#if report}
     <section>
-      <h2>Self-check ({report.checks.filter((c) => c.pass).length}/{report.checks.length} passed)</h2>
+      <h2>Boot self-check ({report.checks.filter((c) => c.pass).length}/{report.checks.length} passed)</h2>
       <table>
         <tbody>
           {#each report.checks as c (c.name)}

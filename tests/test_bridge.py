@@ -15,6 +15,117 @@ import pytest
 from engine import bridge
 
 
+def test_nuclides_lists_the_solvable_set():
+    # The add-by-name source for the M6b inventory panel: every nuclide the engine
+    # can solve (rd's full dataset), as JSON, sorted and de-duplicated, names only.
+    import radioactivedecay as rd
+
+    res = json.loads(bridge.nuclides())
+    assert res["ok"] is True
+    names = res["nuclides"]
+    assert isinstance(names, list) and all(isinstance(n, str) for n in names)
+    # the canary: the whole solvable set is exposed, not a subset
+    assert len(names) == len(set(names)) == len(rd.DEFAULTDATA.nuclides)
+    for known in ("Co-60", "Cs-137", "U-238", "Tc-99m"):
+        assert known in names
+    # naturally ordered (element, mass, state): Co-58 before Co-60 before Cs-137,
+    # and not naive string order ("Co-60" < "Co-58" lexically would be wrong)
+    assert names.index("Co-58") < names.index("Co-60") < names.index("Cs-137")
+    # every listed name actually solves (no phantom entries that would fail add-by-name)
+    for name in ("Co-60", "U-238"):
+        solved = json.loads(bridge.solve(json.dumps({"nuclides": {name: 1.0}, "unit": "Bq"})))
+        assert solved["ok"] is True
+        bridge.release(solved["handle"])
+
+
+def _atoms_at_t0(handle: str, nuclide: str) -> float:
+    ev = json.loads(bridge.evaluate(handle, json.dumps({"times_s": [0.0], "axis": "atoms"})))
+    assert ev["ok"] is True
+    return ev["series"][nuclide][0]
+
+
+def test_solve_entries_form_mixed_units():
+    # The M6b inventory panel sends per-entry units; the engine converts each to atoms
+    # (via rd) and merges. One Bateman solve over the union — §9 "selectable unit per isotope".
+    import radioactivedecay as rd
+
+    spec = {
+        "entries": [
+            {"name": "Co-60", "quantity": 1.0e9, "unit": "Bq"},
+            {"name": "Cs-137", "quantity": 1.0, "unit": "g"},
+        ]
+    }
+    res = json.loads(bridge.solve(json.dumps(spec)))
+    assert res["ok"] is True
+    handle = res["handle"]
+    try:
+        assert "Co-60" in res["nuclides"] and "Cs-137" in res["nuclides"]
+        # atom counts must match rd's own per-entry conversion (no fabricated math)
+        want_co = float(rd.Inventory({"Co-60": 1.0e9}, "Bq").contents["Co-60"])
+        want_cs = float(rd.Inventory({"Cs-137": 1.0}, "g").contents["Cs-137"])
+        assert _atoms_at_t0(handle, "Co-60") == pytest.approx(want_co, rel=1e-9)
+        assert _atoms_at_t0(handle, "Cs-137") == pytest.approx(want_cs, rel=1e-9)
+    finally:
+        bridge.release(handle)
+
+
+def test_solve_entries_duplicate_nuclide_sums_atoms():
+    # Same nuclide in two units (Bq + Ci) is physically the sum of atoms (intentional).
+    import radioactivedecay as rd
+
+    spec = {
+        "entries": [
+            {"name": "Co-60", "quantity": 1.0e9, "unit": "Bq"},
+            {"name": "Co-60", "quantity": 1.0, "unit": "Ci"},
+        ]
+    }
+    res = json.loads(bridge.solve(json.dumps(spec)))
+    assert res["ok"] is True
+    handle = res["handle"]
+    try:
+        want = float(rd.Inventory({"Co-60": 1.0e9}, "Bq").contents["Co-60"]) + float(
+            rd.Inventory({"Co-60": 1.0}, "Ci").contents["Co-60"]
+        )
+        assert _atoms_at_t0(handle, "Co-60") == pytest.approx(want, rel=1e-9)
+    finally:
+        bridge.release(handle)
+
+
+def test_solve_entries_form_hp_path():
+    # HP precision through the entries form must build rd.InventoryHP and evaluate finite.
+    spec = {
+        "entries": [{"name": "U-238", "quantity": 1.0, "unit": "Bq"}],
+        "precision": "hp",
+    }
+    res = json.loads(bridge.solve(json.dumps(spec)))
+    assert res["ok"] is True
+    assert res["hp_recommended"] is True and res["precision"] == "hp"
+    handle = res["handle"]
+    try:
+        lo, hi = res["time_range_s"]
+        grid = [0.0, lo, (lo * hi) ** 0.5, hi]
+        ev = json.loads(bridge.evaluate(handle, json.dumps({"times_s": grid, "axis": "activity"})))
+        assert ev["ok"] is True
+        assert all(math.isfinite(v) and v >= 0.0 for col in ev["series"].values() for v in col)
+    finally:
+        bridge.release(handle)
+
+
+def test_solve_entries_unknown_nuclide_is_loud():
+    res = json.loads(
+        bridge.solve(json.dumps({"entries": [{"name": "Zz-000", "quantity": 1.0, "unit": "Bq"}]}))
+    )
+    assert res["ok"] is False
+    assert res["error"]["type"] == "EngineError"
+    assert "unknown nuclide" in res["error"]["message"].lower()
+
+
+def test_solve_entries_empty_is_loud():
+    res = json.loads(bridge.solve(json.dumps({"entries": []})))
+    assert res["ok"] is False
+    assert res["error"]["type"] == "EngineError"
+
+
 def test_solve_returns_handle_and_metadata():
     res = json.loads(bridge.solve(json.dumps({"nuclides": {"Cs-137": 1.0}, "unit": "Bq"})))
     assert res["ok"] is True
@@ -149,7 +260,12 @@ def test_neutron_dose_round_trip_cf252():
             bridge.neutron_dose(
                 handle,
                 json.dumps(
-                    {"times_s": [0.0], "source": "Cf-252", "quantity": "ambient_H10", "distance_m": 1.0}
+                    {
+                        "times_s": [0.0],
+                        "source": "Cf-252",
+                        "quantity": "ambient_H10",
+                        "distance_m": 1.0,
+                    }
                 ),
             )
         )
@@ -212,6 +328,15 @@ def test_solve_error_is_structured_not_fabricated():
     assert res["ok"] is False
     assert res["error"]["type"] == "EngineError"
     assert "unknown nuclide" in res["error"]["message"]
+
+
+def test_registry_size_tracks_live_handles():
+    # The handle-leak canary for invariant #2 (solve-once / release the old handle).
+    base = json.loads(bridge.registry_size())["size"]
+    r = json.loads(bridge.solve(json.dumps({"nuclides": {"Cs-137": 1.0}, "unit": "Bq"})))
+    assert json.loads(bridge.registry_size())["size"] == base + 1
+    bridge.release(r["handle"])
+    assert json.loads(bridge.registry_size())["size"] == base
 
 
 def test_evaluate_on_unknown_handle_errors():
