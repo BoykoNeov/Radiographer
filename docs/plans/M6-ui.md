@@ -88,7 +88,12 @@ Each chunk is a separable, committable slice with its own validation gate. Spin
 out a `docs/plans/M6<x>-<slug>.md` when that chunk **starts** (don't pre-create —
 empty scaffolds rot); this file is the overview/contract for all of them.
 
-### M6a — Bootstrap & packaging  *(foundation; M0-style "kill early")*
+### M6a — Bootstrap & packaging  *(foundation; M0-style "kill early")*  ✅ DONE
+**See `docs/plans/M6a-bootstrap.md`.** Gate green in a real headless browser (dev
++ built): all benchmarks round-trip, the 1252-file dataset tree mounts, and the
+**HP-in-WASM risk is closed** (micropip auto-pulls sympy/mpmath). Stack: Vite +
+Svelte 5 + TS; one combined engine+data zip (`fflate`) → `zipfile.extractall("/")`.
+
 Replace the stale M1 smoke harness (`web/index.html` loads only 4 modules, no
 data) with the real app shell.
 - Load Pyodide (314.0.0; 0.29.4 fallback) + `micropip.install("radioactivedecay")`.
@@ -215,7 +220,8 @@ data) with the real app shell.
 - **Typed IDs — RESOLVED (follows the build step): use TypeScript.** The Vite
   build makes real TS the natural choice (not JSDoc) for the branded `Handle` and
   nuclide IDs (CLAUDE.md typed-IDs preference).
-- **HP path in WASM** unverified until M6a wires the "computing…" button (M1 risk).
+- **HP path in WASM — RESOLVED (M6a).** `rd.InventoryHP` runs under WASM;
+  `micropip.install("radioactivedecay")` auto-pulls sympy + mpmath. No extra step.
 - **Plotly/Cytoscape** — now **bundled npm deps** (Vite), not CDN/import-map;
   size budget fine (§4, Pyodide dominates). Confirm tree-shaking (Plotly is
   large — consider `plotly.js-dist-min` or a custom bundle) and that Cytoscape +

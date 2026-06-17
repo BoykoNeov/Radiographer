@@ -3,11 +3,24 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "M1 in-browser engine bridge harness (Pyodide).",
+  "description": "Radiographer browser app — Pyodide engine + Svelte UI (M6).",
   "scripts": {
-    "harness": "node drive_browser.mjs"
+    "build:archive": "node scripts/build-archive.mjs",
+    "dev": "node scripts/build-archive.mjs && vite",
+    "build": "node scripts/build-archive.mjs && svelte-check --tsconfig ./tsconfig.json && vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "harness": "node drive_browser.mjs",
+    "harness:built": "node drive_browser.mjs --built"
   },
   "devDependencies": {
-    "playwright": "^1.56.0"
+    "@sveltejs/vite-plugin-svelte": "^5.0.0",
+    "@tsconfig/svelte": "^5.0.4",
+    "fflate": "^0.8.2",
+    "playwright": "^1.56.0",
+    "svelte": "^5.0.0",
+    "svelte-check": "^4.0.0",
+    "typescript": "^5.6.0",
+    "vite": "^6.0.0"
   }
 }

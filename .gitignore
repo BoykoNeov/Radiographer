@@ -17,6 +17,10 @@ build/
 npm-debug.log*
 yarn-error.log*
 
+# Generated runtime archive (engine + datasets) the browser fetches at boot —
+# derived from committed source data; built on demand via web/scripts/build-archive.mjs.
+web/public/radiographer-runtime.zip
+
 # --- OS / editor ---
 .DS_Store
 Thumbs.db
