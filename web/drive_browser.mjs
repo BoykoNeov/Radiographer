@@ -1720,6 +1720,28 @@ async function runM7(page) {
     `h̄=${neutron.coeff} pSv·cm² (anchor 383), rate_si=${neutron.rateAttr} Sv/s, nTrace=${neutron.nTrace}, registry=${neutron.registry}`,
   );
 
+  // 2b) A QUANTITY (strength) edit RESCALES the neutron path, never kills it — neutron rides
+  //     the parent's activity (S(t)=n_per_decay·A_parent(t), M5/§6.3), so doubling the Cf-252
+  //     mass ~doubles the neutron rate with the source key intact. Guards the orphan-guard from
+  //     OVER-firing on a same-nuclide edit (the natural "adjust source strength" action).
+  const rescale = await page.evaluate(async () => {
+    const app = window.__APP__;
+    const before = app.neutronRateAtCursor; // cursor is at the range midpoint (range unchanged)
+    await app.updateEntry(0, { quantity: app.entries[0].quantity * 2 });
+    return {
+      neutronSource: app.neutronSource,
+      seriesPresent: app.neutronDoseSeries !== null,
+      before,
+      after: app.neutronRateAtCursor,
+    };
+  });
+  const ratio = rescale.before > 0 ? rescale.after / rescale.before : NaN;
+  record(
+    "quantity edit RESCALES neutron (×2), keeps the source key — orphan guard doesn't over-fire",
+    rescale.neutronSource === "Cf-252" && rescale.seriesPresent && Math.abs(ratio - 2) < 0.02,
+    `neutronSource=${rescale.neutronSource}, seriesPresent=${rescale.seriesPresent}, rate ×${ratio.toFixed(3)} (want 2)`,
+  );
+
   // 3) ORPHAN GUARD (no-silent-error): hand-editing the inventory while a neutron source is
   //    loaded DROPS the source association, so neutron_dose is never called for a parent that
   //    might leave the inventory — the neutron path goes dark cleanly, not via a stale error.

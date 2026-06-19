@@ -510,7 +510,11 @@ export class AppState {
       if (qErr) return qErr;
     }
     this.entries = this.entries.map((e, i) => (i === index ? { ...e, ...patch } : e));
-    this.neutronSource = null; // hand-edit drops the prebuilt-source identity (orphan guard, M7)
+    // NOTE: a quantity/unit edit does NOT drop `neutronSource` (unlike add/remove). `updateEntry`
+    // cannot change a nuclide's NAME, so the source's parent stays in the inventory — and the
+    // neutron dose RIDES that parent's activity (S(t)=n_per_decay·A_parent(t), M5/§6.3), so a
+    // strength change must RESCALE neutron, not kill it (advisor). The add/remove guards still
+    // cover the only edits that can orphan the parent; the loud `neutronDoseError` is the backstop.
     await this.solve();
     return null;
   }
