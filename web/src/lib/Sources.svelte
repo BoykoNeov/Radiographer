@@ -11,7 +11,8 @@
   // appended after the static ones so the picker shows them once the engine is ready.
   const groups = $derived.by(() => {
     const g = sourcesByCategory();
-    for (const s of appState.spentFuelSources) {
+    // Runtime catalogs (inventory from validated data/): spent fuel (M7c) + fallout (M7d).
+    for (const s of [...appState.spentFuelSources, ...appState.falloutSources]) {
       let grp = g.find((x) => x.category === s.category);
       if (!grp) {
         grp = { category: s.category, sources: [] };

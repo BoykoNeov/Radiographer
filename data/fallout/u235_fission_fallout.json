@@ -1,0 +1,720 @@
+{
+  "schema_version": 1,
+  "id": "u235_fission_fallout",
+  "label": "Fresh fission-product fallout (7:10)",
+  "fissioning_system": "U-235 (thermal)",
+  "yield_type": "cumulative",
+  "yield_cutoff_per_fission": 0.001,
+  "n_nuclides": 177,
+  "reference": "ENDF/B-VIII.0 neutron fission yields, U-235, MF=8/MT=459 (cumulative), thermal 0.0253 eV; see data/vendor/endf_nfy/PROVENANCE.md. Cumulative yields ≈ the H+1 h chain-fed inventory; double-count within chains is a documented shape-preserving approximation. Representative mix — a real weapon is fast U/Pu fission.",
+  "entries": [
+    {
+      "name": "Xe-134",
+      "yield_per_fission": 0.0787208
+    },
+    {
+      "name": "I-134",
+      "yield_per_fission": 0.0782964
+    },
+    {
+      "name": "Te-134",
+      "yield_per_fission": 0.069725
+    },
+    {
+      "name": "Ba-138",
+      "yield_per_fission": 0.0676758
+    },
+    {
+      "name": "Cs-138",
+      "yield_per_fission": 0.0670757
+    },
+    {
+      "name": "Xe-133",
+      "yield_per_fission": 0.0669909
+    },
+    {
+      "name": "Cs-133",
+      "yield_per_fission": 0.0669909
+    },
+    {
+      "name": "I-133",
+      "yield_per_fission": 0.0669654
+    },
+    {
+      "name": "Cs-135",
+      "yield_per_fission": 0.0653899
+    },
+    {
+      "name": "Ba-135",
+      "yield_per_fission": 0.0653899
+    },
+    {
+      "name": "Xe-135",
+      "yield_per_fission": 0.065385
+    },
+    {
+      "name": "Nb-95",
+      "yield_per_fission": 0.0650287
+    },
+    {
+      "name": "Mo-95",
+      "yield_per_fission": 0.0650287
+    },
+    {
+      "name": "Zr-95",
+      "yield_per_fission": 0.0650274
+    },
+    {
+      "name": "Zr-94",
+      "yield_per_fission": 0.064722
+    },
+    {
+      "name": "Y-94",
+      "yield_per_fission": 0.064527
+    },
+    {
+      "name": "La-139",
+      "yield_per_fission": 0.0641343
+    },
+    {
+      "name": "Ba-139",
+      "yield_per_fission": 0.064134
+    },
+    {
+      "name": "Y-95",
+      "yield_per_fission": 0.0637549
+    },
+    {
+      "name": "Zr-93",
+      "yield_per_fission": 0.0634629
+    },
+    {
+      "name": "Nb-93",
+      "yield_per_fission": 0.0634629
+    },
+    {
+      "name": "Y-93",
+      "yield_per_fission": 0.0634616
+    },
+    {
+      "name": "Cs-139",
+      "yield_per_fission": 0.0634464
+    },
+    {
+      "name": "Xe-138",
+      "yield_per_fission": 0.0629685
+    },
+    {
+      "name": "I-135",
+      "yield_per_fission": 0.0628187
+    },
+    {
+      "name": "Sr-93",
+      "yield_per_fission": 0.0623749
+    },
+    {
+      "name": "La-140",
+      "yield_per_fission": 0.0621969
+    },
+    {
+      "name": "Ce-140",
+      "yield_per_fission": 0.0621969
+    },
+    {
+      "name": "Ba-140",
+      "yield_per_fission": 0.0621448
+    },
+    {
+      "name": "Ba-137",
+      "yield_per_fission": 0.0618851
+    },
+    {
+      "name": "Cs-137",
+      "yield_per_fission": 0.0618832
+    },
+    {
+      "name": "Xe-137",
+      "yield_per_fission": 0.0612832
+    },
+    {
+      "name": "Mo-99",
+      "yield_per_fission": 0.0610873
+    },
+    {
+      "name": "Tc-99",
+      "yield_per_fission": 0.0610873
+    },
+    {
+      "name": "Ru-99",
+      "yield_per_fission": 0.0610873
+    },
+    {
+      "name": "Sr-94",
+      "yield_per_fission": 0.0606287
+    },
+    {
+      "name": "Nb-93m",
+      "yield_per_fission": 0.0602898
+    },
+    {
+      "name": "Zr-92",
+      "yield_per_fission": 0.0602125
+    },
+    {
+      "name": "Y-92",
+      "yield_per_fission": 0.0600935
+    },
+    {
+      "name": "Nb-97",
+      "yield_per_fission": 0.059968
+    },
+    {
+      "name": "Mo-97",
+      "yield_per_fission": 0.059968
+    },
+    {
+      "name": "Zr-97",
+      "yield_per_fission": 0.059836
+    },
+    {
+      "name": "Ce-143",
+      "yield_per_fission": 0.0595576
+    },
+    {
+      "name": "Pr-143",
+      "yield_per_fission": 0.0595576
+    },
+    {
+      "name": "Nd-143",
+      "yield_per_fission": 0.0595576
+    },
+    {
+      "name": "Sr-92",
+      "yield_per_fission": 0.0593787
+    },
+    {
+      "name": "La-143",
+      "yield_per_fission": 0.0592443
+    },
+    {
+      "name": "Ba-137m",
+      "yield_per_fission": 0.0585428
+    },
+    {
+      "name": "Ce-142",
+      "yield_per_fission": 0.0584879
+    },
+    {
+      "name": "La-142",
+      "yield_per_fission": 0.0584862
+    },
+    {
+      "name": "Ce-141",
+      "yield_per_fission": 0.0584699
+    },
+    {
+      "name": "Pr-141",
+      "yield_per_fission": 0.0584699
+    },
+    {
+      "name": "La-141",
+      "yield_per_fission": 0.0584698
+    },
+    {
+      "name": "Ba-141",
+      "yield_per_fission": 0.0582849
+    },
+    {
+      "name": "Y-91",
+      "yield_per_fission": 0.0582783
+    },
+    {
+      "name": "Zr-91",
+      "yield_per_fission": 0.0582783
+    },
+    {
+      "name": "Sr-91",
+      "yield_per_fission": 0.058275
+    },
+    {
+      "name": "Mo-98",
+      "yield_per_fission": 0.0578989
+    },
+    {
+      "name": "Sr-90",
+      "yield_per_fission": 0.0578194
+    },
+    {
+      "name": "Y-90",
+      "yield_per_fission": 0.0578194
+    },
+    {
+      "name": "Zr-90",
+      "yield_per_fission": 0.0578194
+    },
+    {
+      "name": "Ba-142",
+      "yield_per_fission": 0.057521
+    },
+    {
+      "name": "Cs-140",
+      "yield_per_fission": 0.0572416
+    },
+    {
+      "name": "Nd-144",
+      "yield_per_fission": 0.0549957
+    },
+    {
+      "name": "Ce-144",
+      "yield_per_fission": 0.0549956
+    },
+    {
+      "name": "Pr-144",
+      "yield_per_fission": 0.0549956
+    },
+    {
+      "name": "Tc-99m",
+      "yield_per_fission": 0.0537569
+    },
+    {
+      "name": "Tc-101",
+      "yield_per_fission": 0.0517255
+    },
+    {
+      "name": "Ru-101",
+      "yield_per_fission": 0.0517255
+    },
+    {
+      "name": "Mo-101",
+      "yield_per_fission": 0.0517239
+    },
+    {
+      "name": "Sr-89",
+      "yield_per_fission": 0.0473274
+    },
+    {
+      "name": "Y-89",
+      "yield_per_fission": 0.0473274
+    },
+    {
+      "name": "Rb-89",
+      "yield_per_fission": 0.0471522
+    },
+    {
+      "name": "Kr-89",
+      "yield_per_fission": 0.0451068
+    },
+    {
+      "name": "Rb-90",
+      "yield_per_fission": 0.0449896
+    },
+    {
+      "name": "Xe-132",
+      "yield_per_fission": 0.043131
+    },
+    {
+      "name": "I-132",
+      "yield_per_fission": 0.0431185
+    },
+    {
+      "name": "Ru-102",
+      "yield_per_fission": 0.0429847
+    },
+    {
+      "name": "Te-132",
+      "yield_per_fission": 0.042948
+    },
+    {
+      "name": "Tc-102m",
+      "yield_per_fission": 0.0428892
+    },
+    {
+      "name": "Mo-102",
+      "yield_per_fission": 0.0427936
+    },
+    {
+      "name": "Te-133m",
+      "yield_per_fission": 0.0399293
+    },
+    {
+      "name": "Nb-99",
+      "yield_per_fission": 0.0397053
+    },
+    {
+      "name": "Pr-145",
+      "yield_per_fission": 0.0393337
+    },
+    {
+      "name": "Nd-145",
+      "yield_per_fission": 0.0393337
+    },
+    {
+      "name": "Ce-145",
+      "yield_per_fission": 0.0393304
+    },
+    {
+      "name": "Sr-88",
+      "yield_per_fission": 0.0357475
+    },
+    {
+      "name": "Rb-88",
+      "yield_per_fission": 0.0357468
+    },
+    {
+      "name": "Kr-88",
+      "yield_per_fission": 0.0355237
+    },
+    {
+      "name": "Y-91m",
+      "yield_per_fission": 0.0338012
+    },
+    {
+      "name": "Te-133",
+      "yield_per_fission": 0.0305767
+    },
+    {
+      "name": "Ru-103",
+      "yield_per_fission": 0.0303093
+    },
+    {
+      "name": "Rh-103",
+      "yield_per_fission": 0.0303093
+    },
+    {
+      "name": "Rh-103m",
+      "yield_per_fission": 0.0300063
+    },
+    {
+      "name": "Pr-146",
+      "yield_per_fission": 0.029969
+    },
+    {
+      "name": "Nd-146",
+      "yield_per_fission": 0.029969
+    },
+    {
+      "name": "I-131",
+      "yield_per_fission": 0.0289069
+    },
+    {
+      "name": "Xe-131",
+      "yield_per_fission": 0.0289069
+    },
+    {
+      "name": "Rb-87",
+      "yield_per_fission": 0.0256012
+    },
+    {
+      "name": "Sr-87",
+      "yield_per_fission": 0.0256012
+    },
+    {
+      "name": "Kr-87",
+      "yield_per_fission": 0.0255762
+    },
+    {
+      "name": "Sb-131",
+      "yield_per_fission": 0.0255646
+    },
+    {
+      "name": "Te-131",
+      "yield_per_fission": 0.0254871
+    },
+    {
+      "name": "Sb-133",
+      "yield_per_fission": 0.0239733
+    },
+    {
+      "name": "Nd-147",
+      "yield_per_fission": 0.0224673
+    },
+    {
+      "name": "Pm-147",
+      "yield_per_fission": 0.0224673
+    },
+    {
+      "name": "Sm-147",
+      "yield_per_fission": 0.0224673
+    },
+    {
+      "name": "Pr-147",
+      "yield_per_fission": 0.0224666
+    },
+    {
+      "name": "Nb-99m",
+      "yield_per_fission": 0.0209539
+    },
+    {
+      "name": "Kr-86",
+      "yield_per_fission": 0.0196497
+    },
+    {
+      "name": "Ru-104",
+      "yield_per_fission": 0.0188069
+    },
+    {
+      "name": "Tc-104",
+      "yield_per_fission": 0.0188037
+    },
+    {
+      "name": "Te-130",
+      "yield_per_fission": 0.0181028
+    },
+    {
+      "name": "Nd-148",
+      "yield_per_fission": 0.0167354
+    },
+    {
+      "name": "Pr-148",
+      "yield_per_fission": 0.0163369
+    },
+    {
+      "name": "Rb-85",
+      "yield_per_fission": 0.0131862
+    },
+    {
+      "name": "Kr-85m",
+      "yield_per_fission": 0.0129071
+    },
+    {
+      "name": "Br-85",
+      "yield_per_fission": 0.0128482
+    },
+    {
+      "name": "Rb-90m",
+      "yield_per_fission": 0.0124155
+    },
+    {
+      "name": "Xe-135m",
+      "yield_per_fission": 0.0110156
+    },
+    {
+      "name": "Pm-149",
+      "yield_per_fission": 0.0108163
+    },
+    {
+      "name": "Sm-149",
+      "yield_per_fission": 0.0108163
+    },
+    {
+      "name": "Nd-149",
+      "yield_per_fission": 0.0108162
+    },
+    {
+      "name": "Kr-84",
+      "yield_per_fission": 0.0100192
+    },
+    {
+      "name": "Br-84",
+      "yield_per_fission": 0.00984871
+    },
+    {
+      "name": "Sb-130m",
+      "yield_per_fission": 0.00967467
+    },
+    {
+      "name": "Se-84",
+      "yield_per_fission": 0.00966293
+    },
+    {
+      "name": "Tc-105",
+      "yield_per_fission": 0.0096416
+    },
+    {
+      "name": "Ru-105",
+      "yield_per_fission": 0.0096416
+    },
+    {
+      "name": "Rh-105",
+      "yield_per_fission": 0.0096416
+    },
+    {
+      "name": "Pd-105",
+      "yield_per_fission": 0.0096416
+    },
+    {
+      "name": "Sb-130",
+      "yield_per_fission": 0.00784944
+    },
+    {
+      "name": "Sn-130",
+      "yield_per_fission": 0.00610716
+    },
+    {
+      "name": "Sn-130m",
+      "yield_per_fission": 0.00570434
+    },
+    {
+      "name": "I-129",
+      "yield_per_fission": 0.00543348
+    },
+    {
+      "name": "Xe-129",
+      "yield_per_fission": 0.00543348
+    },
+    {
+      "name": "Sb-129",
+      "yield_per_fission": 0.00543329
+    },
+    {
+      "name": "Kr-83",
+      "yield_per_fission": 0.00536203
+    },
+    {
+      "name": "Kr-83m",
+      "yield_per_fission": 0.00536196
+    },
+    {
+      "name": "Br-83",
+      "yield_per_fission": 0.00536194
+    },
+    {
+      "name": "Te-129",
+      "yield_per_fission": 0.00510513
+    },
+    {
+      "name": "Pm-151",
+      "yield_per_fission": 0.00418767
+    },
+    {
+      "name": "Sm-151",
+      "yield_per_fission": 0.00418767
+    },
+    {
+      "name": "Eu-151",
+      "yield_per_fission": 0.00418767
+    },
+    {
+      "name": "Nd-151",
+      "yield_per_fission": 0.00418124
+    },
+    {
+      "name": "Te-131m",
+      "yield_per_fission": 0.00412282
+    },
+    {
+      "name": "Ru-106",
+      "yield_per_fission": 0.00401548
+    },
+    {
+      "name": "Rh-106",
+      "yield_per_fission": 0.00401548
+    },
+    {
+      "name": "Pd-106",
+      "yield_per_fission": 0.00401548
+    },
+    {
+      "name": "I-134m",
+      "yield_per_fission": 0.00364183
+    },
+    {
+      "name": "Te-128",
+      "yield_per_fission": 0.00348814
+    },
+    {
+      "name": "Sb-128m",
+      "yield_per_fission": 0.00337975
+    },
+    {
+      "name": "Sn-128",
+      "yield_per_fission": 0.0033161
+    },
+    {
+      "name": "Kr-85",
+      "yield_per_fission": 0.00283404
+    },
+    {
+      "name": "Sn-129",
+      "yield_per_fission": 0.0028239
+    },
+    {
+      "name": "Sm-152",
+      "yield_per_fission": 0.00266913
+    },
+    {
+      "name": "Se-83",
+      "yield_per_fission": 0.00265396
+    },
+    {
+      "name": "Pm-152",
+      "yield_per_fission": 0.00265047
+    },
+    {
+      "name": "Nd-152",
+      "yield_per_fission": 0.00264119
+    },
+    {
+      "name": "Se-83m",
+      "yield_per_fission": 0.0025126
+    },
+    {
+      "name": "Tc-102",
+      "yield_per_fission": 0.00224
+    },
+    {
+      "name": "Cs-138m",
+      "yield_per_fission": 0.00223374
+    },
+    {
+      "name": "Br-81",
+      "yield_per_fission": 0.00203666
+    },
+    {
+      "name": "Se-81",
+      "yield_per_fission": 0.00203657
+    },
+    {
+      "name": "Xe-133m",
+      "yield_per_fission": 0.00194746
+    },
+    {
+      "name": "Sm-153",
+      "yield_per_fission": 0.00158279
+    },
+    {
+      "name": "Eu-153",
+      "yield_per_fission": 0.00158279
+    },
+    {
+      "name": "Pm-153",
+      "yield_per_fission": 0.00158199
+    },
+    {
+      "name": "Sb-127",
+      "yield_per_fission": 0.00156958
+    },
+    {
+      "name": "I-127",
+      "yield_per_fission": 0.00156958
+    },
+    {
+      "name": "Te-127",
+      "yield_per_fission": 0.00156355
+    },
+    {
+      "name": "Ru-107",
+      "yield_per_fission": 0.00146192
+    },
+    {
+      "name": "Rh-107",
+      "yield_per_fission": 0.00146192
+    },
+    {
+      "name": "Pd-107",
+      "yield_per_fission": 0.00146192
+    },
+    {
+      "name": "Ag-107",
+      "yield_per_fission": 0.00146192
+    },
+    {
+      "name": "Se-80",
+      "yield_per_fission": 0.00128823
+    },
+    {
+      "name": "Sn-127",
+      "yield_per_fission": 0.00119477
+    }
+  ]
+}

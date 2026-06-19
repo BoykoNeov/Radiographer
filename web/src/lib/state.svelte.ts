@@ -250,6 +250,11 @@ export class AppState {
   // discharge vectors (not the static `sources.ts` manifest). Merged into the picker.
   spentFuelSources = $state<PrebuiltSource[]>([]);
 
+  // -- fallout catalog (fetched once after boot, M7d §13 #5) ----------------
+  // Prebuilt fission-product fallout source(s) whose inventory comes from the validated
+  // `data/fallout` vector (ENDF/B-VIII.0 U-235 cumulative yields). Merged into the picker.
+  falloutSources = $state<PrebuiltSource[]>([]);
+
   // -- add-by-name source (fetched once after boot) -------------------------
   availableNuclides = $state<string[]>([]);
   /** True once the engine client is attached and the nuclide list is loaded. */
@@ -532,6 +537,21 @@ export class AppState {
       }));
     } else {
       this.errorMsg = `could not load spent-fuel catalog: ${sf.error.type}: ${sf.error.message}`;
+    }
+    // The §13 #5 fallout catalog (inventory from validated data/fallout). Same soft-fail policy.
+    const fo = client.fallout_catalog();
+    if (fo.ok) {
+      this.falloutSources = fo.sources.map((s) => ({
+        id: s.id,
+        label: s.label,
+        category: s.category,
+        blurb: s.blurb,
+        entries: s.entries.map((e) => ({ name: e.name, quantity: e.quantity, unit: e.unit })),
+        referenceTimeS: s.referenceTimeS,
+        caveat: s.caveat ?? undefined,
+      }));
+    } else {
+      this.errorMsg = `could not load fallout catalog: ${fo.error.type}: ${fo.error.message}`;
     }
     this.ready = true;
   }

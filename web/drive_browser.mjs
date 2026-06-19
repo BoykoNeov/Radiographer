@@ -1958,6 +1958,53 @@ async function runM7(page) {
     `n=${sf.nEntries}, Cs137=${sf.hasCs137}, neutronSource=${sf.neutronSource}, heat=${heatKw.toFixed(3)} kW/tHM, text=${JSON.stringify(sf.heatText)}, err=${JSON.stringify(sf.err)}`,
   );
 
+  // 6) FALLOUT (M7d, §13 #5): a fresh fission-product vector loads from the validated
+  //    data/fallout catalog (ENDF/B-VIII.0 U-235 cumulative yields) via its picker card. The
+  //    ~177-nuclide inventory + the dominant γ emitters light up; γ dose is live; neutron stays
+  //    GRAYED (fallout carries no neutron source key). The Way–Wigner t⁻¹·² law itself is the
+  //    physics golden in tests/test_fallout_data.py (re-deriving a slope here would be brittle).
+  const FALLOUT = '[data-testid="source-u235_fission_fallout"]';
+  const foCat = await page.evaluate(() => ({
+    n: window.__APP__.falloutSources.length,
+    ids: window.__APP__.falloutSources.map((s) => s.id),
+  }));
+  record(
+    "M7d fallout catalog present (inventory from validated data/fallout ENDF vector)",
+    foCat.n === 1 && foCat.ids.includes("u235_fission_fallout"),
+    `n=${foCat.n}, ids=${JSON.stringify(foCat.ids)}`,
+  );
+
+  await page.click(FALLOUT);
+  await page.waitForFunction(
+    "window.__APP__.status === 'solved' && window.__APP__.gammaDoseSeries && " +
+      "window.__APP__.closure.includes('Cs-137')",
+    null,
+    { timeout: 60_000 },
+  );
+  const fallout = await page.evaluate(() => {
+    const app = window.__APP__;
+    const card = document.querySelector('[data-testid="dose-neutron"]');
+    const dom = ["Cs-137", "Ba-140", "Zr-95", "I-131"];
+    return {
+      nEntries: app.entries.length,
+      hasDominant: dom.every((n) => app.entries.some((e) => e.name === n)),
+      gammaRate: app.gammaRateAtCursor,
+      neutronSource: app.neutronSource,
+      grayed: card ? card.getAttribute("data-rate-si") === null : null,
+      registry: window.__BRIDGE__.registry_size().size,
+    };
+  });
+  record(
+    "M7d fallout: loads ~177-nuclide ENDF vector via card → γ dose live, dominant emitters in, n grayed",
+    fallout.nEntries > 120 &&
+      fallout.hasDominant &&
+      fallout.gammaRate > 0 &&
+      fallout.neutronSource === null &&
+      fallout.grayed === true &&
+      fallout.registry === 1,
+    `nEntries=${fallout.nEntries}, dominant=${fallout.hasDominant}, gammaRate=${fallout.gammaRate}, neutronSource=${fallout.neutronSource}, grayed=${fallout.grayed}, registry=${fallout.registry}`,
+  );
+
   return { ok: checks.every((c) => c.pass), checks };
 }
 

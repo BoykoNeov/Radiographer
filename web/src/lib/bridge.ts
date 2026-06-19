@@ -225,6 +225,21 @@ export interface SpentFuelCatalogOk {
   sources: SpentFuelSource[];
 }
 
+/** One §8 / §13 #5 fallout catalog source — inventory from validated `data/fallout` (ENDF
+ *  U-235 cumulative fission yields). Loaded with `unit="atoms"` at t=0 ≈ H+1 h. */
+export interface FalloutSource {
+  id: string;
+  label: string;
+  category: string;
+  blurb: string;
+  caveat: string | null;
+  referenceTimeS: number;
+  entries: SolveEntry[];
+}
+export interface FalloutCatalogOk {
+  sources: FalloutSource[];
+}
+
 /** Decay-heat (thermal power, W) series over a time grid (M7c §5). */
 export interface DecayHeatOk {
   quantity: "decay_heat";
@@ -248,6 +263,7 @@ export type DoseResponse = Result<DoseOk>;
 export type DoseLinesResponse = Result<DoseLinesOk>;
 export type ReleaseResponse = Result<ReleaseOk>;
 export type SpentFuelCatalogResponse = Result<SpentFuelCatalogOk>;
+export type FalloutCatalogResponse = Result<FalloutCatalogOk>;
 export type DecayHeatResponse = Result<DecayHeatOk>;
 
 // --- the client --------------------------------------------------------------
@@ -324,6 +340,12 @@ export class BridgeClient {
    *  merged into the source picker by the store. */
   spent_fuel_catalog(): SpentFuelCatalogResponse {
     return this.call<SpentFuelCatalogResponse>("spent_fuel_catalog");
+  }
+
+  /** The §8 / §13 #5 fallout catalog (inventory from validated `data/fallout`); one fetch,
+   *  merged into the source picker by the store. */
+  fallout_catalog(): FalloutCatalogResponse {
+    return this.call<FalloutCatalogResponse>("fallout_catalog");
   }
 
   /** Decay-heat (W) series over a time grid (M7c §5). One evaluate per (inventory ×

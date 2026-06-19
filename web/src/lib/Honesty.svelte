@@ -174,13 +174,18 @@
             "representative value; the spectrum shape and dose coefficient are construction-independent.",
         },
         {
-          title: "Bomb fallout (7:10 rule) — DEFERRED, not silently omitted",
+          title: "Bomb fallout (7:10 rule) — ENDF yields, illustrative mix",
           body:
-            "A fresh fission-product fallout vector (the Way–Wigner t⁻¹·² / 7:10 gross-decay law) " +
-            "is NOT shipped in v1. Doing it honestly needs a cited cumulative fission-yield table " +
-            "(ENDF/B or JEFF) decayed forward and validated against the t⁻¹·² law — a dataset " +
-            "build, not a reconstruction from memory (the same §11 discipline that gated spent " +
-            "fuel and AmBe). It is a documented future addition, deferred rather than faked.",
+            "The fresh fission-product fallout source is built from ENDF/B-VIII.0 U-235 thermal " +
+            "CUMULATIVE fission yields (a cited table, not a memory reconstruction); decayed " +
+            "forward it reproduces the Way–Wigner t⁻¹·² (7:10) gross-γ decay law (regression-" +
+            "tested). Caveats: (1) cumulative-yield seeding ≈ the H+1 h chain-fed inventory and " +
+            "double-counts within decay chains — a shape-preserving approximation, so the DECAY " +
+            "is meaningful but the absolute level is approximate and t < H+1 h is unreliable; " +
+            "(2) it uses thermal U-235 yields, whereas a real weapon is FAST U/Pu fission — the " +
+            "dominant γ emitters and the 7:10 law are broadly common, so this is a representative " +
+            "illustrative mix, not a weapon-specific vector; (3) scaled to a default 1 kt " +
+            "(~1.45×10²³ fissions), editable.",
         },
       ],
     },

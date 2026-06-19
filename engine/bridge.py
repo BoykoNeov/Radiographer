@@ -31,6 +31,7 @@ from engine.emissions import EmissionsError
 from engine.inventory import EngineError, SolvedInventory
 from engine.neutron_dose import NeutronDoseError, NeutronDoseModel
 from engine.neutron_source import NeutronSourceError
+from engine.fallout import FalloutError, catalog as _fallout_catalog
 from engine.spent_fuel import SpentFuelError, catalog as _spent_fuel_catalog
 from engine.photon_interp import OffGridError
 
@@ -44,6 +45,7 @@ _EXPECTED_ERRORS = (
     NeutronDoseError,
     NeutronSourceError,
     SpentFuelError,
+    FalloutError,
     OffGridError,
     AttenuationError,
     BuildupError,
@@ -401,6 +403,21 @@ def spent_fuel_catalog() -> str:
     masses, ``unit="g"``) at discharge (t=0), and the existing time control evolves cooling."""
     try:
         return _ok({"sources": _spent_fuel_catalog()})
+    except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
+        return _err(exc)
+
+
+def fallout_catalog() -> str:
+    """``-> {ok, sources: [{id, label, category, blurb, caveat, referenceTimeS,
+        entries:[{name, quantity, unit}]}]}``.
+
+    The §8 / §13 #5 prebuilt FALLOUT source(s) — a fresh fission-product mix whose inventory
+    comes from the VALIDATED ``data/fallout`` vector (ENDF/B-VIII.0 U-235 cumulative yields,
+    not a hand-written manifest). The JS catalog merges these into the source picker; loading
+    one populates the inventory (per-fission yields × device size, ``unit="atoms"``) at t=0 ≈
+    H+1 h, and the existing time control plays the Way–Wigner 7:10 (≈ t⁻¹·²) decay."""
+    try:
+        return _ok({"sources": _fallout_catalog()})
     except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
         return _err(exc)
 
