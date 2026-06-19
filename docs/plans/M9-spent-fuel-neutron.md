@@ -33,10 +33,23 @@ Vendored `data/vendor/iaea_sf_nu/` — **IAEA NDS** Simakov/Verpelli/Otsuka, *"U
 nuclear data for the neutron emissions for actinides of interest in safeguards"*, Table 1 (SF
 prompt ν_p + calculated n-yields; JEFF-3.1 / Holden 1985). PDF + SHA + a verbatim
 `sf_nubar.json` transcription (18 trans-actinides). Per the §11 no-fabrication discipline,
-**Cm-246/248/Cf-250 ν̄ are NOT typed from memory** — they are absent from this evaluation, so
-those minor SF emitters are a surfaced, bounded drop (Cm-246 matters only at multi-century
-cooling, where the engine warns). Cloudflare blocked the PANDA Table 11-1 mirror; a future
-upgrade is to vendor Cm-246/248 ν̄ from there / ENDF.
+**Cm-246/248 ν̄ were NOT typed from memory.**
+
+**Post-M9 extension (DONE): Cm-246/248 ν̄ vendored to extend the valid cooling regime.** The IAEA
+table covers only the 18 safeguards isotopes, so Cm-246 (t½ 4760 yr) — which dominates the SF
+source once Cm-244 (18 yr) decays at multi-century cooling — was originally a surfaced, bounded
+drop. Now sourced (no fabrication): the **Holden & Zucker BNL-36467 (1985)** SF prompt-neutron
+*multiplicity distributions* P(ν) are vendored in `data/vendor/llnl_sf_multiplicity/` (transcribed
+from LLNL **UCRL-AR-228518-REV-1** Table 4, BSD-licensed), and ν̄ = Σₖ k·P(k) is **derived**:
+Cm-246 = 2.930, Cm-248 = 3.130 (Cm-248 double-confirmed by Vorobyev 2005; Cm-246 single
+authoritative source). BNL-36467 is the same Holden & Zucker evaluation the IAEA report itself
+cites for the curium nu-bars. The derivation is **validated by reproducing the IAEA Cm-242/Cm-244
+ν̄ (2.540/2.720) exactly** from the same source's distributions (regression test
+`test_cm246_nubar_derived_from_vendored_distribution`). With these modeled, the unmodeled-ν̄
+dropped SF-rate fraction stays **< 0.1 % out to 1 Myr** (was capped at ~1 century), and Cm-246 is
+the dominant SF emitter at 1 kyr for the 45 GWd vector (51 %; at low burnup Pu-240 leads — Cm-246
+is a high-order capture product). The remaining drop (chiefly Cm-250/Pu-244) is negligible and
+still surfaced. The orthogonal **(α,n) lower-bound caveat is unchanged.**
 
 ## Validation — what the cross-check actually proves (and what it doesn't)
 
@@ -45,11 +58,13 @@ The Cm-244 cross-check compares `(_SF/_A)·ν̄ = 1.38e-6·2.72 = 3.75e-6 n/deca
 (`n_yield/SA = ν̄·T_tot/T_SF`), so the ~2% agreement validates the **SF branching ratio**
 (Serpent2 1.38e-6 vs IAEA 1.351e-6 vs textbook 1.37e-6) — it catches a `_SF` units/mapping slip
 but does NOT independently validate ν̄ or the absolute yield (those rest on the cited IAEA/Holden
-ν̄, a properly evaluated quantity). Magnitude sense: SF-only source 45 GWd/tHM = 1.36e9 (t0) →
-6.07e8 (10 yr) → 2.39e7 (100 yr) n/s/tHM; the 10 yr figure equals Cm-244 alone (78.6 g/tHM ×
-1.1e7 n/s/g × 0.68 decay), confirming the Cm-242→Cm-244 transition. (An independent ν̄-inclusive
-magnitude anchor would need a specific-yield value from a lineage other than the IAEA ν̄, cleanly
-cited — a future add, not fabricated from memory.)
+ν̄, a properly evaluated quantity). Magnitude sense (rebuilt `selfcheck`, with Cm-246/248 now
+modeled): SF-only source 45 GWd/tHM = 1.36e9 (t0) → 6.12e8 (10 yr) → 2.87e7 (100 yr) n/s/tHM; the
+10 yr figure is ~Cm-244 alone (78.6 g/tHM × 1.1e7 n/s/g × 0.68 decay), confirming the
+Cm-242→Cm-244 transition, and the 100 yr figure now includes the in-grown Cm-246 (the ~20% rise
+over the pre-extension 2.39e7 is exactly Cm-246 starting to carry the source). (An independent
+ν̄-inclusive magnitude anchor would need a specific-yield value from a lineage other than the
+IAEA/Holden ν̄, cleanly cited — a future add, not fabricated from memory.)
 
 ## Key files & decisions
 
@@ -72,7 +87,12 @@ cited — a future add, not fabricated from memory.)
   v5 round-trip + orphan-guard, dev + built).
 
 ## Open / future
-- Vendor Cm-246/248/Cf-250 SF ν̄ (PANDA Table 11-1 / ENDF) to extend the valid cooling regime
-  past ~1 century.
+- ~~Vendor Cm-246/248 SF ν̄ to extend the valid cooling regime past ~1 century.~~ **DONE** — see
+  the ν̄-sourcing section above (Holden & Zucker BNL-36467 via LLNL UCRL-AR-228518 Table 4;
+  ν̄=Σₖ k·P(k); dropped fraction now < 0.1 % out to 1 Myr).
+- Cf-250 SF ν̄ stays dropped (tracked for the warning, not in the dose): t½ 13 yr, so it decays
+  away fast and is negligible at the long cooling where its high SF branch would matter — not
+  worth sourcing.
 - (α,n) source term (would need ORIGEN/SOURCES-grade matrix data) to make it a total, not a
-  lower bound.
+  lower bound. With the SF-ν̄ residual now < 0.1 %, (α,n) is the dominant remaining reason the
+  neutron dose is a lower bound.

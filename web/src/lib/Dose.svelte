@@ -93,7 +93,8 @@
   const hasNeutron = $derived(appState.neutronSource !== null || appState.spentFuelNeutronId !== null);
   const nError = $derived(appState.neutronDoseError);
   // M9 honesty: SF-only lower bound, and the fraction of the SF source unmodeled at this cooling
-  // (chiefly Cm-246 once Cm-244 decays) — surfaced beside the n number, never silent.
+  // (residual minor emitters lacking an evaluated ν̄; <0.1% for shipped vectors now that
+  // Cm-246/248 are sourced) — surfaced beside the n number, never silent.
   const isSpentFuelN = $derived(appState.spentFuelNeutronId !== null);
   const nDroppedFrac = $derived(appState.neutronDroppedSfFracAtCursor); // 0..1, null unless spent-fuel n
 
@@ -513,8 +514,7 @@
                   ⚠ spontaneous fission only — (α,n) on the fuel's oxygen is unmodeled, so this is a
                   LOWER BOUND.{#if nDroppedFrac != null && nDroppedFrac > 0.05}
                     At this cooling ~{Math.round(nDroppedFrac * 100)}% of the SF source is from
-                    emitters without an evaluated ν̄ (chiefly Cm-246) and is also omitted — the
-                    under-count grows as Cm-244 decays.{/if}
+                    minor emitters without an evaluated ν̄ and is also omitted.{/if}
                 </div>
               {/if}
             {/if}

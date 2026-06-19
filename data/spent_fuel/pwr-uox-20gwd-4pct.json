@@ -286,7 +286,7 @@
   "neutron": {
     "model": "spontaneous-fission (SF) only — (α,n) on oxygen is NOT in the SCK-CEN dataset, so the modeled neutron output is a LOWER BOUND (the dangerous direction)",
     "spectrum_source": "Cf-252",
-    "nubar_source": "IAEA NDS SF_n-Yield_20150313 Table 1 (JEFF-3.1 / Holden 1985); yield_per_decay = (_SF/_A)·ν_p",
+    "nubar_source": "ν_p from IAEA NDS SF_n-Yield_20150313 Table 1 (JEFF-3.1 / Holden 1985) for the 18 safeguards isotopes, plus Cm-246/248 derived (Σ_k k·P(k)) from the Holden & Zucker BNL-36467 distributions (LLNL UCRL-AR-228518 Table 4); yield_per_decay = (_SF/_A)·ν_p. See data/vendor/*/PROVENANCE.md.",
     "yields_n_per_decay": {
       "Th-232": 2.1025831736132963e-11,
       "U-232": 1.53639384432605e-12,
@@ -301,6 +301,8 @@
       "Am-241": 1.0737489611327141e-11,
       "Cm-242": 1.5493995467604077e-07,
       "Cm-244": 3.7536070350000387e-06,
+      "Cm-246": 0.000765898753074251,
+      "Cm-248": 0.2631979619659863,
       "Bk-249": 1.5963998413224861e-09
     },
     "dropped_sf_branch": {
@@ -309,14 +311,12 @@
       "Pu-244": 0.0012499097007440659,
       "Am-242m": 1.60034211906679e-10,
       "Am-243": 3.712222297216612e-11,
-      "Cm-246": 0.00026139889183421534,
-      "Cm-248": 0.08408880573993173,
       "Cm-250": 0.7404255319148936,
       "Cf-249": 5.223978059292151e-09,
       "Cf-250": 0.0007651515151515152
     },
-    "dropped_nubar_nominal": 3.0,
-    "dropped_sf_frac_at_discharge": 0.00019252090231495274,
+    "dropped_nubar_nominal": 3.3,
+    "dropped_sf_frac_at_discharge": 4.892788867177223e-07,
     "crosscheck_Cm244": {
       "Cm244_n_per_decay": 3.7536070350000387e-06,
       "Cm244_iaea_n_per_decay": 3.6735934382296785e-06,
@@ -335,7 +335,7 @@
     "activity_frac": 1.7815577529658008e-19
   },
   "source_ref": "SCK-CEN UOX PWR Serpent2 discharge library, Mendeley Data DOI 10.17632/shv89y2zzd (UOX file, version 4), CC BY 4.0. Discharge (zero cooling); cooling = the §9 reference-time control.",
-  "neutron_caveat": "Neutron output is SPONTANEOUS-FISSION only (chiefly Cm-244, plus Cm-242 at short cooling), folded against a representative SF spectrum. (α,n) on the oxygen in UO₂ is NOT in this dataset and is unmodeled, so the neutron dose is a LOWER BOUND. At multi-century cooling the unmodeled Cm-246 SF (no evaluated ν̄) grows in — surfaced as a dropped-fraction warning, never silently.",
+  "neutron_caveat": "Neutron output is SPONTANEOUS-FISSION only, folded against a representative SF spectrum: Cm-242 dominates at short cooling, Cm-244 through ~1 century, and the now-modeled Cm-246/248 (ν_p from Holden & Zucker BNL-36467) carry the source at multi-century cooling and beyond. (α,n) on the oxygen in UO₂ is NOT in this dataset and is unmodeled, so the neutron dose is a LOWER BOUND. Any residual SF rate from minor emitters still lacking an evaluated ν̄ is surfaced as a dropped-fraction warning at the evaluated cooling time, never silently.",
   "selfcheck": {
     "cs137_Bq_per_tHM": 2349838284868984.0,
     "cs137_fission_yield_estimate_Bq_per_tHM": 2441398651088869.5,
@@ -345,9 +345,9 @@
       "t100yr": 164.23957796026573
     },
     "sf_neutron_n_per_s_per_tHM": {
-      "t0": 77333470.41415542,
-      "t10yr": 15735793.52601253,
-      "t100yr": 1963264.5002745134
+      "t0": 77350339.12192275,
+      "t10yr": 15752637.70303807,
+      "t100yr": 1979889.5007224912
     }
   }
 }

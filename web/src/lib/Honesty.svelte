@@ -85,12 +85,15 @@
           body:
             "Spent fuel DOES light the neutron view: a multi-parent spontaneous-fission source " +
             "S(t)=Σ yield_n·A_n(t) off the one decay solve, with per-nuclide yields = (SF rate " +
-            "from the SCK-CEN library)·(prompt ν̄ from the IAEA safeguards table), Cm-244-dominated " +
-            "at cooling, folded against the validated Cf-252 SF spectrum. BUT (α,n) on the fuel's " +
+            "from the SCK-CEN library)·(prompt ν̄). The ν̄ come from the IAEA safeguards table for " +
+            "the dominant emitters (Cm-242 short cooling, Cm-244 through ~1 century), plus Cm-246/248 " +
+            "for multi-century-and-beyond cooling (derived from the Holden & Zucker BNL-36467 " +
+            "distributions); folded against the validated Cf-252 SF spectrum. BUT (α,n) on the fuel's " +
             "oxygen is NOT in the dataset and is unmodeled (typically tens-of-% of the source), so " +
-            "the neutron dose is a lower bound — it UNDER-counts, the dangerous direction. At " +
-            "multi-century cooling the unmodeled Cm-246 SF grows in too; that dropped fraction is " +
-            "shown on the neutron card, never silently. Neutron shielding is still not modeled.",
+            "the neutron dose is a lower bound — it UNDER-counts, the dangerous direction. Any " +
+            "residual SF rate from minor emitters still lacking an evaluated ν̄ (<0.1% out to 1 Myr " +
+            "for the shipped vectors) is shown on the neutron card, never silently. Neutron shielding " +
+            "is still not modeled.",
         },
       ],
     },

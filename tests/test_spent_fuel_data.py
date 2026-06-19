@@ -130,11 +130,17 @@ def test_cooling_lowers_heat_in_the_cooling_regime(points, point_id):
 
 
 # --- M9: SF neutron-yield block ------------------------------------------------------------
-# yield_per_decay(n) = (_SF/_A from Serpent2)·ν̄(IAEA); the neutron source is S(t)=Σ yield·A_n(t).
-# Cm-244 is the dominant SF emitter. NOTE the cross-check below validates the SF BRANCHING RATIO
-# (Serpent2 _SF/_A vs IAEA's implied T_tot/T_SF) — ν̄ cancels in n_yield/SA, so it does NOT
-# independently validate ν̄ or the absolute yield; those rest on the cited IAEA/Holden ν̄.
+# yield_per_decay(n) = (_SF/_A from Serpent2)·ν̄; the neutron source is S(t)=Σ yield·A_n(t).
+# ν̄ is from the IAEA safeguards table for the 18 safeguards isotopes, plus Cm-246/248 derived
+# (Σ_k k·P(k)) from the Holden & Zucker BNL-36467 distributions (see the derivation test below).
+# NOTE the Cm-244 cross-check validates the SF BRANCHING RATIO (Serpent2 _SF/_A vs IAEA's implied
+# T_tot/T_SF) — ν̄ cancels in n_yield/SA, so it does NOT independently validate ν̄ or the absolute
+# yield; those rest on the cited IAEA/Holden ν̄.
 _CM244_IAEA_N_YIELD_N_S_G = 1.100e7   # IAEA NDS SF_n-Yield Table 1
+
+_VENDOR_DIR = Path(__file__).resolve().parents[1] / "data" / "vendor"
+_NUBAR_PATH = _VENDOR_DIR / "iaea_sf_nu" / "sf_nubar.json"
+_SF_MULT_PATH = _VENDOR_DIR / "llnl_sf_multiplicity" / "sf_multiplicity.json"
 
 
 @pytest.mark.parametrize("point_id", POINTS)
@@ -147,8 +153,10 @@ def test_neutron_block_structural(points, point_id):
     assert "lower bound" in n["model"].lower()
     # Discharge drop (emitters without an evaluated ν̄) must be negligible at t=0.
     assert n["dropped_sf_frac_at_discharge"] < 0.01
-    # Cm-246 — which dominates the SF source at long cooling — is the tracked drop the engine warns on.
-    assert "Cm-246" in n["dropped_sf_branch"]
+    # Cm-246/248 ν̄ are now SOURCED (Holden & Zucker BNL-36467), so the dominant long-cooling SF
+    # emitter Cm-246 is MODELED (in yields), not dropped — this is what extends the valid regime.
+    assert "Cm-246" in n["yields_n_per_decay"] and "Cm-248" in n["yields_n_per_decay"]
+    assert "Cm-246" not in n["dropped_sf_branch"] and "Cm-248" not in n["dropped_sf_branch"]
 
 
 @pytest.mark.parametrize("point_id", POINTS)
@@ -188,3 +196,70 @@ def test_sf_neutron_source_cm244_dominates_after_cooling(points, point_id):
     cm244_10 = yields["Cm-244"] * act["Cm-244"][1]
     assert cm242_0 / s0 > 0.10                         # Cm-242 a real share at discharge
     assert cm244_10 / s10 > 0.85                       # Cm-244 dominant by 10 yr (more so at high BU)
+
+
+def test_cm246_nubar_derived_from_vendored_distribution():
+    """The Cm-246/248 ν̄ are DERIVED, not transcribed: ν̄ = Σ_k k·P(k) over the Holden & Zucker
+    BNL-36467 SF multiplicity distributions vendored in data/vendor/llnl_sf_multiplicity/. This
+    re-runs that computation as a regression check, and — crucially — validates the METHOD by
+    reproducing the IAEA-vendored Cm-242/Cm-244 ν̄ (2.540 / 2.720) exactly from the same source's
+    distributions before trusting it for the new nuclides. Then it confirms the value the build
+    consumes (sf_nubar.json's nu_p) equals the freshly derived one — no hand-typed literal slips
+    in between the source and the dose. (No fabrication; §11 / CLAUDE.md.)"""
+    mult = json.loads(_SF_MULT_PATH.read_text(encoding="utf-8"))
+    nubar = json.loads(_NUBAR_PATH.read_text(encoding="utf-8"))["nuclides"]
+
+    derived: dict[str, float] = {}
+    for row in mult["distributions"]:
+        nu_bar = math.fsum(k * p for k, p in enumerate(row["P"]))
+        assert math.isclose(math.fsum(row["P"]), 1.0, abs_tol=2e-4), row  # a probability dist.
+        # Method-validation rows must reproduce the IAEA-known ν̄ exactly (proves Σ_k k·P(k)).
+        if row["role"] == "method-validation":
+            assert nu_bar == pytest.approx(row["expect_nu_bar"], abs=5e-4)
+            assert nu_bar == pytest.approx(nubar[row["nuclide"]]["nu_p"], abs=5e-4)
+        elif row["role"] == "vendored-nu_p-source":
+            derived[row["nuclide"]] = nu_bar
+
+    # The new nuclides, derived from the BNL-36467 distribution, to 3 decimals.
+    assert derived["Cm-246"] == pytest.approx(2.930, abs=5e-4)
+    assert derived["Cm-248"] == pytest.approx(3.130, abs=5e-4)
+    # …and the build's consumed nu_p must equal the derivation (source → dose, no typo).
+    assert nubar["Cm-246"]["nu_p"] == pytest.approx(derived["Cm-246"], abs=5e-4)
+    assert nubar["Cm-248"]["nu_p"] == pytest.approx(derived["Cm-248"], abs=5e-4)
+    assert nubar["Cm-246"]["src"] == "HZ-BNL36467" and nubar["Cm-248"]["src"] == "HZ-BNL36467"
+
+    # Independent cross-confirm for Cm-248 (Vorobyev 2005, a different measurement).
+    vorobyev = next(r for r in mult["distributions"]
+                    if r["nuclide"] == "Cm-248" and r["role"] == "cross-confirm")
+    assert math.fsum(k * p for k, p in enumerate(vorobyev["P"])) == pytest.approx(3.13, abs=2e-3)
+
+
+@pytest.mark.parametrize("point_id", POINTS)
+def test_sourcing_cm246_248_extends_valid_cooling_regime(points, point_id):
+    """With Cm-246/248 now modeled, the unmodeled-ν̄ dropped SF-rate fraction stays negligible
+    across the WHOLE cooling range (it was capped at ~1 century before): Cm-246 (4760 yr) carries
+    the source after Cm-244 (18 yr) decays, and the residual (chiefly Pu-244, Cm-250) is tiny.
+    This is the deliverable — the engine's lower-bound ν̄-gap warning no longer fires for the
+    shipped vectors. (The orthogonal (α,n) lower-bound caveat is unaffected.)"""
+    d = points[point_id]
+    inv = _solve(d)
+    yields = d["neutron"]["yields_n_per_decay"]
+    dropped = d["neutron"]["dropped_sf_branch"]
+    nom = d["neutron"]["dropped_nubar_nominal"]
+    ts = [1.0e3 * _YEAR_S, 1.0e4 * _YEAR_S, 1.0e5 * _YEAR_S]   # the multi-century+ regime
+    series = inv.evaluate(ts, axis="activity", unit="Bq")["series"]
+    for i in range(len(ts)):
+        s = math.fsum(y * series.get(n, [0.0] * len(ts))[i] for n, y in yields.items())
+        s_drop = nom * math.fsum(
+            b * series.get(n, [0.0] * len(ts))[i] for n, b in dropped.items() if n in series)
+        frac = s_drop / (s + s_drop) if (s + s_drop) > 0 else 0.0
+        assert frac < 0.01, f"{point_id}: dropped SF frac {frac:.3%} at t={ts[i] / _YEAR_S:.0f} yr"
+    # Cm-246 must be modeled (the sourcing goal). Its WEIGHT in the long-cooling SF source is
+    # burnup-dependent — Cm-246 is a high-order capture product, so at high burnup it dominates
+    # the 1 kyr source (Cm-244 long gone) while at low burnup Pu-240 leads. Assert the regime-
+    # extending dominance only where the physics gives it.
+    assert "Cm-246" in yields
+    s1k = {n: yields[n] * series[n][0] for n in yields if n in series}
+    if point_id == "pwr-uox-45gwd-4pct":
+        assert max(s1k, key=s1k.get) == "Cm-246"
+        assert s1k["Cm-246"] / math.fsum(s1k.values()) > 0.4

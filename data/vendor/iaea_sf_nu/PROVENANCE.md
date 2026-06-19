@@ -42,16 +42,24 @@ implied `T_tot/T_SF` = 1.351e-6; textbook 1.37e-6) and catches a `_SF` units/map
 **not** an independent check on ν_p or on the absolute neutron yield, which rest on the cited
 IAEA/Holden ν_p.
 
-## Scope / deferral (no fabrication, no silent drop)
+## Scope (no fabrication, no silent drop)
 
-This evaluation covers the **18 safeguards isotopes only**. The discharge vectors also contain
-minor SF emitters absent from it — chiefly **Cm-246** (and Cm-248, Cf-250, …). These are
-**< 0.34 % of the SF rate at discharge through ~1 century cooling**, but Cm-246 (t½ 4760 yr)
-eventually dominates once Cm-244 (t½ 18 yr) decays away. Rather than insert a ν̄ from memory
-(the §11 no-fabrication discipline — cf. the AmBe spectrum and the β Cross-Berger kernel), the
-build **drops** these nuclides and the engine **surfaces the dropped SF-rate fraction at the
-evaluated cooling time** as a loud warning (the dangerous direction is under-, not over-count).
-A future upgrade is to vendor Cm-246/248 ν̄ from PANDA Table 11-1 / ENDF.
+This IAEA evaluation covers the **18 safeguards isotopes only** (`src: "IAEA-T1"` in
+`sf_nubar.json`). The discharge vectors also contain minor SF emitters absent from it — chiefly
+**Cm-246** (t½ 4760 yr), which dominates the SF source once Cm-244 (t½ 18 yr) decays away at
+multi-century cooling, plus **Cm-248** and a long tail (Cm-250, Cf-250, …).
+
+**Cm-246/248 ν̄ are now vendored** (closing the original deferral) — NOT typed from memory, but
+**derived (ν̄ = Σₖ k·P(k)) from the Holden & Zucker BNL-36467 SF multiplicity distributions**
+tabulated in `../llnl_sf_multiplicity/` (`src: "HZ-BNL36467"`). This is the same Holden & Zucker
+1985 evaluation the IAEA report itself cites for the curium nu-bars (its ref [16]). The derivation
+is validated against this very table: the same Σₖ k·P(k) over the source's Cm-242/Cm-244
+distributions reproduces the IAEA Cm-242/244 ν̄ (2.540 / 2.720) **exactly**. With Cm-246/248
+modeled, the **dropped SF-rate fraction stays < 0.1 % out to 1 Myr** for the shipped vectors (it
+was capped at ~1 century cooling before), so the valid cooling regime now spans the whole
+meaningful range. The engine still surfaces the residual dropped fraction at the evaluated cooling
+time as a loud warning (the dangerous direction is under-, not over-count). See
+`../llnl_sf_multiplicity/PROVENANCE.md`.
 
 ## Drift guard
 

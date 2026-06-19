@@ -1,0 +1,35 @@
+{
+  "_comment": "Spontaneous-fission prompt neutron MULTIPLICITY DISTRIBUTIONS P(nu) transcribed verbatim from Table 4 (page 6) of the vendored LLNL report (UCRL-AR-228518-REV-1; see PROVENANCE.md). These primary distributions are the citable source for the SF prompt nu-bar of Cm-246 and Cm-248, which are ABSENT from the IAEA safeguards table (../iaea_sf_nu/). nu_bar is DERIVED, not transcribed: nu_bar = sum_k k * P(k). The Cm-242/Cm-244 rows are carried as a METHOD VALIDATION: the same sum over this source's distributions must reproduce the IAEA-vendored nu_p (2.540 / 2.720) exactly, proving the derivation before it is applied to the new nuclides. P(k) is the probability of emitting k prompt neutrons in one spontaneous fission, k = 0,1,2,...; each row sums to 1.",
+  "schema_version": 1,
+  "source": "J.M. Verbeke, C. Hagmann, D. Wright, 'Simulation of Neutron and Gamma Ray Emission from Fission and Photofission. LLNL Fission Library 2.0.2', UCRL-AR-228518-REV-1, Lawrence Livermore National Laboratory, 2016-10-24, Table 4 ('Neutron number distributions for spontaneous fission, along with their references').",
+  "formula": "nu_bar = sum_{k>=0} k * P(k)",
+  "references": {
+    "[9]": "N.E. Holden, M.S. Zucker, 'A Reevaluation of the Average Prompt Neutron Emission Multiplicity (nu-bar) Values from Fission of Uranium and Transuranium Nuclides', BNL-NCS-35513, Brookhaven National Laboratory.",
+    "[11]": "A.S. Vorobyev et al., 'Distribution of Prompt Neutron Emission Probability for Fission Fragments in Spontaneous Fission of 252Cf and 244,248Cm', AIP Conf. Proc. 769, 613 (2005), doi:10.1063/1.1945084.",
+    "[12]": "N. Holden, M. Zucker, 'Neutron Multiplicities for the Transuranium Nuclides', BNL-36467, Brookhaven, 1985 (the same Holden & Zucker 1985 evaluation the IAEA SF_n-Yield report cites for the curium nu-bars)."
+  },
+  "distributions": [
+    {
+      "nuclide": "Cm-242", "ref_tag": "[9]", "role": "method-validation",
+      "expect_nu_bar": 2.540, "expect_source": "IAEA SF_n-Yield Table 1 nu_p (Holden 1985)",
+      "P": [0.0212550, 0.1467407, 0.3267531, 0.3268277, 0.1375090, 0.0373815, 0.0025912, 0.0007551, 0.0001867]
+    },
+    {
+      "nuclide": "Cm-244", "ref_tag": "[9]", "role": "method-validation",
+      "expect_nu_bar": 2.720, "expect_source": "IAEA SF_n-Yield Table 1 nu_p (Holden 1985)",
+      "P": [0.0150050, 0.1161725, 0.2998427, 0.3331614, 0.1837748, 0.0429780, 0.0087914, 0.0002744]
+    },
+    {
+      "nuclide": "Cm-246", "ref_tag": "[12]", "role": "vendored-nu_p-source",
+      "P": [0.0152182, 0.0762769, 0.2627039, 0.3449236, 0.2180653, 0.0755895, 0.0072227]
+    },
+    {
+      "nuclide": "Cm-248", "ref_tag": "[12]", "role": "vendored-nu_p-source",
+      "P": [0.0067352, 0.0596495, 0.2205536, 0.3509030, 0.2543767, 0.0893555, 0.0167386, 0.0016888]
+    },
+    {
+      "nuclide": "Cm-248", "ref_tag": "[11]", "role": "cross-confirm",
+      "P": [0.0061, 0.0608, 0.2272, 0.3460, 0.2476, 0.0906, 0.0190, 0.0024, 0.0002]
+    }
+  ]
+}

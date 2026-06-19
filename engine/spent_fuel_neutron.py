@@ -19,11 +19,13 @@ Cm-244 is a near-identical Watt spectrum).
 **Honesty (§11), surfaced never silent:**
 
 * SF only — (α,n) on the oxygen in UO₂ is NOT in the dataset, so the result is a LOWER BOUND.
-* Minor SF emitters with no evaluated ν̄ (chiefly Cm-246, which grows in once Cm-244 decays at
-  multi-century cooling) are not in the dose; the model reports the **dropped SF-rate fraction**
-  at the evaluated cooling time (estimated with a nominal ν̄) and warns when it is non-negligible
-  — so the user sees *how much* of the source is unmodeled, in the dangerous (under-count)
-  direction.
+* The dominant SF emitters are modeled across the cooling range: Cm-242 at short cooling,
+  Cm-244 through ~1 century, and Cm-246/248 beyond (the curium ν̄ now sourced — see
+  ``data/build/build_spent_fuel.py``). Any residual SF rate from minor emitters that still
+  lack an evaluated ν̄ is reported as the **dropped SF-rate fraction** at the evaluated cooling
+  time (estimated with a nominal ν̄) and warned when non-negligible — so the user sees *how
+  much*, if any, of the source is unmodeled, in the dangerous (under-count) direction. For the
+  shipped vectors this stays well under 0.1 % out to 1 Myr.
 """
 
 from __future__ import annotations
@@ -138,7 +140,7 @@ class SpentFuelNeutronModel:
                     "max_dropped_frac": max_drop,
                     "message": (
                         f"up to {max_drop:.0%} of the SF neutron source at this cooling comes from "
-                        "emitters without an evaluated ν̄ (chiefly Cm-246) and is NOT in the dose — "
+                        "minor emitters without an evaluated ν̄ and is NOT in the dose — "
                         "the modeled neutron output is a lower bound (under-count)"
                     ),
                 }

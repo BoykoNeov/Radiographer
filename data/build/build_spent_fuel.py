@@ -68,9 +68,10 @@ N_AVOGADRO = 6.02214076e23
 SF_SPECTRUM_SOURCE = "Cf-252"
 
 #: Nominal ν̄ used ONLY to size the "dropped SF fraction" honesty warning for minor SF emitters
-#: that lack an evaluated ν̄ in the IAEA table (chiefly Cm-246). A conservative ~upper bound
-#: (real Cm-246/248 ν̄ ≈ 2.9–3.2); it never enters the dose (which uses only modeled yields).
-DROPPED_NUBAR_NOMINAL = 3.0
+#: that still lack an evaluated ν̄ (Cm-246/248 are now sourced — see sf_nubar.json — so the
+#: remaining dropped set is chiefly Cm-250, ν̄≈3.3). A conservative ~upper bound for that set;
+#: it never enters the dose (which uses only modeled yields).
+DROPPED_NUBAR_NOMINAL = 3.3
 
 #: Max fraction of the discharge SF *rate* allowed to come from emitters without an evaluated
 #: ν̄ (a no-silent-drop guard at t=0; long-cooling Cm-246 dominance is surfaced by the engine
@@ -370,8 +371,10 @@ def build_neutron_block(idx: dict[str, int], nuclides: list[str], row: list[str]
         "model": "spontaneous-fission (SF) only — (α,n) on oxygen is NOT in the SCK-CEN dataset, "
                  "so the modeled neutron output is a LOWER BOUND (the dangerous direction)",
         "spectrum_source": SF_SPECTRUM_SOURCE,
-        "nubar_source": "IAEA NDS SF_n-Yield_20150313 Table 1 (JEFF-3.1 / Holden 1985); "
-                        "yield_per_decay = (_SF/_A)·ν_p",
+        "nubar_source": "ν_p from IAEA NDS SF_n-Yield_20150313 Table 1 (JEFF-3.1 / Holden 1985) for "
+                        "the 18 safeguards isotopes, plus Cm-246/248 derived (Σ_k k·P(k)) from the "
+                        "Holden & Zucker BNL-36467 distributions (LLNL UCRL-AR-228518 Table 4); "
+                        "yield_per_decay = (_SF/_A)·ν_p. See data/vendor/*/PROVENANCE.md.",
         "yields_n_per_decay": yields,
         "dropped_sf_branch": dropped,
         "dropped_nubar_nominal": DROPPED_NUBAR_NOMINAL,
@@ -462,11 +465,13 @@ def build_grid_point(gp: dict, idx: dict[str, int], nuclides: list[str], row: li
             "Discharge (zero cooling); cooling = the §9 reference-time control."
         ),
         "neutron_caveat": (
-            "Neutron output is SPONTANEOUS-FISSION only (chiefly Cm-244, plus Cm-242 at short "
-            "cooling), folded against a representative SF spectrum. (α,n) on the oxygen in UO₂ is "
-            "NOT in this dataset and is unmodeled, so the neutron dose is a LOWER BOUND. At "
-            "multi-century cooling the unmodeled Cm-246 SF (no evaluated ν̄) grows in — surfaced "
-            "as a dropped-fraction warning, never silently."
+            "Neutron output is SPONTANEOUS-FISSION only, folded against a representative SF "
+            "spectrum: Cm-242 dominates at short cooling, Cm-244 through ~1 century, and the "
+            "now-modeled Cm-246/248 (ν_p from Holden & Zucker BNL-36467) carry the source at "
+            "multi-century cooling and beyond. (α,n) on the oxygen in UO₂ is NOT in this dataset "
+            "and is unmodeled, so the neutron dose is a LOWER BOUND. Any residual SF rate from "
+            "minor emitters still lacking an evaluated ν̄ is surfaced as a dropped-fraction "
+            "warning at the evaluated cooling time, never silently."
         ),
     }
 

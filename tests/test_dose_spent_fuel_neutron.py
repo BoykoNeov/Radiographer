@@ -3,8 +3,10 @@
 The dose rides S(t)=Σ yield_n·A_n(t) off the ONE Bateman solve. These tests drive the model
 from the committed discharge vector's ``neutron`` block (no build script, no 370 MB CSV) and
 check: the fold reuses the validated Cf-252 h̄; the source cools through the regime; the dose
-equals an independent S·h̄/4πd² hand-calc; and the unmodeled-Cm-246 lower-bound warning fires
-at long cooling (never a silent under-count).
+equals an independent S·h̄/4πd² hand-calc; with Cm-246/248 ν̄ now sourced the dominant
+long-cooling SF emitter is modeled so the unmodeled-ν̄ lower-bound warning no longer fires for
+the shipped vector; and the warning MECHANISM still surfaces a large unmodeled branch (never a
+silent under-count).
 """
 
 from __future__ import annotations
@@ -83,15 +85,31 @@ def test_distance_is_inverse_square(vector, solved):
     assert r1 / r2 == pytest.approx(4.0, rel=1e-9)
 
 
-def test_dropped_cm246_lower_bound_warning_at_long_cooling(vector, solved):
-    # Cm-244 (18 yr) decays away; Cm-246 (4760 yr, no evaluated ν̄) takes over → the unmodeled
-    # SF fraction grows. The model must SURFACE this (loud), never silently under-count.
+def test_cm246_now_modeled_so_no_lower_bound_warning_at_long_cooling(vector, solved):
+    # Cm-246/248 ν̄ are now SOURCED (Holden & Zucker BNL-36467), so once Cm-244 (18 yr) decays the
+    # dominant long-cooling emitter Cm-246 (4760 yr) is in the dose — NOT dropped. The unmodeled-ν̄
+    # SF fraction therefore stays negligible across the cooling range and the lower-bound ν̄-gap
+    # warning no longer fires for the shipped vector. (This is the deliverable; the orthogonal
+    # (α,n) lower-bound caveat in the vector's neutron_caveat is unaffected.)
     m = _model(vector)
-    ts = [10.0 * _YEAR_S, 100.0 * _YEAR_S, 500.0 * _YEAR_S]
+    ts = [100.0 * _YEAR_S, 500.0 * _YEAR_S, 1.0e4 * _YEAR_S, 1.0e5 * _YEAR_S]
     out = m.dose_rate_series(solved.evaluate(ts, axis="activity", unit="Bq"), 1.0)
-    df = out["dropped_sf_frac"]
-    assert df[0] < df[1] < df[2]          # grows monotonically with cooling
-    assert df[0] < 0.05 and df[2] > 0.5   # negligible at 10 yr, dominant by 500 yr
+    assert max(out["dropped_sf_frac"]) < 0.01     # was >0.5 by 500 yr before Cm-246 was modeled
+    assert not any(w.get("reason") == "dropped_sf_unmodeled" for w in out["warnings"])
+
+
+def test_dropped_sf_warning_mechanism_still_fires_for_a_large_unmodeled_branch(vector, solved):
+    # Coverage for the §11 surfacing PATH itself: if a (future) dataset carried a genuinely large
+    # SF emitter with no evaluated ν̄, the model must still loudly flag the under-count. Inject a
+    # synthetic dropped branch on Cm-244 (present in the series) large enough to dominate, and
+    # confirm the dropped fraction and the loud warning both appear.
+    n = vector["neutron"]
+    m = SpentFuelNeutronModel(
+        n["yields_n_per_decay"], n["spectrum_source"], "ambient_H10",
+        dropped_sf_branch={"Cm-244": 1.0e-3}, dropped_nubar_nominal=3.3,
+    )
+    out = m.dose_rate_series(solved.evaluate([10.0 * _YEAR_S], axis="activity", unit="Bq"), 1.0)
+    assert out["dropped_sf_frac"][0] > 0.05
     assert any(w.get("reason") == "dropped_sf_unmodeled" for w in out["warnings"])
 
 
