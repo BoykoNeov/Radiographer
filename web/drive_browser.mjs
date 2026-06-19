@@ -1600,6 +1600,192 @@ async function runM6h(page) {
   return { ok: checks.every((c) => c.pass), checks };
 }
 
+// M7: prebuilt source catalog + neutron dose wiring. Drive the RENDERED picker cards (works
+// against the built+hashed bundle, unlike importing the manifest by path): a simple preset
+// keeps neutron grayed; Cf-252 lights the neutron path and its H*(10) coefficient matches the
+// M5 validated triangle (≈383 pSv·cm²); a hand-edit drops the source key (orphan guard); and
+// the v3 save/load round-trips the source into the live neutron card.
+async function runM7(page) {
+  const checks = [];
+  const record = (name, pass, detail) => checks.push({ name, pass, detail });
+
+  const NEUTRON = '[data-testid="dose-neutron"]';
+  const DOSEPLOT = '[data-testid="dose-plot"]';
+  const CS137 = '[data-testid="source-cs137-source"]';
+  const CF252 = '[data-testid="source-cf252-source"]';
+
+  // Reset to a clean, DEFAULTED dose context so the Cf-252 anchor reads H*(10) (the M5
+  // validated value), not M6h's leftover effective/PA + lead shield + huge exposure.
+  await page.evaluate(async () => {
+    const app = window.__APP__;
+    await app.clear();
+    app.setDoseQuantity("ambient_H10");
+    app.setDoseDistanceM(1.0);
+    app.clearShield();
+    app.setExposureS(3600);
+    app.setReferenceTimeS(0);
+  });
+
+  // 0) The catalog manifest is present (exposed on window) with the simple + neutron presets.
+  const manifest = await page.evaluate(() => {
+    const s = window.__SOURCES__;
+    if (!Array.isArray(s)) return { ok: false };
+    const ids = s.map((x) => x.id);
+    const cf = s.find((x) => x.id === "cf252-source");
+    return {
+      ok: true,
+      n: s.length,
+      hasCs: ids.includes("cs137-source"),
+      hasCf: !!cf,
+      cfSource: cf && cf.neutronSource,
+    };
+  });
+  record(
+    "M7 catalog manifest present with simple + neutron presets",
+    manifest.ok && manifest.n >= 7 && manifest.hasCs && manifest.hasCf && manifest.cfSource === "Cf-252",
+    `n=${manifest.n}, Cs-137=${manifest.hasCs}, Cf-252=${manifest.hasCf}(src=${manifest.cfSource})`,
+  );
+
+  // 1) A simple INVENTORY-ONLY preset loads via the rendered picker card: Cs-137 → solved
+  //    closure incl. Ba-137m, neutron stays GRAYED (no source key), ONE solve (registry==1).
+  await page.click(CS137);
+  await page.waitForFunction(
+    "window.__APP__.status === 'solved' && window.__APP__.closure.includes('Ba-137m')",
+    null,
+    { timeout: 30_000 },
+  );
+  const simple = await page.evaluate(() => {
+    const app = window.__APP__;
+    const card = document.querySelector('[data-testid="dose-neutron"]');
+    const s = window.__BRIDGE__.registry_size();
+    return {
+      neutronSource: app.neutronSource,
+      entries: app.entries.map((e) => e.name),
+      neutronSeriesNull: app.neutronDoseSeries === null,
+      grayed: card ? card.getAttribute("data-rate-si") === null : null,
+      registry: s.ok ? s.size : -1,
+    };
+  });
+  record(
+    "simple preset (Cs-137) loads via card → solved, neutron grayed, one solve",
+    simple.neutronSource === null &&
+      simple.entries.length === 1 &&
+      simple.entries[0] === "Cs-137" &&
+      simple.neutronSeriesNull &&
+      simple.grayed === true &&
+      simple.registry === 1,
+    `entries=${JSON.stringify(simple.entries)}, neutronSource=${simple.neutronSource}, grayed=${simple.grayed}, registry=${simple.registry}`,
+  );
+
+  // 2) The Cf-252 NEUTRON source loads via its card → the neutron path lights up: source key
+  //    set, the spectrum-averaged coefficient matches the M5 validated triangle (H*(10) ≈ 383
+  //    pSv·cm²), the neutron card shows a positive rate, the breakdown bar gains an n trace on
+  //    the SAME Sv axis as γ (they sum), all off ONE solve (registry==1, §3).
+  await page.click(CF252);
+  await page.waitForFunction(
+    "window.__APP__.status === 'solved' && window.__APP__.neutronSource === 'Cf-252' && window.__APP__.neutronDoseSeries",
+    null,
+    { timeout: 30_000 },
+  );
+  await page.waitForSelector(NEUTRON);
+  // The bar's neutron trace lands a tick after the series (the Plotly effect) — wait for it.
+  await page.waitForFunction(
+    (sel) => {
+      const p = document.querySelector(sel);
+      return !!(p && p.data && p.data.some((t) => typeof t.name === "string" && t.name.startsWith("n (")));
+    },
+    DOSEPLOT,
+    { timeout: 30_000 },
+  );
+  const neutron = await page.evaluate((doseplot) => {
+    const app = window.__APP__;
+    const series = app.neutronDoseSeries;
+    const card = document.querySelector('[data-testid="dose-neutron"]');
+    const plot = document.querySelector(doseplot);
+    const traceNames = plot && plot.data ? plot.data.map((t) => t.name) : [];
+    const s = window.__BRIDGE__.registry_size();
+    return {
+      coeff: series ? series.spectrum_avg_coeff_pSv_cm2 : null,
+      rateAttr: card ? card.getAttribute("data-rate-si") : null,
+      nTrace: traceNames.some((n) => typeof n === "string" && n.startsWith("n (")),
+      registry: s.ok ? s.size : -1,
+      siUnit: series ? series.si_unit : null,
+    };
+  }, DOSEPLOT);
+  const coeffOk = Number.isFinite(neutron.coeff) && Math.abs(neutron.coeff - 383) / 383 < 0.05;
+  const rateOk = Number.isFinite(parseFloat(neutron.rateAttr)) && parseFloat(neutron.rateAttr) > 0;
+  record(
+    "Cf-252 source: H*(10) h̄ ≈ 383 pSv·cm² (M5 triangle), live card + n bar trace, one solve",
+    coeffOk && rateOk && neutron.nTrace && neutron.registry === 1 && neutron.siUnit === "Sv",
+    `h̄=${neutron.coeff} pSv·cm² (anchor 383), rate_si=${neutron.rateAttr} Sv/s, nTrace=${neutron.nTrace}, registry=${neutron.registry}`,
+  );
+
+  // 3) ORPHAN GUARD (no-silent-error): hand-editing the inventory while a neutron source is
+  //    loaded DROPS the source association, so neutron_dose is never called for a parent that
+  //    might leave the inventory — the neutron path goes dark cleanly, not via a stale error.
+  await page.evaluate(async () => {
+    await window.__APP__.addEntry("Co-60", 1e9, "Bq");
+  });
+  await page.waitForFunction(
+    "window.__APP__.status === 'solved' && window.__APP__.neutronSource === null",
+    null,
+    { timeout: 30_000 },
+  );
+  const orphan = await page.evaluate(() => {
+    const app = window.__APP__;
+    const card = document.querySelector('[data-testid="dose-neutron"]');
+    return {
+      neutronSource: app.neutronSource,
+      neutronSeriesNull: app.neutronDoseSeries === null,
+      neutronErr: app.neutronDoseError,
+      grayed: card ? card.getAttribute("data-rate-si") === null : null,
+    };
+  });
+  record(
+    "orphan guard: hand-edit drops the neutron source key + series; card re-grays, no error (§11)",
+    orphan.neutronSource === null &&
+      orphan.neutronSeriesNull &&
+      orphan.neutronErr === "" &&
+      orphan.grayed === true,
+    `neutronSource=${orphan.neutronSource}, seriesNull=${orphan.neutronSeriesNull}, err=${JSON.stringify(orphan.neutronErr)}, grayed=${orphan.grayed}`,
+  );
+
+  // 4) PERSIST v3 round-trip: reload Cf-252, the saved file is v3 carrying the neutron_source;
+  //    clear → loadFromText restores the source key AND the live neutron card (a dropped key
+  //    would re-gray it — the round-trip asserts the rendered view, not just the string).
+  await page.click(CF252);
+  await page.waitForFunction(
+    "window.__APP__.neutronSource === 'Cf-252' && window.__APP__.neutronDoseSeries",
+    null,
+    { timeout: 30_000 },
+  );
+  const saved = await page.evaluate(() => window.__APP__.serialize());
+  const parsed = JSON.parse(saved);
+  await page.evaluate(async () => {
+    await window.__APP__.clear();
+  });
+  const loadErr = await page.evaluate((txt) => window.__APP__.loadFromText(txt), saved);
+  await page.waitForFunction(
+    "window.__APP__.status === 'solved' && window.__APP__.neutronSource === 'Cf-252' && window.__APP__.neutronDoseSeries",
+    null,
+    { timeout: 30_000 },
+  );
+  const restored = await page.evaluate(() => {
+    const card = document.querySelector('[data-testid="dose-neutron"]');
+    return { grayed: card ? card.getAttribute("data-rate-si") === null : null };
+  });
+  record(
+    "persist v3: neutron source survives save/load → key + live card restored (#4)",
+    parsed.version === 3 &&
+      parsed.inventory.neutron_source === "Cf-252" &&
+      loadErr === null &&
+      restored.grayed === false,
+    `version=${parsed.version}, neutron_source=${parsed.inventory.neutron_source}, loadErr=${loadErr}, cardLive=${restored.grayed === false}`,
+  );
+
+  return { ok: checks.every((c) => c.pass), checks };
+}
+
 let exitCode = 1;
 let browser;
 let server;
@@ -1630,6 +1816,7 @@ try {
   let m6f = { ok: false, checks: [] };
   let m6g = { ok: false, checks: [] };
   let m6h = { ok: false, checks: [] };
+  let m7 = { ok: false, checks: [] };
   if (m6aOk) {
     m6b = await runM6b(page);
     if (m6b.ok) {
@@ -1644,8 +1831,13 @@ try {
               m6g = await runM6g(page);
               if (m6g.ok) {
                 m6h = await runM6h(page);
+                if (m6h.ok) {
+                  m7 = await runM7(page);
+                } else {
+                  console.log("[gate] skipping M7 — M6h checks failed");
+                }
               } else {
-                console.log("[gate] skipping M6h — M6g checks failed");
+                console.log("[gate] skipping M6h/M7 — M6g checks failed");
               }
             } else {
               console.log("[gate] skipping M6g/M6h — M6f checks failed");
@@ -1701,11 +1893,17 @@ try {
     console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
   }
 
-  exitCode = m6aOk && m6b.ok && m6c.ok && m6d.ok && m6e.ok && m6f.ok && m6g.ok && m6h.ok ? 0 : 1;
+  console.log("\n===== M7 prebuilt sources + neutron dose =====");
+  for (const c of m7.checks) {
+    console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
+  }
+
+  exitCode =
+    m6aOk && m6b.ok && m6c.ok && m6d.ok && m6e.ok && m6f.ok && m6g.ok && m6h.ok && m7.ok ? 0 : 1;
   console.log(
     exitCode === 0
-      ? "\n✅ M6h PASS (real browser): boot + inventory + curves + time + chain + dose + shield + honesty/round-trip"
-      : "\n❌ M6h FAIL (real browser)",
+      ? "\n✅ M7 PASS (real browser): boot + inventory + curves + time + chain + dose + shield + honesty/round-trip + sources/neutron"
+      : "\n❌ M7 FAIL (real browser)",
   );
 } catch (err) {
   console.error("Driver error:", err);

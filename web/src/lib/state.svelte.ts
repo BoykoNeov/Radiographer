@@ -33,6 +33,7 @@ import {
 } from "./bridge";
 import { geometricFactor, interpAt, trapzWindow, type TrapzResult } from "./dosemath";
 import { ColorRegistry } from "./palette";
+import type { PrebuiltSource } from "./sources";
 import {
   deserializeState,
   downloadStateFile,
@@ -77,6 +78,16 @@ export class AppState {
   precision = $state<Precision>("double");
   /** Reference time / source-age (t=0), seconds. Stored only in M6b (see invariant #1). */
   referenceTimeS = $state<number>(0);
+  /**
+   * Prebuilt NEUTRON source key (M7 / §6.3) — set when a catalog neutron source (Cf-252…)
+   * is loaded; null for every user-style inventory. Its presence is the §6.3 GRAY-OUT GATE
+   * that lights the neutron dose path (M7b). It is dropped the moment the user HAND-EDITS
+   * the inventory (add/remove/update) — a prebuilt source's identity is broken once edited,
+   * and dropping it here is the no-silent-error guard against an ORPHANED key calling
+   * `neutron_dose` for a parent that is no longer in the inventory (advisor). Set only by
+   * `loadSource` and the load path; persisted in v3 (M7b).
+   */
+  neutronSource = $state<string | null>(null);
 
   // -- engine + derived solve state -----------------------------------------
   /** The live Bateman solve; null when empty or after a failed solve (#2). */
@@ -158,6 +169,23 @@ export class AppState {
   gammaLines = $state<DoseLinesOk | null>(null);
   /** Loud dose-path error (#3) — surfaced, never a silent blank breakdown. */
   doseError = $state<string>("");
+
+  // -- neutron dose (M7b, §6.3) ---------------------------------------------
+  // Only computed when `neutronSource != null` (a prebuilt neutron source is loaded —
+  // the §6.3 gray-out gate). Same solve-once / cursor-index pattern as γ: one
+  // `neutron_dose` evaluate per (source × distance × quantity × geometry) over `curveX`,
+  // the cursor indexes it. γ and n are the SAME quantity (both Sv, H*(10)/effective) so
+  // they DO sum in the breakdown total (unlike β's Gy) — invariant #5 is γ-vs-β only.
+  // Neutron is UNSHIELDED in v1: the M6g shield list is γ-buildup materials; hydrogenous
+  // neutron shielding is deferred (§6.3), so a present γ shield does NOT attenuate n (a
+  // surfaced caveat in the UI, not a silent pass-through). A neutron failure sets its OWN
+  // error and nulls only its series — it never blanks the γ/β breakdown (advisor: orphan
+  // guard). `source_gamma` (reaction γ) is null for Cf-252 (prompt-fission γ unmodeled,
+  // §11); it lands with AmBe (M7d), folded into the γ total then.
+  /** Neutron dose-rate series (Sv/s) over `curveX`; null when no neutron source / stale. */
+  neutronDoseSeries = $state<DoseOk | null>(null);
+  /** Loud neutron-path error (#3) — its own field so a neutron failure can't blank γ/β. */
+  neutronDoseError = $state<string>("");
 
   // -- shield builder (M6g, §9) ---------------------------------------------
   // A single-layer shield (§13 #2; multi-layer is post-v1). A shield change is a pure
@@ -275,6 +303,19 @@ export class AppState {
   /** β ACCUMULATED skin dose (Gy) over the same window. */
   get betaAccumulated(): TrapzResult | null {
     const s = this.betaDoseSeries;
+    if (!s) return null;
+    return trapzWindow(this.curveX, s.rate_si, this.cursorOffsetS, this.cursorOffsetS + this.exposureS);
+  }
+
+  // -- neutron at the cursor (M7b; same Sv quantity as γ — these DO sum) -----
+  /** n dose-RATE (Sv/s) at the cursor; null when no neutron source/series. */
+  get neutronRateAtCursor(): number | null {
+    const s = this.neutronDoseSeries;
+    return s ? interpAt(this.curveX, s.rate_si, this.cursorOffsetS) : null;
+  }
+  /** n ACCUMULATED dose (Sv) over [cursor, cursor+exposure] — ∫rate dt (#2, §11). */
+  get neutronAccumulated(): TrapzResult | null {
+    const s = this.neutronDoseSeries;
     if (!s) return null;
     return trapzWindow(this.curveX, s.rate_si, this.cursorOffsetS, this.cursorOffsetS + this.exposureS);
   }
@@ -449,6 +490,7 @@ export class AppState {
     const qErr = this.validateQuantity(quantity);
     if (qErr) return qErr;
     this.entries = [...this.entries, { name: trimmed, quantity, unit }];
+    this.neutronSource = null; // a hand-edited inventory is no longer a prebuilt source (orphan guard)
     await this.solve();
     return null;
   }
@@ -456,6 +498,7 @@ export class AppState {
   async removeEntry(index: number): Promise<void> {
     if (index < 0 || index >= this.entries.length) return;
     this.entries = this.entries.filter((_, i) => i !== index);
+    this.neutronSource = null; // hand-edit drops the prebuilt-source identity (orphan guard, M7)
     await this.solve();
   }
 
@@ -467,6 +510,7 @@ export class AppState {
       if (qErr) return qErr;
     }
     this.entries = this.entries.map((e, i) => (i === index ? { ...e, ...patch } : e));
+    this.neutronSource = null; // hand-edit drops the prebuilt-source identity (orphan guard, M7)
     await this.solve();
     return null;
   }
@@ -614,6 +658,7 @@ export class AppState {
       this.curveX = [];
       this.cursorOffsetS = 0;
       this.curveError = "";
+      this.neutronSource = null; // no inventory ⇒ no prebuilt source
       this.clearDose();
       this.clearChain();
       this.errorMsg = "";
@@ -808,6 +853,31 @@ export class AppState {
     this.gammaDoseSeriesBare = bare;
     this.bremsSeries = b.bremsstrahlung ?? null;
     this.gammaThicknessCoeffs = thickness;
+
+    // Neutron (M7b, §6.3): only for a prebuilt neutron source. Computed SEPARATELY from the
+    // γ/β path — a neutron failure sets its own error and nulls only its series, never
+    // blanking the γ/β breakdown (advisor orphan guard; #3). UNSHIELDED in v1 (no `shield`
+    // arg — hydrogenous neutron shielding is deferred, §6.3); a present γ shield is surfaced
+    // in the UI as not attenuating n, not silently applied. Same quantity/geometry as γ so
+    // the two are directly comparable and summable (both Sv).
+    this.neutronDoseError = "";
+    if (this.neutronSource) {
+      const nq = this.client.neutron_dose(this.handle, {
+        times_s: times,
+        source: this.neutronSource,
+        quantity: this.doseQuantity,
+        distance_m: this.doseDistanceM,
+        geometry,
+      });
+      if (nq.ok) {
+        this.neutronDoseSeries = nq;
+      } else {
+        this.neutronDoseSeries = null;
+        this.neutronDoseError = `${nq.error.type}: ${nq.error.message}`;
+      }
+    } else {
+      this.neutronDoseSeries = null;
+    }
   }
 
   /**
@@ -837,6 +907,8 @@ export class AppState {
     this.gammaDoseSeriesBare = null;
     this.bremsSeries = null;
     this.gammaThicknessCoeffs = null;
+    this.neutronDoseSeries = null;
+    this.neutronDoseError = "";
   }
 
   /** Clear the dose breakdown (empty / failed solve). */
@@ -918,6 +990,7 @@ export class AppState {
       entries: this.entries.map((e) => ({ ...e })),
       precision: this.precision,
       referenceTimeS: this.referenceTimeS,
+      neutronSource: this.neutronSource, // prebuilt source key (M7b v3)
       // view (M6h)
       axis: this.axis,
       activityUnit: this.activityUnit,
@@ -964,6 +1037,7 @@ export class AppState {
     this.entries = parsed.entries.map((e) => ({ ...e }));
     this.precision = parsed.precision;
     this.referenceTimeS = parsed.referenceTimeS;
+    this.neutronSource = parsed.neutronSource; // restore the prebuilt-source key (M7b v3)
     this.axis = parsed.axis;
     this.activityUnit = parsed.activityUnit;
     this.massUnit = parsed.massUnit;
@@ -987,6 +1061,24 @@ export class AppState {
 
   async loadFile(file: File): Promise<string | null> {
     return this.loadFromText(await readStateFile(file));
+  }
+
+  /**
+   * Load a prebuilt catalog source (M7 / §8): replace the inventory with the source's
+   * named entries + its reference time (source-age) + its optional neutron-source key,
+   * then re-solve. Mirrors `loadFromText`'s direct-assign-before-`solve()` order (one
+   * recompute pass), but the manifest is trusted so there is nothing to validate/clamp —
+   * the engine validates the entries loudly on solve as the backstop (#3). The cursor is
+   * left at `solve()`'s midpoint home, which lands mid-evolution so the §5 equilibrium
+   * demos (Cs-137 secular, Mo-99/Tc-99m transient) are visible immediately on load.
+   * Returns the error message on a failed solve, else null.
+   */
+  async loadSource(source: PrebuiltSource): Promise<string | null> {
+    this.entries = source.entries.map((e) => ({ ...e }));
+    this.referenceTimeS = source.referenceTimeS ?? 0;
+    this.neutronSource = source.neutronSource ?? null; // set AFTER nothing can null it (not a hand-edit)
+    await this.solve();
+    return this.status === "error" ? this.errorMsg : null;
   }
 
   /** Clear the inventory (releases the handle). */

@@ -5,11 +5,12 @@
   // the exposure makes NO bridge call (the M6d smooth-slider payoff). It only ever
   // calls store SETTERS, never the BridgeClient, and never `solve()`.
   //
-  // The load-bearing honesty rule (M6f-dose.md #1; §6.2 LOCKED): γ (and neutron, M7)
-  // are Sv (H*(10)/effective); β is a DIFFERENT quantity — Gy at 7 mg/cm² (Hp(0.07),
-  // w_R=1). They render against SEPARATE y-axes and are NEVER summed into one total.
-  // Accumulated dose INTEGRATES the rate over the exposure window (the store getters),
-  // never rate×time (#2; §11). Neutron is grayed for user inventories (§6.3 gate).
+  // The load-bearing honesty rule (M6f-dose.md #1; §6.2 LOCKED): γ AND neutron are Sv
+  // (H*(10)/effective) — the SAME quantity, so they DO sum (the stacked-bar total, the
+  // γ+n distance curve); β is a DIFFERENT quantity — Gy at 7 mg/cm² (Hp(0.07), w_R=1) —
+  // on its own axis and NEVER summed in. Accumulated dose INTEGRATES the rate over the
+  // exposure window (the store getters), never rate×time (#2; §11). Neutron is live ONLY
+  // for a prebuilt neutron source (M7b); grayed for user inventories (§6.3 gate).
   import Plotly from "plotly.js-basic-dist-min";
   import { onDestroy } from "svelte";
   import { appState } from "./state.svelte";
@@ -84,11 +85,20 @@
   const qLabel = $derived(doseQuantityLabel(appState.doseQuantity, appState.doseGeometry));
   const qShort = $derived(appState.doseQuantity === "effective" ? "E" : "H*(10)");
 
+  // Neutron (M7b, §6.3): live ONLY for a prebuilt neutron source (the gray-out gate). γ and
+  // n are the SAME quantity (both Sv) so they stack in the breakdown total — unlike β (Gy).
+  const nRate = $derived(appState.neutronRateAtCursor); // Sv/s, null when no neutron source
+  const nAcc = $derived(appState.neutronAccumulated); // {value Sv, truncated}
+  const hasNeutron = $derived(appState.neutronSource !== null);
+  const nError = $derived(appState.neutronDoseError);
+
   // The dose breakdown needs the rate series (a stable inventory has none).
   const hasDose = $derived(appState.gammaDoseSeries !== null && appState.curveX.length > 0);
   // Below-floor X-ray skips etc. are recorded at build time on the γ series (#3).
   const gammaWarnings = $derived(appState.gammaDoseSeries?.warnings ?? []);
-  const truncated = $derived((gAcc?.truncated ?? false) || (bAcc?.truncated ?? false));
+  const truncated = $derived(
+    (gAcc?.truncated ?? false) || (bAcc?.truncated ?? false) || (nAcc?.truncated ?? false),
+  );
 
   // Per-line γ table at the cursor (M6f-2, §9). `gLines` is null when the per-nuclide
   // activity is unavailable; we distinguish that (show a note) from "no decomposition at
@@ -108,40 +118,66 @@
   // per-segment whiskers ambiguous (§9). The whisker uses the CONSERVATIVE upper bound
   // (γ 15%, β 30%); the caption shows the full ±10–15% / ±20–30% range. On a log axis
   // ±15% stays well clear of zero (×0.85 / ×1.15), so the bars render sensibly.
-  function whisker(modality: "gamma" | "beta"): Partial<Plotly.ErrorBar> {
-    if (!isLog) return { visible: false };
-    return {
-      type: "percent",
-      value: MODALITY_UNCERTAINTY[modality].hi * 100,
-      visible: true,
-      thickness: 1.5,
-      width: 8,
-    };
+  // γ/β are roughly symmetric registers (±10–15 % / ±20–30 %) → a Plotly `percent` whisker.
+  // Neutron is ORDER-OF-MAGNITUDE — symmetric-percent would push the lower bound negative on
+  // a log axis, so it gets an explicit MULTIPLICATIVE (×/÷ ~3) asymmetric whisker computed
+  // from the bar's value (§11 "×/÷ a few"). `yPerHour` is needed for that branch.
+  function whisker(modality: "gamma" | "beta" | "neutron", yPerHour: number | null): Partial<Plotly.ErrorBar> {
+    if (!isLog || yPerHour == null) return { visible: false };
+    const u = MODALITY_UNCERTAINTY[modality];
+    if (modality === "neutron") {
+      const f = 1 + u.hi; // hi=2.0 → up to ×3, down to ÷3
+      return {
+        type: "data",
+        symmetric: false,
+        array: [yPerHour * (f - 1)],
+        arrayminus: [yPerHour * (1 - 1 / f)],
+        visible: true,
+        thickness: 1.5,
+        width: 8,
+      };
+    }
+    return { type: "percent", value: u.hi * 100, visible: true, thickness: 1.5, width: 8 };
   }
 
   function barTraces(): Partial<Plotly.PlotData>[] {
-    return [
+    const traces: Partial<Plotly.PlotData>[] = [
       {
         type: "bar",
         name: `γ (${qShort}, Sv)`,
-        x: ["γ"],
+        x: ["γ + n"],
         y: [perHour(gRate)],
         yaxis: "y",
         marker: { color: MODALITY_COLORS.gamma },
-        error_y: whisker("gamma"),
+        error_y: whisker("gamma", perHour(gRate)),
         hovertemplate: "γ %{y:.3e} Sv/h<extra></extra>",
       } as Partial<Plotly.PlotData>,
-      {
-        type: "bar",
-        name: "β skin Hp(0.07), Gy",
-        x: ["β"],
-        y: [perHour(bRate)],
-        yaxis: "y2",
-        marker: { color: MODALITY_COLORS.beta },
-        error_y: whisker("beta"),
-        hovertemplate: "β %{y:.3e} Gy/h<extra></extra>",
-      } as Partial<Plotly.PlotData>,
     ];
+    // Neutron shares the γ Sv axis and the same x-category → in stacked mode it sits ON TOP of
+    // γ (a true Sv total); in grouped mode it stands beside γ with its order-of-mag whisker.
+    if (hasNeutron) {
+      traces.push({
+        type: "bar",
+        name: `n (${qShort}, Sv)`,
+        x: ["γ + n"],
+        y: [perHour(nRate)],
+        yaxis: "y",
+        marker: { color: MODALITY_COLORS.neutron },
+        error_y: whisker("neutron", perHour(nRate)),
+        hovertemplate: "n %{y:.3e} Sv/h<extra></extra>",
+      } as Partial<Plotly.PlotData>);
+    }
+    traces.push({
+      type: "bar",
+      name: "β skin Hp(0.07), Gy",
+      x: ["β"],
+      y: [perHour(bRate)],
+      yaxis: "y2",
+      marker: { color: MODALITY_COLORS.beta },
+      error_y: whisker("beta", perHour(bRate)),
+      hovertemplate: "β %{y:.3e} Gy/h<extra></extra>",
+    } as Partial<Plotly.PlotData>);
+    return traces;
   }
 
   // -- dose-vs-distance curve with the γ uncertainty fill band (M6f-2, §9) -------------
@@ -153,59 +189,75 @@
   // square distance model) and not shown here; neutron (order-of-mag) arrives with the
   // prebuilt sources (M7) — that is where the "tight γ vs fat n" contrast lands (§9).
   const DIST_RGBA = "rgba(78,121,167,0.18)"; // MODALITY_COLORS.gamma at low alpha (band fill)
+  const DIST_RGBA_N = "rgba(89,161,79,0.16)"; // MODALITY_COLORS.neutron at low alpha (n band)
 
-  function distanceTraces(): Partial<Plotly.PlotData>[] {
-    const rate0 = gRate; // Sv/s at the current distance
-    const d0 = appState.doseDistanceM;
-    if (rate0 == null || !(d0 > 0)) return [];
-    const u = MODALITY_UNCERTAINTY.gamma;
-    const lo = Math.max(d0 / 10, 0.01);
-    const hi = d0 * 10;
-    const N = 48;
-    const xs: number[] = [];
+  /**
+   * One modality's dose-vs-distance band + centre line. Both γ and n are EXACT inverse-square
+   * here (point source, no shield, no air; §11) → reconstructed client-side from the cursor
+   * rate `r(d)=r(d₀)·(d₀/d)²`, zero engine calls. γ's register is roughly symmetric (±15 %);
+   * n's is ORDER-OF-MAGNITUDE → a MULTIPLICATIVE ×/÷(1+hi) band (so the lower edge stays
+   * positive on the log axis). The fat-n vs tight-γ band separation IS the teaching point (§9).
+   */
+  function bandTraces(
+    rate0: number,
+    d0: number,
+    xs: number[],
+    color: string,
+    fill: string,
+    name: string,
+    modality: "gamma" | "neutron",
+  ): Partial<Plotly.PlotData>[] {
+    const u = MODALITY_UNCERTAINTY[modality];
+    const f = 1 + u.hi;
     const yc: number[] = [];
     const yUp: number[] = [];
     const yLo: number[] = [];
-    const la = Math.log10(lo);
-    const lb = Math.log10(hi);
-    for (let i = 0; i < N; i++) {
-      const d = 10 ** (la + ((lb - la) * i) / (N - 1));
+    for (const d of xs) {
       const r = rate0 * (d0 / d) ** 2 * 3600; // Sv/h
-      xs.push(d);
       yc.push(r);
-      yUp.push(r * (1 + u.hi));
-      yLo.push(r * (1 - u.hi));
+      // γ: symmetric ±hi; n: multiplicative ×f / ÷f (order-of-magnitude).
+      yUp.push(modality === "neutron" ? r * f : r * (1 + u.hi));
+      yLo.push(modality === "neutron" ? r / f : r * (1 - u.hi));
     }
     return [
-      // lower edge (invisible line) then upper edge filling down to it = the shaded band.
       { x: xs, y: yLo, mode: "lines", line: { width: 0 }, hoverinfo: "skip", showlegend: false } as Partial<Plotly.PlotData>,
-      {
-        x: xs,
-        y: yUp,
-        mode: "lines",
-        line: { width: 0 },
-        fill: "tonexty",
-        fillcolor: DIST_RGBA,
-        hoverinfo: "skip",
-        showlegend: false,
-      } as Partial<Plotly.PlotData>,
+      { x: xs, y: yUp, mode: "lines", line: { width: 0 }, fill: "tonexty", fillcolor: fill, hoverinfo: "skip", showlegend: false } as Partial<Plotly.PlotData>,
       {
         x: xs,
         y: yc,
         mode: "lines",
-        line: { color: MODALITY_COLORS.gamma, width: 2 },
-        name: `γ ${qShort}`,
+        line: { color, width: 2 },
+        name,
         hovertemplate: "%{x:.3g} m → %{y:.3e} Sv/h<extra></extra>",
       } as Partial<Plotly.PlotData>,
     ];
   }
 
+  function distanceTraces(): Partial<Plotly.PlotData>[] {
+    const d0 = appState.doseDistanceM;
+    if (gRate == null || !(d0 > 0)) return [];
+    const lo = Math.max(d0 / 10, 0.01);
+    const hi = d0 * 10;
+    const N = 48;
+    const xs: number[] = [];
+    const la = Math.log10(lo);
+    const lb = Math.log10(hi);
+    for (let i = 0; i < N; i++) xs.push(10 ** (la + ((lb - la) * i) / (N - 1)));
+    const traces = bandTraces(gRate, d0, xs, MODALITY_COLORS.gamma, DIST_RGBA, `γ ${qShort}`, "gamma");
+    // The §9 contrast: overlay the neutron curve when a prebuilt source is loaded.
+    if (hasNeutron && nRate != null && nRate > 0) {
+      traces.push(...bandTraces(nRate, d0, xs, MODALITY_COLORS.neutron, DIST_RGBA_N, "n H*(10)", "neutron"));
+    }
+    return traces;
+  }
+
   function distanceLayout(): Partial<Plotly.Layout> {
     return {
       margin: { l: 72, r: 20, t: 10, b: 42 },
-      showlegend: false,
+      showlegend: hasNeutron, // legend only matters once there are two curves (γ + n)
+      legend: { orientation: "h", y: -0.2 },
       xaxis: { type: "log", title: { text: "distance (m)" }, automargin: true },
-      yaxis: { type: "log", title: { text: `γ ${qShort} dose rate (Sv·h⁻¹)` }, automargin: true },
+      yaxis: { type: "log", title: { text: `${hasNeutron ? "γ + n" : "γ"} ${qShort} dose rate (Sv·h⁻¹)` }, automargin: true },
       shapes: [
         {
           type: "line",
@@ -256,6 +308,7 @@
   $effect(() => {
     void gRate;
     void bRate;
+    void nRate;
     void mode;
     void qShort;
     const el = plotEl;
@@ -271,6 +324,7 @@
   // and the quantity label. Pure client-side reconstruction — no bridge call (§3).
   $effect(() => {
     void gRate;
+    void nRate;
     void appState.doseDistanceM;
     void qShort;
     const el = distEl;
@@ -398,22 +452,49 @@
           </div>
         </div>
 
-        <div class="card neutron grayed" data-testid="dose-neutron">
-          <div class="card-h">
-            <span class="swatch" style="background:{MODALITY_COLORS.neutron}"></span>
-            n — neutron
+        {#if hasNeutron}
+          <div class="card neutron" data-testid="dose-neutron" data-rate-si={nRate ?? ""}>
+            <div class="card-h">
+              <span class="swatch" style="background:{MODALITY_COLORS.neutron}"></span>
+              n — {qLabel} <span class="unit">(Sv)</span>
+            </div>
+            {#if nError}
+              <div class="big">—</div>
+              <div class="sub error">⚠ {nError}</div>
+            {:else}
+              <div class="big">{nRate == null ? "—" : formatDoseRate(nRate, "Sv")}</div>
+              <div class="sub muted">
+                accumulated: <strong>{nAcc == null ? "—" : formatDose(nAcc.value, "Sv")}</strong>
+                — same quantity as γ, summed in the total
+              </div>
+            {/if}
           </div>
-          <div class="big">N/A</div>
-          <div class="sub muted">prebuilt neutron sources only (Cf-252…); arrives in M7</div>
-        </div>
+        {:else}
+          <div class="card neutron grayed" data-testid="dose-neutron">
+            <div class="card-h">
+              <span class="swatch" style="background:{MODALITY_COLORS.neutron}"></span>
+              n — neutron
+            </div>
+            <div class="big">N/A</div>
+            <div class="sub muted">prebuilt neutron sources only (load Cf-252 from the catalog)</div>
+          </div>
+        {/if}
       </div>
+
+      {#if hasNeutron && appState.shieldActive}
+        <p class="note warn" data-testid="dose-neutron-unshielded">
+          ⚠ the shield attenuates γ only — neutron dose is shown UNSHIELDED (hydrogenous
+          neutron shielding is not modeled in v1, §6.3), so the γ+n total understates the
+          shield's neutron transparency, not overstates it.
+        </p>
+      {/if}
 
       <!-- Breakdown bar: dual-axis (γ→Sv, β→Gy); never one summed scale (#1). The
            grouped (log) view carries the per-modality uncertainty whiskers (§9/§11). -->
       <div class="bar-head">
         <span class="muted">
           Breakdown (dose rate at cursor){#if isLog}
-            · whiskers = γ {MODALITY_UNCERTAINTY.gamma.label}, β {MODALITY_UNCERTAINTY.beta.label}{/if}
+            · whiskers = γ {MODALITY_UNCERTAINTY.gamma.label}, β {MODALITY_UNCERTAINTY.beta.label}{#if hasNeutron}, n {MODALITY_UNCERTAINTY.neutron.label}{/if}{/if}
         </span>
         <div class="mode-toggle" role="group" aria-label="Breakdown scale" data-testid="dose-mode">
           <button class:selected={mode === "stacked"} onclick={() => (mode = "stacked")}>
@@ -430,16 +511,18 @@
            inverse-square); β is contact-dominated, n arrives with prebuilt sources (M7). -->
       <div class="bar-head">
         <span class="muted">
-          Dose vs distance — γ ({qShort}), shaded ±band = {MODALITY_UNCERTAINTY.gamma.label} register
+          Dose vs distance — {hasNeutron ? "γ + n" : "γ"} ({qShort}); shaded bands = γ
+          {MODALITY_UNCERTAINTY.gamma.label}{#if hasNeutron}, n {MODALITY_UNCERTAINTY.neutron.label}{/if} registers
         </span>
       </div>
       <div class="plot dist" data-testid="dose-distance-plot" bind:this={distEl}></div>
       <p class="hint muted">
-        γ falls as 1/distance² (exact here — v1 models no air attenuation, §11); the band is
-        the model's accuracy register, not statistical error. β is a contact/near-contact
-        skin hazard (not inverse-square) and is shown only in the breakdown bar; neutron
-        (order-of-magnitude) lands with the prebuilt sources (M7), where the tight-γ-vs-fat-n
-        contrast becomes the point.
+        γ{#if hasNeutron} and n{/if} fall as 1/distance² (exact here — v1 models no air
+        attenuation, §11); the bands are the models' accuracy registers, not statistical error.
+        {#if hasNeutron}The TIGHT γ band vs the wide order-of-magnitude n band is the point — the
+        neutron source term is tabulated to ×/÷ a few (§11).{/if}
+        β is a contact/near-contact skin hazard (not inverse-square) and is shown only in the
+        breakdown bar.
       </p>
 
       <!-- Per-line γ table (§9): "the gamma slice expands to a per-line table", colored by
@@ -642,6 +725,9 @@
   }
   .sub {
     font-size: 0.82rem;
+  }
+  .sub.error {
+    color: #b3261e;
   }
   .bar-head {
     display: flex;

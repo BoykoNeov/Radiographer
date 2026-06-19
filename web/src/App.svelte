@@ -3,6 +3,8 @@
   import { boot, type BootProgress } from "./lib/pyodide-boot";
   import { runSelfCheck, type SelfCheckReport } from "./lib/selfcheck";
   import { appState } from "./lib/state.svelte";
+  import Sources from "./lib/Sources.svelte";
+  import { PREBUILT_SOURCES } from "./lib/sources";
   import Inventory from "./lib/Inventory.svelte";
   import Curves from "./lib/Curves.svelte";
   import TimeControl from "./lib/TimeControl.svelte";
@@ -36,6 +38,7 @@
       appState.setClient(client);
       window.__APP__ = appState;
       window.__BRIDGE__ = client; // gate: assert released handles are dead + no leak
+      window.__SOURCES__ = PREBUILT_SOURCES; // gate: assert the M7 catalog manifest is present
       phase = "ready";
 
       if (wantSelfCheck) {
@@ -87,6 +90,7 @@
   {/if}
 
   {#if phase === "ready"}
+    <Sources />
     <Inventory />
     <Curves />
     <TimeControl />

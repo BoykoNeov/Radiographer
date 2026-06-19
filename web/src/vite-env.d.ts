@@ -31,6 +31,8 @@ declare global {
     __M6A_RESULT__?: unknown;
     __APP__?: unknown;
     __BRIDGE__?: unknown;
+    // M7: the prebuilt source catalog manifest, exposed for the gate to assert it loaded.
+    __SOURCES__?: unknown;
     // M6e: the live Cytoscape instance (canvas → no DOM to assert against), exposed
     // for the headless gate to read node/edge data, sizes, and positions.
     __CY__?: unknown;

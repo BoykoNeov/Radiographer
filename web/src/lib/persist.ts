@@ -38,6 +38,8 @@ export interface PersistableState {
   entries: InventoryEntry[];
   precision: Precision;
   referenceTimeS: number;
+  // prebuilt neutron source key (v3); null for a user-style inventory (§6.3 gate, M7b)
+  neutronSource: string | null;
   // view (v2)
   axis: Axis;
   activityUnit: string;
@@ -58,7 +60,10 @@ export interface PersistableState {
 
 /** The defaults for any section a (v1 or partial) file omits — mirror the store's initial
  *  values so an omitted section round-trips to the same view as a fresh app. */
-export const PERSIST_DEFAULTS: Omit<PersistableState, "entries" | "precision" | "referenceTimeS"> = {
+export const PERSIST_DEFAULTS: Omit<
+  PersistableState,
+  "entries" | "precision" | "referenceTimeS" | "neutronSource"
+> = {
   axis: "activity",
   activityUnit: "Bq",
   massUnit: "g",
@@ -73,7 +78,7 @@ export const PERSIST_DEFAULTS: Omit<PersistableState, "entries" | "precision" | 
 };
 
 export const STATE_SCHEMA = "radiographer.app-state";
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 
 export class PersistError extends Error {
   constructor(message: string) {
@@ -97,6 +102,7 @@ interface Envelope {
     entries: InventoryEntry[];
     precision: Precision;
     reference_time_s: number;
+    neutron_source: string | null;
   };
   view: {
     axis: Axis;
@@ -130,6 +136,7 @@ export function serializeState(state: PersistableState): string {
       })),
       precision: state.precision,
       reference_time_s: state.referenceTimeS,
+      neutron_source: state.neutronSource,
     },
     view: {
       axis: state.axis,
@@ -246,6 +253,18 @@ export function deserializeState(text: string): PersistableState {
   // t=0 is optional for forward/backward tolerance, but a present value must be a number ≥ 0.
   const referenceTimeS = reqNumber(inv, "reference_time_s", "inventory.reference_time_s", 0, 0);
 
+  // prebuilt neutron source (v3; optional → null). A present value must be a non-empty
+  // string (the engine fails loud on an unknown source key as the backstop, §6.3).
+  let neutronSource: string | null = null;
+  if (inv.neutron_source !== undefined && inv.neutron_source !== null) {
+    if (typeof inv.neutron_source !== "string" || inv.neutron_source.length === 0) {
+      throw new PersistError(
+        `inventory.neutron_source must be null or a non-empty string (got ${JSON.stringify(inv.neutron_source)})`,
+      );
+    }
+    neutronSource = inv.neutron_source;
+  }
+
   // -- view (v2; optional → defaults) --
   const view = obj.view === undefined ? {} : obj.view;
   if (!isObject(view)) throw new PersistError("view section must be an object");
@@ -292,6 +311,7 @@ export function deserializeState(text: string): PersistableState {
     entries,
     precision,
     referenceTimeS,
+    neutronSource,
     axis,
     activityUnit,
     massUnit,
