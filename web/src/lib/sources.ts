@@ -128,6 +128,33 @@ export const PREBUILT_SOURCES: PrebuiltSource[] = [
     ],
   },
 
+  // --- Weapons material -----------------------------------------------------
+  {
+    id: "pu-pit",
+    label: "Weapons-grade Pu pit",
+    category: "Weapons material",
+    blurb:
+      "Weapons-grade plutonium — an α emitter that reads almost NOTHING on an external " +
+      "survey meter yet is deadly if inhaled (external ≠ internal, §12). Scrub time " +
+      "forward to watch the Am-241 (59.5 keV γ) daughter grow in from Pu-241 decay.",
+    // ~4 kg weapons-grade Pu (one pit-scale mass), illustrative teaching composition:
+    // ~93.5 % Pu-239 / 6 % Pu-240 / 0.5 % Pu-241 by mass (IAEA "weapons-grade" = <7 %
+    // Pu-240). Trace Pu-238/Pu-242 (<0.05 %) omitted — negligible to the external field.
+    // These are representative quantities (editable after load), NOT regression-grade data.
+    entries: [
+      { name: "Pu-239", quantity: 3740, unit: "g" },
+      { name: "Pu-240", quantity: 240, unit: "g" },
+      { name: "Pu-241", quantity: 20, unit: "g" },
+    ],
+    // Freshly cast/separated pit (t=0): no Am-241 yet, so its in-growth is visible on the
+    // timeline. Am-241 (t½ 432 y, in-grows from Pu-241 t½ 14.3 y) is the real external-γ story.
+    referenceTimeS: 0,
+    caveat:
+      "External dose shown is α + γ (incl. in-growing Am-241). A real Pu pit ALSO emits " +
+      "~1000 n/s/g of Pu-240 spontaneous-fission neutrons — that neutron dose is NOT modeled " +
+      "here (v1), so the external total is an UNDERESTIMATE for this source (§11).",
+  },
+
   // --- Neutron sources ------------------------------------------------------
   {
     id: "cf252-source",

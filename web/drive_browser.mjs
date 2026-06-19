@@ -1677,6 +1677,46 @@ async function runM7(page) {
     `entries=${JSON.stringify(simple.entries)}, neutronSource=${simple.neutronSource}, grayed=${simple.grayed}, registry=${simple.registry}`,
   );
 
+  // 1b) The Pu PIT preset (M7d) loads via its card → its α/γ inventory solves, the in-growing
+  //     Am-241 daughter (from Pu-241, the real external-γ story) is in the closure, and neutron
+  //     stays GRAYED: the pit's Pu-240 SPONTANEOUS-FISSION neutron output is a DOCUMENTED defer
+  //     (§11), never silently modeled. The card carries the loud "neutron NOT modeled" caveat.
+  const PIT = '[data-testid="source-pu-pit"]';
+  const pitManifest = await page.evaluate(() => {
+    const p = (window.__SOURCES__ || []).find((x) => x.id === "pu-pit");
+    return p
+      ? { found: true, neutronSource: p.neutronSource ?? null, caveat: p.caveat || "" }
+      : { found: false };
+  });
+  await page.click(PIT);
+  await page.waitForFunction(
+    "window.__APP__.status === 'solved' && window.__APP__.closure.includes('Am-241')",
+    null,
+    { timeout: 30_000 },
+  );
+  const pit = await page.evaluate(() => {
+    const app = window.__APP__;
+    const card = document.querySelector('[data-testid="dose-neutron"]');
+    return {
+      entries: app.entries.map((e) => e.name),
+      neutronSource: app.neutronSource,
+      hasAm241: app.closure.includes("Am-241"),
+      grayed: card ? card.getAttribute("data-rate-si") === null : null,
+    };
+  });
+  record(
+    "M7d Pu pit: loads via card → solves, Am-241 in-growth in closure, neutron GRAYED (SF-n defer, §11)",
+    pitManifest.found &&
+      pitManifest.neutronSource === null &&
+      /neutron/i.test(pitManifest.caveat) &&
+      pit.neutronSource === null &&
+      pit.hasAm241 &&
+      pit.grayed === true &&
+      pit.entries.length === 3 &&
+      pit.entries[0] === "Pu-239",
+    `entries=${JSON.stringify(pit.entries)}, Am-241=${pit.hasAm241}, neutronSource=${pit.neutronSource}, grayed=${pit.grayed}, caveatNeutron=${/neutron/i.test(pitManifest.caveat)}`,
+  );
+
   // 2) The Cf-252 NEUTRON source loads via its card → the neutron path lights up: source key
   //    set, the spectrum-averaged coefficient matches the M5 validated triangle (H*(10) ≈ 383
   //    pSv·cm²), the neutron card shows a positive rate, the breakdown bar gains an n trace on
