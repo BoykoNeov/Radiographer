@@ -234,3 +234,30 @@ def test_off_grid_energy_raises():
     """Energy interpolation is M3's job; the loader evaluates only at grid energies."""
     with pytest.raises(bu.BuildupError):
         bu.buildup_factor("water", 1.234, 5.0)   # 1.234 MeV is not a tabulated point
+
+
+# --------------------------------------------------------------------------- #
+# Buildup-fit cap: beyond MFP_FIT_MAX the G-P form overflows float64 and is
+# physically invalid (extrapolation). B is frozen at B(MFP_FIT_MAX), finite, no raise.
+# docs/plans/gamma-buildup-overflow.md.
+# --------------------------------------------------------------------------- #
+
+def test_gp_buildup_capped_beyond_fit_range():
+    """At a few hundred mfp the raw ``K**mfp`` overflows; the cap must make B finite and
+    equal to its frozen value at the fit limit — and be a no-op at/below the limit."""
+    # lead @ 0.06 MeV (near Am-241's 59 keV line through thick lead → hundreds of mfp).
+    args = tuple(bu.gp_coefficients("lead")[bu._grid_index("lead", 0.06)][k] for k in GP_KEYS)
+    b_at_limit = bu.gp_buildup(*args, bu.MFP_FIT_MAX)
+    for deep in (bu.MFP_FIT_MAX + 1e-9, 100.0, 285.0, 1000.0):
+        b_deep = bu.gp_buildup(*args, deep)
+        assert math.isfinite(b_deep), f"B({deep} mfp) not finite — overflow not capped"
+        assert b_deep == b_at_limit, f"B not frozen at the fit limit for {deep} mfp"
+    # The cap must NOT perturb anything inside the validated range.
+    assert bu.gp_buildup(*args, bu.MFP_FIT_MAX) == b_at_limit
+
+
+def test_buildup_factor_finite_for_thick_lead_low_energy():
+    """The dose-path symptom at the loader level: a low-energy line through thick lead is
+    hundreds of mfp and must reconstruct a finite B (no OverflowError)."""
+    b = bu.buildup_factor("lead", 0.06, 300.0)
+    assert math.isfinite(b) and b >= 1.0

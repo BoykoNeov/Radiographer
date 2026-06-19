@@ -118,6 +118,33 @@ def _normalize_shield(shield) -> Optional[list[tuple[str, float]]]:
     return out or None
 
 
+def _stack_transmission(layers: Sequence[tuple[str, float]], E_MeV: float) -> tuple[float, float]:
+    """Shared core of :func:`transmission`/:func:`stack_transmission`.
+
+    Returns ``(B_L(E, Σμx)·exp(−Σμx), Σμx)`` — the broad-beam shield factor and the total
+    penetration depth in mean free paths. The second value lets the dose engine surface a §11
+    honesty note when the depth exceeds the buildup fit range (:data:`buildup.MFP_FIT_MAX`),
+    where ``B`` is frozen by :func:`engine.buildup.gp_buildup`. Both public entry points route
+    through here so the n=1 case is bit-for-bit identical (the exact-equality stack tests).
+    """
+    layers = list(layers)
+    if not layers:
+        return 1.0, 0.0
+    total_mfp = 0.0
+    for material, thickness_cm in layers:
+        if not buildup.has_material(material):
+            # Force the same loud failure the last-layer interp_buildup would give, but for
+            # an interior layer too — never let it slip through as attenuation-only.
+            raise buildup.BuildupError(
+                f"shield layer {material!r} has no ANS-6.4.3 buildup data; every layer in a "
+                "stack must have buildup (no silent attenuation-only surrogate, §6.5)."
+            )
+        mu_lin = pi.interp_mu_rho(material, E_MeV) * attenuation.density(material)  # cm⁻¹
+        total_mfp += mu_lin * thickness_cm
+    b = pi.interp_buildup(layers[-1][0], E_MeV, total_mfp)  # detector-side material
+    return b * math.exp(-total_mfp), total_mfp
+
+
 def transmission(material: str, E_MeV: float, thickness_cm: float) -> float:
     """Broad-beam transmission ``B(E, μx)·exp(−μx)`` of a single ``material`` layer.
 
@@ -126,10 +153,7 @@ def transmission(material: str, E_MeV: float, thickness_cm: float) -> float:
     ``μx`` in mean free paths. Off-grid energies raise :class:`OffGridError`. The
     :func:`stack_transmission` n=1 case is bit-for-bit identical to this.
     """
-    mu_lin = pi.interp_mu_rho(material, E_MeV) * attenuation.density(material)  # cm⁻¹
-    mfp = mu_lin * thickness_cm
-    b = pi.interp_buildup(material, E_MeV, mfp)
-    return b * math.exp(-mfp)
+    return _stack_transmission([(material, thickness_cm)], E_MeV)[0]
 
 
 def stack_transmission(layers: Sequence[tuple[str, float]], E_MeV: float) -> float:
@@ -149,22 +173,7 @@ def stack_transmission(layers: Sequence[tuple[str, float]], E_MeV: float) -> flo
     would otherwise contribute attenuation only, an invisible underestimate. A layer with no
     buildup raises :class:`engine.buildup.BuildupError`; off-grid energies raise OffGridError.
     """
-    layers = list(layers)
-    if not layers:
-        return 1.0
-    total_mfp = 0.0
-    for material, thickness_cm in layers:
-        if not buildup.has_material(material):
-            # Force the same loud failure the last-layer interp_buildup would give, but for
-            # an interior layer too — never let it slip through as attenuation-only.
-            raise buildup.BuildupError(
-                f"shield layer {material!r} has no ANS-6.4.3 buildup data; every layer in a "
-                "stack must have buildup (no silent attenuation-only surrogate, §6.5)."
-            )
-        mu_lin = pi.interp_mu_rho(material, E_MeV) * attenuation.density(material)  # cm⁻¹
-        total_mfp += mu_lin * thickness_cm
-    b = pi.interp_buildup(layers[-1][0], E_MeV, total_mfp)  # detector-side material
-    return b * math.exp(-total_mfp)
+    return _stack_transmission(layers, E_MeV)[0]
 
 
 class GammaDoseModel:
@@ -246,10 +255,15 @@ class GammaDoseModel:
         coeff = pi.interp_conversion(self.quantity, E_MeV, self.geometry)  # pSv·cm²
         return coeff * PSV_CM2_TO_SV_M2  # Sv·m²
 
-    def _shield_factor(self, E_MeV: float) -> float:
+    def _shield_factor(self, E_MeV: float) -> tuple[float, float]:
+        """Shield transmission and total penetration depth (mfp) at ``E_MeV``.
+
+        Returns ``(factor, total_mfp)``; the depth lets :meth:`_lines_for` flag the §11
+        buildup-cap honesty note when a line penetrates past :data:`buildup.MFP_FIT_MAX`.
+        """
         if self.shield is None:
-            return 1.0
-        return stack_transmission(self.shield, E_MeV)
+            return 1.0, 0.0
+        return _stack_transmission(self.shield, E_MeV)
 
     def _lines_for(self, nuclide: str) -> list[dict]:
         """Scored photon lines for ``nuclide``: ``[{E_MeV, yield, origin, coeff_si}]`` where
@@ -267,6 +281,8 @@ class GammaDoseModel:
             lines = override  # synthetic source (e.g. bremsstrahlung); bypasses has_emissions
 
         rows: list[dict] = []
+        n_capped = 0          # lines whose buildup was frozen at the fit limit (§11 note)
+        deepest_mfp = 0.0
         for line in lines:
             E = float(line["E_MeV"])
             y = float(line["yield"])
@@ -274,7 +290,10 @@ class GammaDoseModel:
                 continue
             try:
                 const = self._per_line_constant_si(E)
-                shield = self._shield_factor(E)
+                shield, total_mfp = self._shield_factor(E)
+                if total_mfp > buildup.MFP_FIT_MAX:
+                    n_capped += 1
+                    deepest_mfp = max(deepest_mfp, total_mfp)
             except pi.OffGridError as off:
                 if off.reason == pi.BELOW_FLOOR:
                     self.warnings.append(
@@ -300,6 +319,23 @@ class GammaDoseModel:
                     "yield": y,
                     "origin": line.get("origin"),
                     "coeff_si": const * y * shield,
+                }
+            )
+        if n_capped:
+            # §11: the deepest-penetrating lines exceed the ANS-6.4.3 buildup fit range, so B
+            # is frozen at B(MFP_FIT_MAX) rather than extrapolated (or overflowed). Their
+            # transmission is already ~0, so the cap changes the dose negligibly — but the
+            # extrapolation is surfaced, never silent. One aggregated note per nuclide.
+            self.warnings.append(
+                {
+                    "nuclide": nuclide,
+                    "reason": "buildup_capped",
+                    "message": (
+                        f"{n_capped} deep γ line(s) penetrate up to {deepest_mfp:.0f} mfp of "
+                        f"shielding, past the {buildup.MFP_FIT_MAX:g}-mfp ANS-6.4.3 buildup "
+                        "fit range; buildup frozen at the fit limit (transmission ~0, "
+                        "contribution negligible — extrapolation not silent, §11)."
+                    ),
                 }
             )
         return rows

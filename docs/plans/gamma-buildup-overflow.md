@@ -1,6 +1,8 @@
 # Follow-up — γ buildup OverflowError for thick high-Z + a low-energy line
 
-**Status:** OPEN (tracked; surfaced during M10, NOT introduced by it)
+**Status:** RESOLVED (2026-06-19). Buildup argument capped at the ANS-6.4.3 fit limit;
+the OverflowError is gone, the §11 honesty note is surfaced, and regression tests guard it.
+See "Resolution" below.
 **Severity:** a single shield/line combination crashes the whole γ dose panel with a raw
 `OverflowError`. Loud (not silent), but cryptic and over-broad. Pre-existing in the M6g/M3 γ path.
 
@@ -39,6 +41,34 @@ physically reasonable (the deep-penetration buildup of an already-negligible com
 §11 honesty line ("buildup extrapolated/capped beyond the fit range for very thick high-Z") and add
 a regression test (Am-241 59 keV + thick lead → finite, ~0 transmission, no raise). Repairs M6g for
 **every** low-energy source, independent of neutrons.
+
+## Resolution (2026-06-19)
+Implemented exactly as proposed — cap the **argument**, keep `exp(−mfp)` exact:
+
+- `engine/buildup.py`: new constant `MFP_FIT_MAX = 40.0` (the ANS-6.4.3 / NUREG-CR-5740 fit
+  validity bound). `gp_buildup` now clamps `mfp = min(mfp, MFP_FIT_MAX)` *inside the buildup
+  formula only* — so `B` freezes at `B(40)` for deeper penetration and `K**mfp` can no longer
+  overflow. No-op at/below 40 mfp, so every algebraic identity and tabulated check point is
+  bit-for-bit unchanged. The lowest layer is capped so **every** caller is protected.
+- `engine/dose.py`: `transmission`/`stack_transmission` now route through one shared core
+  `_stack_transmission(layers, E) → (T, total_mfp)` (keeps the exact-equality n=1 reduction).
+  `GammaDoseModel._lines_for` compares `total_mfp` against `buildup.MFP_FIT_MAX` (single source
+  of truth — never a hardcoded 40) and, per nuclide, appends one aggregated §11 warning
+  `reason="buildup_capped"` when deep lines were frozen. The exact `exp(−Σμx)` attenuation is
+  unchanged, so the transmission of those deep lines is ~0 and the dose moves negligibly.
+- `web/src/lib/Dose.svelte`: generalized the warnings `<summary>` copy (the list now also
+  carries buildup-cap notes; the `reason` field distinguishes them).
+
+**Tests added:** `tests/test_buildup_data.py` — `gp_buildup` finite + frozen at the limit for
+100–1000 mfp (no raise), no-op ≤40; `tests/test_dose_gamma.py` — Am-241 `ambient_H10` through
+5 cm lead builds with finite `coeff_si`, transmission `0 ≤ T < 1e-15`, and a `buildup_capped`
+warning present.
+
+**Verified:** the doc's exact bridge repro (`bridge.solve` Am-241 1 Ci → `bridge.dose`
+`ambient_H10`, 1 m, `[["lead", 5.0]]`) now returns `out["ok"] is True` (was `OverflowError`);
+full `pytest` green; `npm run build` 0 errors; built browser harness green (the M10 Cf-252 +
+lead case now reports `γFailed=false`). The M10 JS containment split
+(`recomputeGammaBeta`/`recomputeNeutron`) stays as defense-in-depth.
 
 ## What M10 did about it (containment only)
 Made the γ/β and neutron dose paths fail INDEPENDENTLY (`state.svelte.ts`: `recomputeDose` split

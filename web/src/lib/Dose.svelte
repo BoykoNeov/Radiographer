@@ -816,7 +816,7 @@
 
       {#if gammaWarnings.length > 0}
         <details class="warnings" data-testid="dose-warnings">
-          <summary>{gammaWarnings.length} γ scoring note(s) — below-floor lines skipped</summary>
+          <summary>{gammaWarnings.length} γ scoring note(s) — below-floor lines skipped / buildup capped past fit range</summary>
           <ul>
             {#each gammaWarnings as w, i (i)}
               <li class="mono">{w.nuclide ?? "?"}: {w.message ?? w.reason ?? "skipped"}</li>

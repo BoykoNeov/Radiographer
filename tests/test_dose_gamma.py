@@ -343,6 +343,31 @@ def test_stack_lastlayer_artifact_low_z_behind_high_z():
     assert lead_then_water > lead_alone  # the documented non-physical increase
 
 
+# --- thick high-Z + low-energy line: buildup-fit cap (no OverflowError) ---------------
+#
+# docs/plans/gamma-buildup-overflow.md: Am-241's 59 keV line through 5 cm lead is hundreds
+# of mfp. The raw G-P form overflows float64; the cap freezes B at the fit limit while the
+# exact exp(−mfp) drives transmission → ~0. The whole γ panel must build, finite, with a
+# §11 honesty note — not crash with a cryptic OverflowError.
+
+def test_thick_lead_low_energy_does_not_overflow():
+    from engine.buildup import MFP_FIT_MAX
+
+    E = 0.059536  # Am-241's 59.5 keV line (a tabulated H*(10) grid energy)
+    t = transmission("lead", E, 5.0)
+    assert math.isfinite(t)
+    assert 0.0 <= t < 1e-15  # ~e^(−hundreds of mfp); underflows toward 0, never overflows
+
+    # Full coefficient assembly through a thick-lead shield must not raise, and must record
+    # the buildup-cap honesty note (not a below-floor skip).
+    m = GammaDoseModel(["Am-241"], "ambient_H10", shield=[("lead", 5.0)])
+    coeff = m.coeff_si["Am-241"]
+    assert math.isfinite(coeff) and coeff >= 0.0
+    capped = [w for w in m.warnings if w.get("reason") == "buildup_capped"]
+    assert capped, "expected a buildup-cap (§11) warning for Am-241 through 5 cm lead"
+    assert f"{MFP_FIT_MAX:g}-mfp" in capped[0]["message"]
+
+
 def test_stack_non_buildup_layer_anywhere_raises():
     # A material without ANS-6.4.3 buildup ANYWHERE in the stack must fail loudly — the
     # per-layer gate, not just the first slot (§6.5, no silent B=1 surrogate).

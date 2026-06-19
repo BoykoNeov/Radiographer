@@ -45,6 +45,16 @@ from pathlib import Path
 
 SCHEMA_VERSION = 1
 
+#: Upper bound (mean free paths) of the ANS-6.4.3 / NUREG-CR-5740 G-P fit validity. The
+#: published coefficient tables are tabulated and validated to 40 mfp; beyond that the
+#: geometric-progression form is both numerically unstable (``K**mfp`` overflows float64
+#: around a few hundred mfp) and physically meaningless (extrapolation past the fit). The
+#: buildup is **frozen** at ``B(MFP_FIT_MAX)`` for deeper penetration while the exact
+#: ``exp(−mfp)`` attenuation (applied by the dose engine at the TRUE mfp) drives the
+#: transmission of that already-negligible component to ~0. Callers that want to surface a
+#: §11 honesty note compare their total mfp against this constant — never a hardcoded 40.
+MFP_FIT_MAX = 40.0
+
 _DEFAULT_ROOT = Path(__file__).resolve().parents[1] / "data" / "buildup"
 _data_root = _DEFAULT_ROOT
 
@@ -122,11 +132,20 @@ def gp_buildup(b: float, c: float, a: float, Xk: float, d: float, mfp: float) ->
     Pure function of the five G-P coefficients. ``B(0)=1`` and ``B(1)=b`` hold exactly.
     Raises ``BuildupError`` if the geometric ratio K ≤ 0 (the G-P form assumes K > 0; a
     non-positive K would make ``K**mfp`` complex — surfaced, never silently returned).
+
+    Beyond :data:`MFP_FIT_MAX` the ANS-6.4.3 fit is invalid and ``K**mfp`` overflows, so the
+    evaluation depth is clamped: ``B`` is **frozen** at ``B(MFP_FIT_MAX)`` (its last valid
+    value) for deeper penetration. This is a no-op for ``mfp <= MFP_FIT_MAX`` — the algebraic
+    identities and every tabulated check point are untouched. The transmission of such a deep
+    component is ~0 once the dose engine multiplies by the exact ``exp(−mfp)`` at the TRUE
+    mfp; the cap removes the overflow artifact without fabricating buildup past the fit. The
+    dose engine surfaces a §11 honesty note when this clamp engages (see ``engine.dose``).
     """
     if mfp < 0:
         raise BuildupError(f"negative penetration depth mfp={mfp}")
     if mfp == 0:
         return 1.0
+    mfp = min(mfp, MFP_FIT_MAX)  # freeze buildup at the fit limit; attenuation stays exact
     k = c * (mfp ** a) + d * (math.tanh(mfp / Xk - 2.0) - _TANH_M2) / (1.0 - _TANH_M2)
     if k <= 0.0:
         raise BuildupError(
