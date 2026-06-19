@@ -92,12 +92,24 @@
   const hasNeutron = $derived(appState.neutronSource !== null);
   const nError = $derived(appState.neutronDoseError);
 
+  // Source-correlated reaction γ (M7d; e.g. AmBe 4.438 MeV): a γ contribution NOT in the
+  // decay lines, scored in the same Sv quantity. It stacks into the breakdown total as its
+  // own segment and gets a γ-card sub-line — kept distinct from the inventory decay-γ so the
+  // per-line table's Σ==card invariant is untouched. null/0 for Cf-252 (continuum unmodeled).
+  const sgRate = $derived(appState.sourceGammaRateAtCursor); // Sv/s
+  const sgAcc = $derived(appState.sourceGammaAccumulated); // {value Sv, truncated}
+  const hasSourceGamma = $derived(sgRate != null && sgRate > 0);
+  const SOURCE_GAMMA_COLOR = "#b07aa1"; // distinct from MODALITY_COLORS.gamma (it's a reaction γ)
+
   // The dose breakdown needs the rate series (a stable inventory has none).
   const hasDose = $derived(appState.gammaDoseSeries !== null && appState.curveX.length > 0);
   // Below-floor X-ray skips etc. are recorded at build time on the γ series (#3).
   const gammaWarnings = $derived(appState.gammaDoseSeries?.warnings ?? []);
   const truncated = $derived(
-    (gAcc?.truncated ?? false) || (bAcc?.truncated ?? false) || (nAcc?.truncated ?? false),
+    (gAcc?.truncated ?? false) ||
+      (bAcc?.truncated ?? false) ||
+      (nAcc?.truncated ?? false) ||
+      (sgAcc?.truncated ?? false),
   );
 
   // Per-line γ table at the cursor (M6f-2, §9). `gLines` is null when the per-nuclide
@@ -153,6 +165,21 @@
         hovertemplate: "γ %{y:.3e} Sv/h<extra></extra>",
       } as Partial<Plotly.PlotData>,
     ];
+    // Source-correlated reaction γ (e.g. AmBe 4.438 MeV): a SECOND γ contribution in the same
+    // Sv quantity, so it stacks onto the γ+n total as its own labeled segment (kept visually
+    // distinct — it is a reaction γ, not a decay line). Present only when the source emits one.
+    if (hasSourceGamma) {
+      traces.push({
+        type: "bar",
+        name: `γ source (4.438 MeV, Sv)`,
+        x: ["γ + n"],
+        y: [perHour(sgRate)],
+        yaxis: "y",
+        marker: { color: SOURCE_GAMMA_COLOR },
+        error_y: whisker("gamma", perHour(sgRate)),
+        hovertemplate: "γ source %{y:.3e} Sv/h<extra></extra>",
+      } as Partial<Plotly.PlotData>);
+    }
     // Neutron shares the γ Sv axis and the same x-category → in stacked mode it sits ON TOP of
     // γ (a true Sv total); in grouped mode it stands beside γ with its order-of-mag whisker.
     if (hasNeutron) {
@@ -309,6 +336,7 @@
     void gRate;
     void bRate;
     void nRate;
+    void sgRate;
     void mode;
     void qShort;
     const el = plotEl;
@@ -438,6 +466,14 @@
             accumulated over {humanTime(appState.exposureS)}:
             <strong>{gAcc == null ? "—" : formatDose(gAcc.value, "Sv")}</strong>
           </div>
+          {#if hasSourceGamma}
+            <div class="sub muted" data-testid="dose-source-gamma" data-rate-si={sgRate ?? ""}>
+              + reaction γ (4.438 MeV, source-correlated — not a decay line):
+              <strong>{sgRate == null ? "—" : formatDoseRate(sgRate, "Sv")}</strong>
+              (acc. {sgAcc == null ? "—" : formatDose(sgAcc.value, "Sv")}) — stacked into the
+              Sv total below
+            </div>
+          {/if}
         </div>
 
         <div class="card beta" data-testid="dose-beta" data-rate-si={bRate ?? ""}>

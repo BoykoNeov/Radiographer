@@ -168,6 +168,24 @@ export const PREBUILT_SOURCES: PrebuiltSource[] = [
     entries: [{ name: "Cf-252", quantity: 1, unit: "ug" }],
     neutronSource: "Cf-252",
   },
+  {
+    id: "ambe-source",
+    label: "Am-241/Be neutron source",
+    category: "Neutron",
+    blurb:
+      "The standard lab (α,n) calibration source: Am-241 α on ⁹Be → neutrons (0.1–10 MeV) " +
+      "PLUS a clean 4.438 MeV reaction γ. ~1 Ci ≈ 2.2×10⁶ n/s; watch the γ-source segment " +
+      "stack into the Sv total alongside the neutrons.",
+    // 1 Ci (37 GBq) Am-241 ≈ 2.2×10⁶ n/s (the canonical AmBe specific emission). The neutron
+    // spectrum (ISO 8529 / IAEA TRS-403) + the 4.438 MeV γ are the VALIDATED data/neutron_sources/
+    // AmBe.json; `neutronSource` lights the §6.3 neutron path (h̄ = 393.6 pSv·cm² ≈ ISO 391).
+    entries: [{ name: "Am-241", quantity: 1, unit: "Ci" }],
+    neutronSource: "AmBe",
+    caveat:
+      "Neutron YIELD is source-construction-dependent (Am:Be ratio, encapsulation) and varies " +
+      "≈±15% — a representative value; the spectrum shape and dose coefficient are the " +
+      "construction-independent ISO-standard part (§11).",
+  },
 ];
 
 /** Picker grouping: category → its sources, in manifest order. */

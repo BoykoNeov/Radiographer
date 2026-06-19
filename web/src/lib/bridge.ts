@@ -142,6 +142,12 @@ export interface DoseOk {
    *  when a shield stops the β ("more lead → more photon dose"). null when no shield. A
    *  γ (Sv/air-kerma) quantity — shown beside, NEVER summed into, the β skin (Gy) number. */
   bremsstrahlung?: DoseOk | null;
+  /** neutron_dose responses only (M7d): the SOURCE-correlated reaction γ-dose series (e.g.
+   *  AmBe 4.438 MeV, scored through the γ engine in the SAME Sv quantity) — null for Cf-252
+   *  (prompt-fission γ continuum unmodeled, §11). A γ contribution that DOES stack into the
+   *  Sv total, but is kept distinct from the inventory's decay-γ lines (it is a reaction γ,
+   *  not a decay line). */
+  source_gamma?: DoseOk | null;
 }
 
 /** One shield material for the M6g picker. `has_buildup` is the γ-shield gate (a material

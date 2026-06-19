@@ -1845,6 +1845,68 @@ async function runM7(page) {
     `version=${parsed.version}, neutron_source=${parsed.inventory.neutron_source}, loadErr=${loadErr}, cardLive=${restored.grayed === false}`,
   );
 
+  // 4b) AmBe (M7d): the SECOND neutron source loads via its card → neutron path lights with the
+  //     ISO 8529 spectrum (h̄ ≈ 391 pSv·cm², IAEA TRS-403), AND its 4.438 MeV REACTION γ (the
+  //     first non-empty source_gamma path — Cf-252's is null) appears BOTH as a γ-card sub-line
+  //     and as its own stacked-bar segment summing into the Sv total. One solve (§3).
+  const AMBE = '[data-testid="source-ambe-source"]';
+  await page.click(AMBE);
+  await page.waitForFunction(
+    "window.__APP__.status === 'solved' && window.__APP__.neutronSource === 'AmBe' && " +
+      "window.__APP__.neutronDoseSeries && window.__APP__.neutronDoseSeries.source_gamma",
+    null,
+    { timeout: 30_000 },
+  );
+  // the γ-source bar segment lands a tick after the series (the Plotly effect) — wait for it.
+  await page.waitForFunction(
+    (sel) => {
+      const p = document.querySelector(sel);
+      return !!(p && p.data && p.data.some((t) => typeof t.name === "string" && t.name.startsWith("γ source (")));
+    },
+    DOSEPLOT,
+    { timeout: 30_000 },
+  );
+  const ambe = await page.evaluate((doseplot) => {
+    const app = window.__APP__;
+    const s = app.neutronDoseSeries;
+    const sgCard = document.querySelector('[data-testid="dose-source-gamma"]');
+    const plot = document.querySelector(doseplot);
+    const traces = plot && plot.data ? plot.data : [];
+    const nTrace = traces.find((t) => typeof t.name === "string" && t.name.startsWith("n ("));
+    const sgTrace = traces.find((t) => typeof t.name === "string" && t.name.startsWith("γ source ("));
+    const reg = window.__BRIDGE__.registry_size();
+    return {
+      coeff: s ? s.spectrum_avg_coeff_pSv_cm2 : null,
+      nRate: app.neutronRateAtCursor,
+      sgRate: app.sourceGammaRateAtCursor,
+      sgCardRate: sgCard ? parseFloat(sgCard.getAttribute("data-rate-si")) : null,
+      sgUnit: s && s.source_gamma ? s.source_gamma.si_unit : null,
+      sgTraceY: sgTrace && sgTrace.y ? sgTrace.y[0] : null,
+      sgTraceAxis: sgTrace ? sgTrace.yaxis : null,
+      nTraceAxis: nTrace ? nTrace.yaxis : null,
+      registry: reg.ok ? reg.size : -1,
+    };
+  }, DOSEPLOT);
+  const ambeCoeffOk = Number.isFinite(ambe.coeff) && Math.abs(ambe.coeff - 391) / 391 < 0.03;
+  // γ source and neutron both ride the γ Sv axis ("y") → they stack into one Sv total.
+  const sgStacksOk =
+    ambe.sgRate > 0 &&
+    ambe.sgTraceAxis === "y" &&
+    ambe.nTraceAxis === "y" &&
+    Math.abs(ambe.sgTraceY - ambe.sgRate * 3600) / (ambe.sgRate * 3600) < 1e-6;
+  record(
+    "M7d AmBe: h̄ ≈ 391 (ISO/TRS-403), 4.438 MeV reaction γ in γ-card + stacked Sv bar, one solve",
+    ambeCoeffOk &&
+      ambe.nRate > 0 &&
+      ambe.sgRate > 0 &&
+      ambe.sgUnit === "Sv" &&
+      Math.abs(ambe.sgCardRate - ambe.sgRate) / ambe.sgRate < 1e-6 &&
+      sgStacksOk &&
+      ambe.registry === 1,
+    `h̄=${ambe.coeff} (anchor 391), nRate=${ambe.nRate}, sgRate=${ambe.sgRate} Sv/s (unit=${ambe.sgUnit}), ` +
+      `sgCard=${ambe.sgCardRate}, sgAxis=${ambe.sgTraceAxis}/nAxis=${ambe.nTraceAxis}, registry=${ambe.registry}`,
+  );
+
   // 5) SPENT FUEL (M7c): a parameterized PWR discharge vector loads from the validated
   //    data/spent_fuel catalog (not the static manifest) via its picker card. The 67-nuclide
   //    inventory + the live decay-heat readout light up; cooling to 10 yr drops decay heat into

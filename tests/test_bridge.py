@@ -464,6 +464,37 @@ def test_neutron_dose_round_trip_cf252():
         bridge.release(handle)
 
 
+def test_neutron_dose_ambe_carries_reaction_gamma():
+    # AmBe (M7d): the neutron path lights with the ISO 8529 spectrum (h̄ ≈ 391, TRS-403) AND a
+    # non-null source_gamma — the 4.438 MeV reaction γ scored through the γ engine in the SAME
+    # Sv quantity (the first non-empty source_gamma path; contrast Cf-252's None above).
+    res = json.loads(bridge.solve(json.dumps({"nuclides": {"Am-241": 1.0}, "unit": "Ci"})))
+    handle = res["handle"]
+    try:
+        out = json.loads(
+            bridge.neutron_dose(
+                handle,
+                json.dumps(
+                    {
+                        "times_s": [0.0],
+                        "source": "AmBe",
+                        "quantity": "ambient_H10",
+                        "distance_m": 1.0,
+                    }
+                ),
+            )
+        )
+        assert out["ok"] is True
+        assert out["source"] == "AmBe" and out["parent"] == "Am-241"
+        assert out["spectrum_avg_coeff_pSv_cm2"] == pytest.approx(391.0, rel=0.03)
+        sg = out["source_gamma"]
+        assert sg is not None, "AmBe 4.438 MeV reaction γ must be scored, not dropped"
+        assert sg["si_unit"] == "Sv"  # same quantity as the neutron H*(10) → they sum
+        assert sg["rate_si"][0] > 0.0
+    finally:
+        bridge.release(handle)
+
+
 def test_neutron_dose_grayed_out_when_parent_absent():
     # The §6.3 gray-out: asking for a Cf-252 neutron dose over an inventory that does NOT
     # contain Cf-252 is a loud structured error (never a silent zero) — the engine cannot

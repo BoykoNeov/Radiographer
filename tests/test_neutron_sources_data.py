@@ -26,7 +26,18 @@ import pytest
 
 from engine import neutron_source as ns
 
-SHIPPED = {"Cf-252"}            # M5 source set (AmBe added when its ISO-8529 spectrum is sourced)
+SHIPPED = {"Cf-252", "AmBe"}    # M5 Cf-252 + M7d AmBe (ISO-8529 spectrum sourced from TRS-403)
+
+# AmBe ISO 8529 reference spectrum, transcribed INDEPENDENTLY from IAEA TRS-403 Table 4.V
+# (column Am–Be) — a second copy so a build-side transcription error is caught here (§7).
+_AMBE_TRS403_EV_VALUE = [
+    (1.00e5, 1.66e-2), (1.25e5, 2.21e-2), (1.58e5, 2.87e-2), (1.99e5, 3.67e-2),
+    (2.51e5, 4.65e-2), (3.16e5, 5.77e-2), (3.98e5, 7.06e-2), (5.01e5, 8.48e-2),
+    (6.30e5, 9.61e-2), (7.94e5, 1.06e-1), (1.00e6, 1.18e-1), (1.25e6, 1.27e-1),
+    (1.58e6, 1.81e-1), (1.99e6, 2.43e-1), (2.51e6, 4.21e-1), (3.16e6, 5.71e-1),
+    (3.98e6, 6.86e-1), (5.01e6, 6.50e-1), (6.30e6, 5.78e-1), (7.94e6, 1.66e-1),
+    (1.00e7, 1.72e-2),
+]
 N_AVOGADRO = 6.02214076e23
 SECONDS_PER_YEAR = 365.25 * 24 * 3600
 
@@ -57,6 +68,9 @@ def test_structural(key):
     assert hi[-1] <= 20.0 + 1e-9, "spectrum within the 20 MeV neutron H*(10) grid"
     reps = ns.representative_energies(key)
     assert all(a <= r <= b for a, r, b in zip(lo, reps, hi)), "rep energy inside its bin"
+    # Bins must NOT overlap (the geometric-midpoint-edge trap: a naïve E_i·r^±½ build can store
+    # overlapping bins that still sum to 1 and still fold correctly — a silent data bug, §11).
+    assert all(hi[i] <= lo[i + 1] + 1e-12 for i in range(len(lo) - 1)), "bins must not overlap"
 
 
 def test_loader_rejects_unknown_source():
@@ -115,3 +129,48 @@ def test_cf252_source_gammas_documented_empty():
     # Prompt-fission γ (continuum) is intentionally not modeled in M5 (honesty register);
     # the field exists and is an empty list, not missing.
     assert ns.source_gammas("Cf-252") == []
+
+
+# --------------------------------------------------------------------------- #
+# 5. AmBe (M7d) — ISO 8529 spectrum (TRS-403), transcription + physics goldens.
+# --------------------------------------------------------------------------- #
+
+def test_ambe_spectrum_matches_independent_transcription():
+    """Normalize the INDEPENDENTLY transcribed TRS-403 Am–Be per-lethargy values (constant Δu
+    on the 10/decade grid ⇒ direct normalization → per-bin fractions) and confirm they match
+    the stored fractions. Catches a transcription/normalization error in the build."""
+    _, _, frac = ns.spectrum("AmBe")
+    raw = np.array([v for _, v in _AMBE_TRS403_EV_VALUE])
+    indep = raw / raw.sum()
+    assert len(frac) == len(indep), "AmBe bin count drifted from the TRS-403 table"
+    assert np.allclose(frac, indep, rtol=1e-9, atol=1e-12), "stored AmBe fractions drifted from TRS-403"
+
+
+def test_ambe_neutrons_per_decay_canonical_yield():
+    """n/decay = canonical AmBe specific emission 2.2×10⁶ n/s per Ci of Am-241 ÷ 3.7×10¹⁰ Bq/Ci.
+    Construction-dependent (≈±15%) — a representative value, not an intrinsic constant."""
+    npd = ns.neutrons_per_decay("AmBe")
+    assert npd == pytest.approx(2.2e6 / 3.7e10, rel=1e-3), f"AmBe n/decay {npd}"
+
+
+def test_ambe_mean_energy_and_lethargy_peak():
+    d = ns.load("AmBe")
+    # Fluence-weighted mean over the ISO 0.1–10 MeV bins ≈ 3.5 MeV (internal regression). NB the
+    # often-quoted ~4.2 MeV (Kluge–Weise) is the un-truncated mean incl. the >10 MeV tail —
+    # documented difference, not an error.
+    assert d["mean_energy_MeV"] == pytest.approx(3.5, abs=0.2), "AmBe mean E ~3.5 MeV (ISO, truncated)"
+    lo, hi, frac = ns.spectrum("AmBe")
+    reps = ns.representative_energies("AmBe")
+    e_peak = reps[max(range(len(frac)), key=lambda i: frac[i])]
+    assert 3.0 <= e_peak <= 5.0, f"AmBe spectrum peaks at {e_peak:.2f} MeV (expected ~4)"
+
+
+def test_ambe_source_gamma_4438_line():
+    """The clean discrete 4.438 MeV reaction γ at the recommended γ/n ratio R=0.575
+    (Liu et al.) — contrast Cf-252's unmodeled prompt-fission continuum."""
+    gammas = ns.source_gammas("AmBe")
+    assert len(gammas) == 1
+    g = gammas[0]
+    assert g["E_MeV"] == pytest.approx(4.438)
+    npd = ns.neutrons_per_decay("AmBe")
+    assert g["yield_per_decay"] == pytest.approx(npd * 0.575, rel=1e-6)

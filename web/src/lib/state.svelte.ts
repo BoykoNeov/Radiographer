@@ -338,6 +338,24 @@ export class AppState {
     return trapzWindow(this.curveX, s.rate_si, this.cursorOffsetS, this.cursorOffsetS + this.exposureS);
   }
 
+  // -- source-correlated reaction γ (M7d; e.g. AmBe 4.438 MeV) ---------------
+  // A neutron source can carry a reaction γ (NOT in the ICRP-107 decay lines) — scored through
+  // the γ engine in the SAME Sv quantity/geometry and returned on `neutronDoseSeries.source_gamma`
+  // (null for Cf-252, §11). It is a γ contribution that DOES sum into the Sv total, but is kept
+  // DISTINCT from the inventory's decay-γ (`gammaDoseSeries`) so the per-line decay table's
+  // Σ==card invariant holds; in the breakdown it stacks as its own labeled segment.
+  /** Reaction-γ dose-RATE (Sv/s) at the cursor; null when no source / no modeled reaction γ. */
+  get sourceGammaRateAtCursor(): number | null {
+    const sg = this.neutronDoseSeries?.source_gamma;
+    return sg ? interpAt(this.curveX, sg.rate_si, this.cursorOffsetS) : null;
+  }
+  /** Reaction-γ ACCUMULATED dose (Sv) over [cursor, cursor+exposure] — ∫rate dt (#2, §11). */
+  get sourceGammaAccumulated(): TrapzResult | null {
+    const sg = this.neutronDoseSeries?.source_gamma;
+    if (!sg) return null;
+    return trapzWindow(this.curveX, sg.rate_si, this.cursorOffsetS, this.cursorOffsetS + this.exposureS);
+  }
+
   // -- shield (M6g) ---------------------------------------------------------
 
   /** The active shield as the engine's `[material, thickness_cm]`, or null when no material

@@ -46,6 +46,30 @@ def test_cf252_spectrum_averaged_h10_matches_published():
     assert m.hbar_pSv_cm2 == pytest.approx(373.0, rel=0.05)
 
 
+def test_ambe_spectrum_averaged_h10_matches_iso():
+    # AmBe validation triangle: fold the ISO 8529 Am–Be reference spectrum (IAEA TRS-403
+    # Table 4.V) against the vendored ICRP-74 neutron H*(10) table → 393.6 pSv·cm². This
+    # agrees with TRS-403 Table 4.IV's PUBLISHED ISO H*(10) = 391 to +0.66% (well inside the
+    # inter-method spread; Table 4.V's own "spectrum-weighted responses" lists 395 — a ~1%
+    # conversion-coefficient-set difference). Two anchors:
+    m = NeutronDoseModel("AmBe", "ambient_H10")
+    # (a) physics: matches the externally published ISO value (a unit slip misses by far more)
+    assert m.hbar_pSv_cm2 == pytest.approx(391.0, rel=0.03)
+    # (b) tight regression pin on the built data + fold — a 1% drift must FAIL, not pass silently
+    assert m.hbar_pSv_cm2 == pytest.approx(393.56, rel=0.005)
+
+
+def test_ambe_source_gamma_override_has_4438_line():
+    # AmBe's clean discrete 4.438 MeV reaction γ flows through the override (contrast Cf-252's
+    # empty continuum). yield = n/decay (5.95e-5) × γ/n ratio R=0.575 (Liu et al., recommended).
+    m = NeutronDoseModel("AmBe", "ambient_H10")
+    ov = m.source_gamma_override()
+    assert set(ov) == {"Am-241"}
+    (line,) = ov["Am-241"]
+    assert line["E_MeV"] == pytest.approx(4.438)
+    assert line["yield"] == pytest.approx(5.9459e-5 * 0.575, rel=1e-3)
+
+
 def test_cf252_dose_rate_constant_per_microgram_at_1m():
     # 1 µg Cf-252 at 1 m, bare → H*(10) ≈ 2.5 mrem/h — the well-known field magnitude, here a
     # DERIVED consequence of two sourced numbers (specific yield 2.3e6 n/s/µg × h̄ ≈ 379) not a
