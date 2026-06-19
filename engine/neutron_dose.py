@@ -53,6 +53,47 @@ class NeutronDoseError(Exception):
     """Loud failure in the neutron-dose path — never swallowed, never a fallback number."""
 
 
+def fold_spectrum(source_key: str, quantity: str, geometry: Optional[str]) -> tuple[float, list[dict]]:
+    """h̄ = Σ_bins φ_i · h(E_rep_i) in pSv·cm² for a tabulated neutron spectrum (Σ φ = 1).
+
+    The spectrum-averaged fluence-to-dose coefficient, shared by the single-source
+    :class:`NeutronDoseModel` and the spent-fuel multi-parent model (both fold the SAME way —
+    only the source of the per-decay strength differs). Below-floor bins are logged skips; a
+    bin **above** the conversion grid is a loud error (dropping flux underestimates dose, the
+    dangerous direction). Returns ``(hbar_pSv_cm2, warnings)``.
+    """
+    frac = nsrc.spectrum(source_key)[2]
+    reps = nsrc.representative_energies(source_key)
+    warnings: list[dict] = []
+    hbar = 0.0
+    skipped_frac = 0.0
+    for f, e in zip(frac, reps):
+        if f <= 0.0:
+            continue
+        try:
+            coeff = pi.interp_conversion(quantity, e, geometry, particle="neutron")
+        except pi.OffGridError as off:
+            if off.reason == pi.BELOW_FLOOR:
+                skipped_frac += f
+                warnings.append(
+                    {"source": source_key, "E_MeV": e, "fluence_frac": f,
+                     "reason": pi.BELOW_FLOOR, "message": str(off)}
+                )
+                continue
+            raise NeutronDoseError(
+                f"{source_key}: spectrum bin at {e:g} MeV (fraction {f:g}) is above the "
+                f"neutron {quantity} grid — refusing to extrapolate ({off})."
+            ) from off
+        hbar += f * coeff
+    if skipped_frac > 0.0:
+        warnings.append(
+            {"source": source_key, "reason": "below_floor_total", "skipped_fluence_frac": skipped_frac,
+             "message": (f"{skipped_frac:.3g} of the fluence is below the neutron conversion-grid "
+                         "floor and was dropped (negligible thermal tail)")}
+        )
+    return hbar, warnings
+
+
 class NeutronDoseModel:
     """Solve-once neutron dose coefficient for a fixed (source, quantity, geometry).
 
@@ -99,47 +140,9 @@ class NeutronDoseModel:
     # -- coefficient assembly (solve once) --------------------------------
 
     def _fold_spectrum(self) -> float:
-        """h̄ = Σ_bins φ_i · h(E_rep_i) in pSv·cm². Below-floor bins are logged skips; an
-        above-grid bin is a loud error (dropping flux underestimates dose)."""
-        _lo, _hi, frac = nsrc.spectrum(self.source)
-        reps = nsrc.representative_energies(self.source)
-        hbar = 0.0
-        skipped_frac = 0.0
-        for f, e in zip(frac, reps):
-            if f <= 0.0:
-                continue
-            try:
-                coeff = pi.interp_conversion(self.quantity, e, self.geometry, particle="neutron")
-            except pi.OffGridError as off:
-                if off.reason == pi.BELOW_FLOOR:
-                    skipped_frac += f
-                    self.warnings.append(
-                        {
-                            "source": self.source,
-                            "E_MeV": e,
-                            "fluence_frac": f,
-                            "reason": pi.BELOW_FLOOR,
-                            "message": str(off),
-                        }
-                    )
-                    continue
-                raise NeutronDoseError(
-                    f"{self.source}: spectrum bin at {e:g} MeV (fraction {f:g}) is above the "
-                    f"neutron {self.quantity} grid — refusing to extrapolate ({off})."
-                ) from off
-            hbar += f * coeff
-        if skipped_frac > 0.0:
-            self.warnings.append(
-                {
-                    "source": self.source,
-                    "reason": "below_floor_total",
-                    "skipped_fluence_frac": skipped_frac,
-                    "message": (
-                        f"{skipped_frac:.3g} of the fluence is below the neutron conversion-grid "
-                        "floor and was dropped (negligible thermal tail)"
-                    ),
-                }
-            )
+        """h̄ = Σ_bins φ_i · h(E_rep_i) in pSv·cm² (shared :func:`fold_spectrum`)."""
+        hbar, warns = fold_spectrum(self.source, self.quantity, self.geometry)
+        self.warnings.extend(warns)
         return hbar
 
     def source_gamma_override(self) -> dict[str, list[dict]]:

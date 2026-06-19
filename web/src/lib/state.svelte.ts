@@ -92,6 +92,15 @@ export class AppState {
    */
   neutronSource = $state<string | null>(null);
 
+  /**
+   * Loaded spent-fuel SF neutron source id (M9 / §6.3) — set when a spent-fuel vector with a
+   * `neutron` block is loaded. The MULTI-parent neutron path (S(t)=Σ yield_n·A_n(t) off the one
+   * solve), distinct from `neutronSource` (a single tabulated key) and MUTUALLY EXCLUSIVE with
+   * it. Same gray-out/orphan-guard discipline: dropped on a hand-edit (add/remove) that breaks
+   * the prebuilt identity. Persisted in v5.
+   */
+  spentFuelNeutronId = $state<string | null>(null);
+
   // -- engine + derived solve state -----------------------------------------
   /** The live Bateman solve; null when empty or after a failed solve (#2). */
   handle = $state<Handle | null>(null);
@@ -348,6 +357,14 @@ export class AppState {
     if (!s) return null;
     return trapzWindow(this.curveX, s.rate_si, this.cursorOffsetS, this.cursorOffsetS + this.exposureS);
   }
+  /** M9: fraction of the spent-fuel SF neutron source UNMODELED at the cursor (no evaluated ν̄,
+   *  chiefly Cm-246 at long cooling) — the honest lower-bound gap. null unless a spent-fuel
+   *  multi-parent source is active (single tabulated sources carry no dropped fraction). */
+  get neutronDroppedSfFracAtCursor(): number | null {
+    const s = this.neutronDoseSeries;
+    if (!s || !s.dropped_sf_frac) return null;
+    return interpAt(this.curveX, s.dropped_sf_frac, this.cursorOffsetS);
+  }
 
   // -- source-correlated reaction γ (M7d; e.g. AmBe 4.438 MeV) ---------------
   // A neutron source can carry a reaction γ (NOT in the ICRP-107 decay lines) — scored through
@@ -589,6 +606,8 @@ export class AppState {
         blurb: s.blurb,
         entries: s.entries.map((e) => ({ name: e.name, quantity: e.quantity, unit: e.unit })),
         referenceTimeS: s.referenceTimeS,
+        // M9: a spent-fuel vector carries an intrinsic multi-parent SF neutron source.
+        spentFuelNeutronId: s.hasNeutron ? s.id : undefined,
         caveat: s.caveat ?? undefined,
       }));
     } else {
@@ -641,6 +660,7 @@ export class AppState {
     if (qErr) return qErr;
     this.entries = [...this.entries, { name: trimmed, quantity, unit }];
     this.neutronSource = null; // a hand-edited inventory is no longer a prebuilt source (orphan guard)
+    this.spentFuelNeutronId = null; // M9: same guard for the spent-fuel multi-parent source
     await this.solve();
     return null;
   }
@@ -649,6 +669,7 @@ export class AppState {
     if (index < 0 || index >= this.entries.length) return;
     this.entries = this.entries.filter((_, i) => i !== index);
     this.neutronSource = null; // hand-edit drops the prebuilt-source identity (orphan guard, M7)
+    this.spentFuelNeutronId = null; // M9: same guard for the spent-fuel multi-parent source
     await this.solve();
   }
 
@@ -866,6 +887,7 @@ export class AppState {
       this.cursorOffsetS = 0;
       this.curveError = "";
       this.neutronSource = null; // no inventory ⇒ no prebuilt source
+      this.spentFuelNeutronId = null; // M9: same — empty inventory carries no SF neutron source
       this.clearDose();
       this.clearChain();
       this.errorMsg = "";
@@ -1105,6 +1127,22 @@ export class AppState {
         this.neutronDoseSeries = null;
         this.neutronDoseError = `${nq.error.type}: ${nq.error.message}`;
       }
+    } else if (this.spentFuelNeutronId) {
+      // M9 spent-fuel SF neutrons — the MULTI-parent path. Same DoseOk shape as `neutron_dose`,
+      // so `neutronDoseSeries` and all its cursor/stacked-bar consumers are reused unchanged.
+      const nq = this.client.spent_fuel_neutron_dose(this.handle, {
+        times_s: times,
+        source_id: this.spentFuelNeutronId,
+        quantity: this.doseQuantity,
+        distance_m: this.doseDistanceM,
+        geometry,
+      });
+      if (nq.ok) {
+        this.neutronDoseSeries = nq;
+      } else {
+        this.neutronDoseSeries = null;
+        this.neutronDoseError = `${nq.error.type}: ${nq.error.message}`;
+      }
     } else {
       this.neutronDoseSeries = null;
     }
@@ -1254,6 +1292,7 @@ export class AppState {
       precision: this.precision,
       referenceTimeS: this.referenceTimeS,
       neutronSource: this.neutronSource, // prebuilt source key (M7b v3)
+      spentFuelNeutronId: this.spentFuelNeutronId, // spent-fuel SF neutron source (M9 v5)
       // view (M6h)
       axis: this.axis,
       activityUnit: this.activityUnit,
@@ -1300,6 +1339,7 @@ export class AppState {
     this.precision = parsed.precision;
     this.referenceTimeS = parsed.referenceTimeS;
     this.neutronSource = parsed.neutronSource; // restore the prebuilt-source key (M7b v3)
+    this.spentFuelNeutronId = parsed.spentFuelNeutronId; // restore the spent-fuel SF source (M9 v5)
     this.axis = parsed.axis;
     this.activityUnit = parsed.activityUnit;
     this.massUnit = parsed.massUnit;
@@ -1337,7 +1377,10 @@ export class AppState {
   async loadSource(source: PrebuiltSource): Promise<string | null> {
     this.entries = source.entries.map((e) => ({ ...e }));
     this.referenceTimeS = source.referenceTimeS ?? 0;
-    this.neutronSource = source.neutronSource ?? null; // set AFTER nothing can null it (not a hand-edit)
+    // Set AFTER nothing can null these (a load is not a hand-edit). Mutually exclusive: a source
+    // is either a single tabulated neutron key OR a spent-fuel multi-parent vector, never both.
+    this.neutronSource = source.neutronSource ?? null;
+    this.spentFuelNeutronId = source.spentFuelNeutronId ?? null;
     await this.solve();
     return this.status === "error" ? this.errorMsg : null;
   }

@@ -52,12 +52,30 @@ from engine import emissions as emissions  # noqa: E402
 from engine.decay_heat import MEV_TO_J, DecayHeatModel, recoverable_energy_MeV  # noqa: E402
 from engine.inventory import SolvedInventory  # noqa: E402
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # v2: adds the per-nuclide SF neutron-yield block (M9)
 DATA_DIR = Path(__file__).resolve().parents[1]                 # .../data
 OUT_DIR = DATA_DIR / "spent_fuel"
 CSV_PATH = DATA_DIR / "vendor" / "sckcen_sf" / "SCKCEN_UOX_PWR.csv"
+NUBAR_PATH = DATA_DIR / "vendor" / "iaea_sf_nu" / "sf_nubar.json"
 
 N_AVOGADRO = 6.02214076e23
+
+#: Representative SF neutron spectrum for the dose fold (M9). Cm-244 (the dominant SF emitter
+#: through the cooling regime) is a Watt spectrum ≈ Cf-252's ISO-8529 Maxwellian, and H*(10)
+#: is flat over 0.5–6 MeV (validated <1% for Cf-252 in M5), so the shape difference is sub-%.
+#: We therefore fold the spent-fuel SF neutrons against the already-validated Cf-252 spectrum
+#: rather than ship a new (sourcing-gated) one.
+SF_SPECTRUM_SOURCE = "Cf-252"
+
+#: Nominal ν̄ used ONLY to size the "dropped SF fraction" honesty warning for minor SF emitters
+#: that lack an evaluated ν̄ in the IAEA table (chiefly Cm-246). A conservative ~upper bound
+#: (real Cm-246/248 ν̄ ≈ 2.9–3.2); it never enters the dose (which uses only modeled yields).
+DROPPED_NUBAR_NOMINAL = 3.0
+
+#: Max fraction of the discharge SF *rate* allowed to come from emitters without an evaluated
+#: ν̄ (a no-silent-drop guard at t=0; long-cooling Cm-246 dominance is surfaced by the engine
+#: at evaluate time, not here — see PROVENANCE + the §11 honesty note).
+_MAX_DROPPED_SF_FRAC_DISCHARGE = 0.01
 
 #: Curated (burnup GWd/tHM, enrichment %) grid points to ship (§13 #4). A modern PWR
 #: reference plus a low-burnup contrast — both legible IE/BU and on the dataset grid
@@ -264,8 +282,102 @@ def _verify_energy_and_basis(row: list[str], idx: dict[str, int], nuclides: list
     return factor
 
 
+def _load_nubar() -> dict[str, dict]:
+    """Load the vendored IAEA SF prompt-ν̄ table (data/vendor/iaea_sf_nu/sf_nubar.json)."""
+    if not NUBAR_PATH.is_file():
+        raise BuildError(f"missing SF ν̄ table {NUBAR_PATH} — see its PROVENANCE.md")
+    rec = json.loads(NUBAR_PATH.read_text(encoding="utf-8"))
+    nb = rec.get("nuclides") or {}
+    if not nb:
+        raise BuildError(f"{NUBAR_PATH}: empty ν̄ table")
+    return nb
+
+
+def _specific_activity_bq_per_g(rd_name: str) -> float:
+    """λ·N_A/M (Bq/g) from rd half-life + atomic mass — for the SF-yield cross-check."""
+    nd = rd.DEFAULTDATA.nuclide_dict
+    sd = rd.DEFAULTDATA.scipy_data
+    lam = math.log(2.0) / float(rd.Nuclide(rd_name).half_life("s"))
+    mass = float(sd.atomic_masses[nd[rd_name]])
+    return lam * N_AVOGADRO / mass
+
+
+def build_neutron_block(idx: dict[str, int], nuclides: list[str], row: list[str],
+                        entry_names: set[str], nubar: dict[str, dict]) -> dict:
+    """The M9 SF neutron source: per-nuclide neutrons-per-decay = (``_SF``/``_A``)·ν̄.
+
+    ``_SF`` is the spontaneous-fission RATE (fissions/s) — ``_SF``/``_A`` reproduces the SF
+    branching ratio, basis-independent (the ≈0.535 ``_A`` factor cancels). Multiplying by the
+    IAEA prompt ν̄ gives neutrons per decay; the engine forms S(t)=Σ yield_n·A_n(t) off the
+    same Bateman solve (solve-once / evaluate-many). Minor SF emitters with no evaluated ν̄
+    (chiefly Cm-246) are recorded separately as ``dropped`` (their SF branch only) so the
+    engine can size the lower-bound warning at long cooling — they are NOT in the dose.
+    """
+    yields: dict[str, float] = {}
+    dropped: dict[str, float] = {}
+    total_sf = modeled_sf = 0.0
+    for n in nuclides:
+        sf = _cell(row, idx, f"{n}_SF")
+        if sf <= 0.0:
+            continue
+        a = _cell(row, idx, f"{n}_A")
+        if a <= 0.0:
+            raise BuildError(f"{n}: _SF>0 but _A=0 — cannot form the SF branching ratio")
+        total_sf += sf
+        rd_name = _to_rd_name(n)
+        branch = sf / a
+        if rd_name in nubar:
+            if rd_name not in entry_names:
+                # A modeled SF emitter must be in the solve closure or its A_n(t) is unavailable
+                # and the neutron source would be silently incomplete (§11). Loud, never silent.
+                raise BuildError(
+                    f"{rd_name}: has evaluated ν̄ and _SF>0 but is not in the solve closure "
+                    "(stable/not-in-rd?) — SF neutron source would silently drop it"
+                )
+            yields[rd_name] = branch * float(nubar[rd_name]["nu_p"])
+            modeled_sf += sf
+        elif rd_name in entry_names:
+            # No evaluated ν̄: kept ONLY for the engine's lower-bound warning (needs A_n(t)).
+            dropped[rd_name] = branch
+
+    if not yields:
+        raise BuildError("no modeled SF emitter found — spent-fuel neutron block would be empty")
+    dropped_frac = (total_sf - modeled_sf) / total_sf if total_sf else 0.0
+    if dropped_frac > _MAX_DROPPED_SF_FRAC_DISCHARGE:
+        raise BuildError(
+            f"dropped SF-rate fraction at discharge {dropped_frac:.2%} exceeds "
+            f"{_MAX_DROPPED_SF_FRAC_DISCHARGE:.0%} — a significant SF emitter lacks an evaluated ν̄"
+        )
+
+    # Cross-check (apples-to-apples, SF only): our (_SF/_A)·ν̄ for the dominant emitter Cm-244
+    # must equal the IAEA's OWN independently-calculated specific yield / specific activity.
+    cross = None
+    if "Cm-244" in yields:
+        iaea_y = float(nubar["Cm-244"]["n_yield_n_s_g"]) / _specific_activity_bq_per_g("Cm-244")
+        rel = abs(yields["Cm-244"] - iaea_y) / iaea_y
+        if rel > 0.05:
+            raise BuildError(
+                f"Cm-244 SF yield {yields['Cm-244']:.4e} n/decay vs IAEA n_yield/SA {iaea_y:.4e} "
+                f"off by {rel:.1%} — ν̄ transcription or _SF basis error"
+            )
+        cross = {"Cm244_n_per_decay": yields["Cm-244"], "Cm244_iaea_n_per_decay": iaea_y, "rel": rel}
+
+    return {
+        "model": "spontaneous-fission (SF) only — (α,n) on oxygen is NOT in the SCK-CEN dataset, "
+                 "so the modeled neutron output is a LOWER BOUND (the dangerous direction)",
+        "spectrum_source": SF_SPECTRUM_SOURCE,
+        "nubar_source": "IAEA NDS SF_n-Yield_20150313 Table 1 (JEFF-3.1 / Holden 1985); "
+                        "yield_per_decay = (_SF/_A)·ν_p",
+        "yields_n_per_decay": yields,
+        "dropped_sf_branch": dropped,
+        "dropped_nubar_nominal": DROPPED_NUBAR_NOMINAL,
+        "dropped_sf_frac_at_discharge": dropped_frac,
+        "crosscheck_Cm244": cross,
+    }
+
+
 def build_grid_point(gp: dict, idx: dict[str, int], nuclides: list[str], row: list[str],
-                     fresh_row: list[str], a_factor: float) -> dict:
+                     fresh_row: list[str], a_factor: float, nubar: dict[str, dict]) -> dict:
     """Extract one discharge vector as **grams per tonne initial HM**, with diagnostics.
 
     Activity/heat come from the engine's λN at load time, so the vector is stored as the
@@ -315,6 +427,8 @@ def build_grid_point(gp: dict, idx: dict[str, int], nuclides: list[str], row: li
             f"nuclides {dropped_nuclides}"
         )
 
+    neutron = build_neutron_block(idx, nuclides, row, {e["name"] for e in entries}, nubar)
+
     return {
         "schema_version": SCHEMA_VERSION,
         "id": gp["id"],
@@ -336,6 +450,7 @@ def build_grid_point(gp: dict, idx: dict[str, int], nuclides: list[str], row: li
         "n_nuclides": len(entries),
         "n_stable_skipped": n_stable_skipped,
         "entries": entries,
+        "neutron": neutron,
         "dropped": {"nuclides": dropped_nuclides, "activity_frac": frac_A},
         "source_ref": (
             "SCK-CEN UOX PWR Serpent2 discharge library, Mendeley Data "
@@ -343,9 +458,11 @@ def build_grid_point(gp: dict, idx: dict[str, int], nuclides: list[str], row: li
             "Discharge (zero cooling); cooling = the §9 reference-time control."
         ),
         "neutron_caveat": (
-            "Cooled spent fuel emits neutrons (SF + (α,n), e.g. Cm-244) — the dataset carries "
-            "_SF/_AN — but v1 does NOT model spent-fuel neutron output (no source key); only "
-            "γ/β/decay-heat are computed. A future hook."
+            "Neutron output is SPONTANEOUS-FISSION only (chiefly Cm-244, plus Cm-242 at short "
+            "cooling), folded against a representative SF spectrum. (α,n) on the oxygen in UO₂ is "
+            "NOT in this dataset and is unmodeled, so the neutron dose is a LOWER BOUND. At "
+            "multi-century cooling the unmodeled Cm-246 SF (no evaluated ν̄) grows in — surfaced "
+            "as a dropped-fraction warning, never silently."
         ),
     }
 
@@ -369,10 +486,21 @@ def _selfcheck_solve(record: dict) -> None:
             f"{expected_cs137:.3e} (>20%) — absolute basis error"
         )
     heat = DecayHeatModel(inv.names).heat_series(act)["total_W"]
+
+    # M9 SF neutron source S(t)=Σ yield_n·A_n(t) (n/s/tHM), modeled emitters only, at the same
+    # sample times. Records the discharge + cooled source strength so the magnitude is auditable
+    # (a lower bound — (α,n) unmodeled). Cm-244 should dominate by 10 yr (Cm-242 gone).
+    yields = record["neutron"]["yields_n_per_decay"]
+    series = act["series"]
+    s_neutron = [
+        math.fsum(y * series.get(name, [0.0, 0.0, 0.0])[i] for name, y in yields.items())
+        for i in range(3)
+    ]
     record["selfcheck"] = {
         "cs137_Bq_per_tHM": cs137,
         "cs137_fission_yield_estimate_Bq_per_tHM": expected_cs137,
         "decay_heat_W_per_tHM": {"t0": heat[0], "t10yr": heat[1], "t100yr": heat[2]},
+        "sf_neutron_n_per_s_per_tHM": {"t0": s_neutron[0], "t10yr": s_neutron[1], "t100yr": s_neutron[2]},
     }
 
 
@@ -385,6 +513,7 @@ def build() -> int:
         )
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     _, idx, nuclides = _read_header(CSV_PATH)
+    nubar = _load_nubar()
 
     wanted = [(gp["burnup"], gp["enrichment"]) for gp in GRID_POINTS]
     # The fresh-fuel (BU=0) row at each enrichment gives that point's initial HM density.
@@ -396,7 +525,7 @@ def build() -> int:
         row = rows[(gp["burnup"], gp["enrichment"])]
         fresh = rows[(0.0, gp["enrichment"])]
         a_factor = _verify_energy_and_basis(row, idx, nuclides)
-        record = build_grid_point(gp, idx, nuclides, row, fresh, a_factor)
+        record = build_grid_point(gp, idx, nuclides, row, fresh, a_factor, nubar)
         _selfcheck_solve(record)
         (OUT_DIR / f"{gp['id']}.json").write_text(
             json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"

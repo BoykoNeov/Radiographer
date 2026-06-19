@@ -78,9 +78,19 @@
             "Neutron source terms are tabulated per prebuilt source (not derived), so neutron " +
             "output is grayed out for user-defined inventories. The dose folds a spectrum against " +
             "ICRP-74 (H*(10)) / ICRP-116 (effective) coefficients; source spectra are good to " +
-            "±factor, the dose is order-of-magnitude grade. NOTE: real spent fuel DOES emit " +
-            "neutrons (spontaneous fission + (α,n), chiefly Cm-244), but v1 does NOT model " +
-            "spent-fuel neutron output — only γ / β / decay heat are computed for it.",
+            "±factor, the dose is order-of-magnitude grade.",
+        },
+        {
+          title: "Spent-fuel neutrons — spontaneous fission only (a LOWER BOUND)",
+          body:
+            "Spent fuel DOES light the neutron view: a multi-parent spontaneous-fission source " +
+            "S(t)=Σ yield_n·A_n(t) off the one decay solve, with per-nuclide yields = (SF rate " +
+            "from the SCK-CEN library)·(prompt ν̄ from the IAEA safeguards table), Cm-244-dominated " +
+            "at cooling, folded against the validated Cf-252 SF spectrum. BUT (α,n) on the fuel's " +
+            "oxygen is NOT in the dataset and is unmodeled (typically tens-of-% of the source), so " +
+            "the neutron dose is a lower bound — it UNDER-counts, the dangerous direction. At " +
+            "multi-century cooling the unmodeled Cm-246 SF grows in too; that dropped fraction is " +
+            "shown on the neutron card, never silently. Neutron shielding is still not modeled.",
         },
       ],
     },

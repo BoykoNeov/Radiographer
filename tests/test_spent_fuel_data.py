@@ -67,7 +67,7 @@ def test_all_grid_points_present():
 @pytest.mark.parametrize("point_id", POINTS)
 def test_structural(points, point_id):
     d = points[point_id]
-    assert d["schema_version"] == 1
+    assert d["schema_version"] == 2  # v2: + SF neutron-yield block (M9)
     assert d["cooling_time_s"] == 0.0  # a DISCHARGE vector; cooling = the §9 time control
     assert d["entries"] and all(e["mass_g_per_tHM"] > 0.0 for e in d["entries"])
     assert "tonne initial heavy metal" in d["basis"]
@@ -127,3 +127,60 @@ def test_cooling_lowers_heat_in_the_cooling_regime(points, point_id):
     ts = [1.0 * _YEAR_S, 10.0 * _YEAR_S, 100.0 * _YEAR_S, 1000.0 * _YEAR_S]
     w = DecayHeatModel(inv.names).heat_series(inv.evaluate(ts, axis="activity", unit="Bq"))["total_W"]
     assert all(w[i] > w[i + 1] for i in range(len(w) - 1)), w
+
+
+# --- M9: SF neutron-yield block ------------------------------------------------------------
+# yield_per_decay(n) = (_SF/_A from Serpent2)·ν̄(IAEA); the neutron source is S(t)=Σ yield·A_n(t).
+# Cm-244's published specific neutron yield (the dominant SF emitter); used as the independent
+# apples-to-apples (SF-only) anchor, recomputed here from rd's specific activity.
+_CM244_IAEA_N_YIELD_N_S_G = 1.100e7   # IAEA NDS SF_n-Yield Table 1
+
+
+@pytest.mark.parametrize("point_id", POINTS)
+def test_neutron_block_structural(points, point_id):
+    n = points[point_id]["neutron"]
+    assert n["spectrum_source"] == "Cf-252"
+    assert n["yields_n_per_decay"] and "Cm-244" in n["yields_n_per_decay"]
+    assert all(v > 0.0 for v in n["yields_n_per_decay"].values())
+    # SF-only is a documented LOWER BOUND ((α,n) absent from the dataset) — must say so.
+    assert "lower bound" in n["model"].lower()
+    # Discharge drop (emitters without an evaluated ν̄) must be negligible at t=0.
+    assert n["dropped_sf_frac_at_discharge"] < 0.01
+    # Cm-246 — which dominates the SF source at long cooling — is the tracked drop the engine warns on.
+    assert "Cm-246" in n["dropped_sf_branch"]
+
+
+@pytest.mark.parametrize("point_id", POINTS)
+def test_cm244_sf_yield_matches_published_specific_yield(points, point_id):
+    # Independent of the build: the stored (_SF/_A)·ν̄ for Cm-244 must equal the IAEA's OWN
+    # specific neutron yield / specific activity (recomputed from rd). Two routes, one number.
+    import radioactivedecay as rd
+    nd = rd.DEFAULTDATA.nuclide_dict
+    sd = rd.DEFAULTDATA.scipy_data
+    lam = math.log(2.0) / float(rd.Nuclide("Cm-244").half_life("s"))
+    sa = lam * 6.02214076e23 / float(sd.atomic_masses[nd["Cm-244"]])   # Bq/g
+    expected = _CM244_IAEA_N_YIELD_N_S_G / sa
+    stored = points[point_id]["neutron"]["yields_n_per_decay"]["Cm-244"]
+    assert stored == pytest.approx(expected, rel=0.05)
+
+
+@pytest.mark.parametrize("point_id", POINTS)
+def test_sf_neutron_source_cm244_dominates_after_cooling(points, point_id):
+    # The whole point of the per-nuclide (multi-parent) model: Cm-242 (163 d) carries a big
+    # share at discharge but is gone by 10 yr, leaving Cm-244 (18 yr) dominant; the source then
+    # falls with Cm-244. A single-parent model could not show this transition.
+    d = points[point_id]
+    inv = _solve(d)
+    yields = d["neutron"]["yields_n_per_decay"]
+    ts = [0.0, 10.0 * _YEAR_S, 100.0 * _YEAR_S]
+    act = inv.evaluate(ts, axis="activity", unit="Bq")["series"]
+
+    def s_at(i):  # total SF neutron source at sample i (n/s/tHM)
+        return math.fsum(y * act.get(name, [0.0] * 3)[i] for name, y in yields.items())
+
+    s0, s10, s100 = s_at(0), s_at(1), s_at(2)
+    assert s0 > s10 > s100 > 0.0                       # cools down through the regime
+    cm242_0 = yields.get("Cm-242", 0.0) * act["Cm-242"][0]
+    cm244_10 = yields["Cm-244"] * act["Cm-244"][1]
+    assert cm242_0 / s0 > 0.10                         # Cm-242 a real share at discharge
+    assert cm244_10 / s10 > 0.85                       # Cm-244 dominant by 10 yr (more so at high BU)

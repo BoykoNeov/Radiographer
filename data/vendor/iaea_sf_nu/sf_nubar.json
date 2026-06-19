@@ -1,0 +1,25 @@
+{
+  "_comment": "Spontaneous-fission prompt neutron multiplicity (nu_p) and calculated specific neutron yield, transcribed verbatim from Table 1 of the vendored IAEA NDS report (see PROVENANCE.md). nu_p drives the spent-fuel SF neutron source: yield_per_decay(n) = (SF_branch from Serpent2 _SF/_A) * nu_p. n_yield_n_s_g is the IAEA's own independently-calculated specific neutron yield (n/s/g) and is used ONLY as a cross-check (n_yield/specific_activity must match (_SF/_A)*nu_p). sf_half_life_y / total_half_life_y are for reference. Covers the 18 trans-actinides of safeguards interest (Th-232..Cf-252); Cm-246/248/Cf-250 etc. are NOT in this evaluation and are a surfaced, bounded drop in the build (no fabrication).",
+  "schema_version": 1,
+  "source": "IAEA NDS, Simakov/Verpelli/Otsuka, Update of the nuclear data for the neutron emissions for actinides of interest in safeguards, Table 1",
+  "nuclides": {
+    "Th-232": {"nu_p": 1.500, "n_yield_n_s_g": 7.126e-08, "total_half_life_y": 1.402e10, "sf_half_life_y": 1.200e21},
+    "U-232":  {"nu_p": 1.710, "n_yield_n_s_g": 3.866e-02, "total_half_life_y": 7.060e01, "sf_half_life_y": 2.521e15},
+    "U-233":  {"nu_p": 1.750, "n_yield_n_s_g": 3.679e-04, "total_half_life_y": 1.591e05, "sf_half_life_y": 2.700e17},
+    "U-234":  {"nu_p": 1.800, "n_yield_n_s_g": 6.782e-03, "total_half_life_y": 2.455e05, "sf_half_life_y": 1.500e16},
+    "U-235":  {"nu_p": 1.870, "n_yield_n_s_g": 1.074e-05, "total_half_life_y": 7.040e08, "sf_half_life_y": 9.800e18},
+    "U-236":  {"nu_p": 1.900, "n_yield_n_s_g": 4.276e-03, "total_half_life_y": 2.343e07, "sf_half_life_y": 2.490e16},
+    "U-238":  {"nu_p": 2.000, "n_yield_n_s_g": 1.355e-02, "total_half_life_y": 4.468e09, "sf_half_life_y": 8.202e15},
+    "Np-237": {"nu_p": 2.040, "n_yield_n_s_g": 1.138e-04, "total_half_life_y": 2.144e06, "sf_half_life_y": 1.000e18},
+    "Pu-238": {"nu_p": 2.210, "n_yield_n_s_g": 2.591e03, "total_half_life_y": 8.774e01, "sf_half_life_y": 4.740e10},
+    "Pu-239": {"nu_p": 2.320, "n_yield_n_s_g": 1.605e-02, "total_half_life_y": 2.410e04, "sf_half_life_y": 8.000e15},
+    "Pu-240": {"nu_p": 2.151, "n_yield_n_s_g": 1.031e03, "total_half_life_y": 6.561e03, "sf_half_life_y": 1.150e11},
+    "Pu-241": {"nu_p": 2.250, "n_yield_n_s_g": 2.058e-03, "total_half_life_y": 1.433e01, "sf_half_life_y": 6.000e16},
+    "Pu-242": {"nu_p": 2.141, "n_yield_n_s_g": 1.723e03, "total_half_life_y": 3.730e05, "sf_half_life_y": 6.790e10},
+    "Am-241": {"nu_p": 2.500, "n_yield_n_s_g": 1.143e00, "total_half_life_y": 4.326e02, "sf_half_life_y": 1.200e14},
+    "Cm-242": {"nu_p": 2.540, "n_yield_n_s_g": 1.980e07, "total_half_life_y": 4.459e-01, "sf_half_life_y": 7.010e06},
+    "Cm-244": {"nu_p": 2.720, "n_yield_n_s_g": 1.100e07, "total_half_life_y": 1.811e01, "sf_half_life_y": 1.340e07},
+    "Bk-249": {"nu_p": 3.400, "n_yield_n_s_g": 1.003e05, "total_half_life_y": 9.035e-01, "sf_half_life_y": 1.800e09},
+    "Cf-252": {"nu_p": 3.759, "n_yield_n_s_g": 2.305e12, "total_half_life_y": 2.647e00, "sf_half_life_y": 8.576e01}
+  }
+}

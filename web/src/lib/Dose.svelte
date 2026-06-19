@@ -89,8 +89,13 @@
   // n are the SAME quantity (both Sv) so they stack in the breakdown total — unlike β (Gy).
   const nRate = $derived(appState.neutronRateAtCursor); // Sv/s, null when no neutron source
   const nAcc = $derived(appState.neutronAccumulated); // {value Sv, truncated}
-  const hasNeutron = $derived(appState.neutronSource !== null);
+  // M9: the gate also covers the spent-fuel multi-parent SF source (S(t)=Σ yield_n·A_n(t)).
+  const hasNeutron = $derived(appState.neutronSource !== null || appState.spentFuelNeutronId !== null);
   const nError = $derived(appState.neutronDoseError);
+  // M9 honesty: SF-only lower bound, and the fraction of the SF source unmodeled at this cooling
+  // (chiefly Cm-246 once Cm-244 decays) — surfaced beside the n number, never silent.
+  const isSpentFuelN = $derived(appState.spentFuelNeutronId !== null);
+  const nDroppedFrac = $derived(appState.neutronDroppedSfFracAtCursor); // 0..1, null unless spent-fuel n
 
   // Source-correlated reaction γ (M7d; e.g. AmBe 4.438 MeV): a γ contribution NOT in the
   // decay lines, scored in the same Sv quantity. It stacks into the breakdown total as its
@@ -503,6 +508,15 @@
                 accumulated: <strong>{nAcc == null ? "—" : formatDose(nAcc.value, "Sv")}</strong>
                 — same quantity as γ, summed in the total
               </div>
+              {#if isSpentFuelN}
+                <div class="sub warn" data-testid="dose-neutron-sf-lowerbound">
+                  ⚠ spontaneous fission only — (α,n) on the fuel's oxygen is unmodeled, so this is a
+                  LOWER BOUND.{#if nDroppedFrac != null && nDroppedFrac > 0.05}
+                    At this cooling ~{Math.round(nDroppedFrac * 100)}% of the SF source is from
+                    emitters without an evaluated ν̄ (chiefly Cm-246) and is also omitted — the
+                    under-count grows as Cm-244 decays.{/if}
+                </div>
+              {/if}
             {/if}
           </div>
         {:else}

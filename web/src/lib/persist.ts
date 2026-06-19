@@ -40,6 +40,9 @@ export interface PersistableState {
   referenceTimeS: number;
   // prebuilt neutron source key (v3); null for a user-style inventory (§6.3 gate, M7b)
   neutronSource: string | null;
+  // loaded spent-fuel SF neutron source id (v5; M9) — the multi-parent path, mutually exclusive
+  // with neutronSource; null unless a spent-fuel vector with a neutron block is loaded
+  spentFuelNeutronId: string | null;
   // view (v2)
   axis: Axis;
   activityUnit: string;
@@ -62,7 +65,7 @@ export interface PersistableState {
  *  values so an omitted section round-trips to the same view as a fresh app. */
 export const PERSIST_DEFAULTS: Omit<
   PersistableState,
-  "entries" | "precision" | "referenceTimeS" | "neutronSource"
+  "entries" | "precision" | "referenceTimeS" | "neutronSource" | "spentFuelNeutronId"
 > = {
   axis: "activity",
   activityUnit: "Bq",
@@ -77,7 +80,7 @@ export const PERSIST_DEFAULTS: Omit<
 };
 
 export const STATE_SCHEMA = "radiographer.app-state";
-export const STATE_VERSION = 4;
+export const STATE_VERSION = 5;
 
 export class PersistError extends Error {
   constructor(message: string) {
@@ -102,6 +105,7 @@ interface Envelope {
     precision: Precision;
     reference_time_s: number;
     neutron_source: string | null;
+    spent_fuel_neutron_id?: string | null;
   };
   view: {
     axis: Axis;
@@ -136,6 +140,7 @@ export function serializeState(state: PersistableState): string {
       precision: state.precision,
       reference_time_s: state.referenceTimeS,
       neutron_source: state.neutronSource,
+      spent_fuel_neutron_id: state.spentFuelNeutronId,
     },
     view: {
       axis: state.axis,
@@ -263,6 +268,23 @@ export function deserializeState(text: string): PersistableState {
     neutronSource = inv.neutron_source;
   }
 
+  // spent-fuel SF neutron source id (v5; optional → null). Mutually exclusive with
+  // neutron_source; the engine fails loud on an unknown id as the backstop.
+  let spentFuelNeutronId: string | null = null;
+  if (inv.spent_fuel_neutron_id !== undefined && inv.spent_fuel_neutron_id !== null) {
+    if (typeof inv.spent_fuel_neutron_id !== "string" || inv.spent_fuel_neutron_id.length === 0) {
+      throw new PersistError(
+        `inventory.spent_fuel_neutron_id must be null or a non-empty string (got ${JSON.stringify(inv.spent_fuel_neutron_id)})`,
+      );
+    }
+    if (neutronSource !== null) {
+      throw new PersistError(
+        "inventory cannot carry both neutron_source and spent_fuel_neutron_id (mutually exclusive)",
+      );
+    }
+    spentFuelNeutronId = inv.spent_fuel_neutron_id;
+  }
+
   // -- view (v2; optional → defaults) --
   const view = obj.view === undefined ? {} : obj.view;
   if (!isObject(view)) throw new PersistError("view section must be an object");
@@ -305,6 +327,7 @@ export function deserializeState(text: string): PersistableState {
     precision,
     referenceTimeS,
     neutronSource,
+    spentFuelNeutronId,
     axis,
     activityUnit,
     massUnit,

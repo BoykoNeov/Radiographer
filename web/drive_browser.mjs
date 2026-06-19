@@ -1922,8 +1922,8 @@ async function runM7(page) {
     return { grayed: card ? card.getAttribute("data-rate-si") === null : null };
   });
   record(
-    "persist (v4): neutron source survives save/load → key + live card restored (#4)",
-    parsed.version === 4 &&
+    "persist (v5): neutron source survives save/load → key + live card restored (#4)",
+    parsed.version === 5 &&
       parsed.inventory.neutron_source === "Cf-252" &&
       loadErr === null &&
       restored.grayed === false,
@@ -1992,25 +1992,28 @@ async function runM7(page) {
       `sgCard=${ambe.sgCardRate}, sgAxis=${ambe.sgTraceAxis}/nAxis=${ambe.nTraceAxis}, registry=${ambe.registry}`,
   );
 
-  // 5) SPENT FUEL (M7c): a parameterized PWR discharge vector loads from the validated
+  // 5) SPENT FUEL (M7c + M9): a parameterized PWR discharge vector loads from the validated
   //    data/spent_fuel catalog (not the static manifest) via its picker card. The 67-nuclide
   //    inventory + the live decay-heat readout light up; cooling to 10 yr drops decay heat into
-  //    the published PWR band (~1.7 kW/tHM). Neutron stays GRAYED — spent fuel carries no v1
-  //    neutron source key (SF/(α,n) output is a documented defer, §11).
+  //    the published PWR band (~1.7 kW/tHM). M9: the neutron path now LIGHTS for spent fuel —
+  //    a MULTI-parent spontaneous-fission source (S(t)=Σ yield_n·A_n(t), Cm-244-dominated at
+  //    10 yr) via `spentFuelNeutronId` (NOT the single-key `neutronSource`), carrying the loud
+  //    SF-only lower-bound caveat ((α,n) unmodeled).
   const SF45 = '[data-testid="source-pwr-uox-45gwd-4pct"]';
   const sfCat = await page.evaluate(() => ({
     n: window.__APP__.spentFuelSources.length,
     ids: window.__APP__.spentFuelSources.map((s) => s.id),
+    hasNeutron: window.__APP__.spentFuelSources.every((s) => s.spentFuelNeutronId),
   }));
   record(
-    "M7c spent-fuel catalog present (inventory from validated data/spent_fuel vectors)",
-    sfCat.n === 2 && sfCat.ids.includes("pwr-uox-45gwd-4pct"),
-    `n=${sfCat.n}, ids=${JSON.stringify(sfCat.ids)}`,
+    "M7c spent-fuel catalog present (inventory from validated data/spent_fuel vectors), all SF-neutron armed (M9)",
+    sfCat.n === 2 && sfCat.ids.includes("pwr-uox-45gwd-4pct") && sfCat.hasNeutron,
+    `n=${sfCat.n}, ids=${JSON.stringify(sfCat.ids)}, hasNeutron=${sfCat.hasNeutron}`,
   );
 
   await page.click(SF45);
   await page.waitForFunction(
-    "window.__APP__.status === 'solved' && window.__APP__.decayHeatSeries",
+    "window.__APP__.status === 'solved' && window.__APP__.decayHeatSeries && window.__APP__.neutronDoseSeries",
     null,
     { timeout: 60_000 },
   );
@@ -2020,27 +2023,97 @@ async function runM7(page) {
     app.setReferenceTimeS(10 * YR); // cool to 10 yr (forward-decay evaluation, not a re-solve)
     if (app.cursorRange) app.setCursorOffsetS(app.cursorRange[0]); // cursor ≈ 0 → currentTime ≈ 10 yr
     const valEl = document.querySelector(".decayheat .value");
+    const card = document.querySelector('[data-testid="dose-neutron"]');
+    const lb = document.querySelector('[data-testid="dose-neutron-sf-lowerbound"]');
     return {
       nEntries: app.entries.length,
       hasCs137: app.closure.includes("Cs-137"),
       neutronSource: app.neutronSource,
+      spentFuelNeutronId: app.spentFuelNeutronId,
       heatW: app.decayHeatAtCursor,
       heatText: valEl ? valEl.textContent : null,
       err: app.decayHeatError,
+      nRate: app.neutronRateAtCursor,
+      nErr: app.neutronDoseError,
+      grayed: card ? card.className.includes("grayed") : null,
+      hbar: app.neutronDoseSeries ? app.neutronDoseSeries.spectrum_avg_coeff_pSv_cm2 : null,
+      lowerBound: lb ? lb.textContent.replace(/\s+/g, " ").trim() : null,
       registry: app.handle ? 1 : 0,
     };
   });
   const heatKw = sf.heatW / 1e3;
   record(
-    "M7c: spent fuel loads 67-nuclide vector; live decay-heat readout ≈ 1.7 kW/tHM at 10 yr; n grayed",
+    "M7c: spent fuel loads 67-nuclide vector; live decay-heat readout ≈ 1.7 kW/tHM at 10 yr",
     sf.nEntries === 67 &&
       sf.hasCs137 &&
-      sf.neutronSource === null &&
       sf.err === "" &&
       heatKw > 1.0 &&
       heatKw < 2.5 &&
       /W/.test(sf.heatText || ""),
-    `n=${sf.nEntries}, Cs137=${sf.hasCs137}, neutronSource=${sf.neutronSource}, heat=${heatKw.toFixed(3)} kW/tHM, text=${JSON.stringify(sf.heatText)}, err=${JSON.stringify(sf.err)}`,
+    `n=${sf.nEntries}, Cs137=${sf.hasCs137}, heat=${heatKw.toFixed(3)} kW/tHM, text=${JSON.stringify(sf.heatText)}, err=${JSON.stringify(sf.err)}`,
+  );
+  record(
+    "M9: spent fuel lights the MULTI-parent SF neutron path (spentFuelNeutronId set, neutronSource null), live card + SF-only lower-bound caveat",
+    sf.spentFuelNeutronId === "pwr-uox-45gwd-4pct" &&
+      sf.neutronSource === null &&
+      sf.grayed === false &&
+      sf.nErr === "" &&
+      Number.isFinite(sf.nRate) &&
+      sf.nRate > 0 &&
+      Math.abs(sf.hbar - 383) / 383 < 0.05 &&
+      /lower bound/i.test(sf.lowerBound || ""),
+    `sfNId=${sf.spentFuelNeutronId}, neutronSource=${sf.neutronSource}, grayed=${sf.grayed}, nRate=${sf.nRate}, hbar=${sf.hbar}, lb=${JSON.stringify(sf.lowerBound)}`,
+  );
+
+  // 5b) PERSIST v5 round-trip (M9): the saved file is v5 carrying spent_fuel_neutron_id; clear →
+  //     loadFromText restores the id AND the live SF neutron card (a dropped id would re-gray it).
+  const sfSaved = await page.evaluate(() => window.__APP__.serialize());
+  const sfPersist = await page.evaluate(async (text) => {
+    const app = window.__APP__;
+    const parsed = JSON.parse(text);
+    await app.clear();
+    const loadErr = await app.loadFromText(text);
+    const card = document.querySelector('[data-testid="dose-neutron"]');
+    return {
+      version: parsed.version,
+      savedId: parsed.inventory.spent_fuel_neutron_id,
+      loadErr,
+      restoredId: app.spentFuelNeutronId,
+      cardLive: card ? !card.className.includes("grayed") : null,
+      seriesPresent: app.neutronDoseSeries !== null,
+    };
+  }, sfSaved);
+  record(
+    "M9 persist (v5): spent_fuel_neutron_id survives save/load → id + live SF neutron card restored",
+    sfPersist.version === 5 &&
+      sfPersist.savedId === "pwr-uox-45gwd-4pct" &&
+      sfPersist.loadErr === null &&
+      sfPersist.restoredId === "pwr-uox-45gwd-4pct" &&
+      sfPersist.cardLive === true &&
+      sfPersist.seriesPresent,
+    `version=${sfPersist.version}, savedId=${sfPersist.savedId}, loadErr=${sfPersist.loadErr}, restoredId=${sfPersist.restoredId}, cardLive=${sfPersist.cardLive}`,
+  );
+
+  // 5c) ORPHAN GUARD (M9): hand-editing the inventory drops spentFuelNeutronId so the multi-parent
+  //     neutron path goes dark cleanly (the prebuilt identity is broken) — no stale series/error.
+  const sfOrphan = await page.evaluate(async () => {
+    const app = window.__APP__;
+    await app.removeEntry(0); // any hand-edit
+    const card = document.querySelector('[data-testid="dose-neutron"]');
+    return {
+      spentFuelNeutronId: app.spentFuelNeutronId,
+      seriesNull: app.neutronDoseSeries === null,
+      nErr: app.neutronDoseError,
+      grayed: card ? card.className.includes("grayed") : null,
+    };
+  });
+  record(
+    "M9 orphan guard: hand-edit drops spentFuelNeutronId + series; SF neutron card re-grays, no error",
+    sfOrphan.spentFuelNeutronId === null &&
+      sfOrphan.seriesNull &&
+      sfOrphan.nErr === "" &&
+      sfOrphan.grayed === true,
+    `sfNId=${sfOrphan.spentFuelNeutronId}, seriesNull=${sfOrphan.seriesNull}, err=${JSON.stringify(sfOrphan.nErr)}, grayed=${sfOrphan.grayed}`,
   );
 
   // 6) FALLOUT (M7d, §13 #5): a fresh fission-product vector loads from the validated

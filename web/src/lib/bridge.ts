@@ -158,6 +158,10 @@ export interface DoseOk {
    *  Sv total, but is kept distinct from the inventory's decay-γ lines (it is a reaction γ,
    *  not a decay line). */
   source_gamma?: DoseOk | null;
+  /** spent_fuel_neutron_dose responses only (M9): per-time fraction of the SF neutron source
+   *  from emitters without an evaluated ν̄ (chiefly Cm-246 at long cooling) — NOT in the dose.
+   *  The honest lower-bound gap, surfaced for the UI to show (the dangerous under-count). */
+  dropped_sf_frac?: number[];
 }
 
 /** One shield material for the M6g picker. `has_buildup` is the γ-shield gate (a material
@@ -229,6 +233,8 @@ export interface SpentFuelSource {
   referenceTimeS: number;
   burnup_GWd_tHM: number;
   enrichment_pct: number;
+  /** M9: this vector carries an intrinsic multi-parent SF neutron source (arms the neutron view). */
+  hasNeutron: boolean;
   entries: SolveEntry[];
 }
 export interface SpentFuelCatalogOk {
@@ -344,6 +350,12 @@ export class BridgeClient {
 
   neutron_dose(handle: Handle, req: Record<string, unknown>): DoseResponse {
     return this.call<DoseResponse>("neutron_dose", handle, JSON.stringify(req));
+  }
+
+  /** The §6.3 spent-fuel SF neutron dose (M9) — multi-parent (S(t)=Σ yield_n·A_n(t)); same
+   *  DoseOk shape as `neutron_dose`. `req`: {times_s, source_id, quantity, distance_m, geometry}. */
+  spent_fuel_neutron_dose(handle: Handle, req: Record<string, unknown>): DoseResponse {
+    return this.call<DoseResponse>("spent_fuel_neutron_dose", handle, JSON.stringify(req));
   }
 
   /** The §8 spent-fuel catalog (inventory from validated `data/spent_fuel`); one fetch,

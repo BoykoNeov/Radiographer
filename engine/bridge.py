@@ -31,8 +31,9 @@ from engine.emissions import EmissionsError
 from engine.inventory import EngineError, SolvedInventory
 from engine.neutron_dose import NeutronDoseError, NeutronDoseModel
 from engine.neutron_source import NeutronSourceError
+from engine.spent_fuel_neutron import SpentFuelNeutronModel
 from engine.fallout import FalloutError, catalog as _fallout_catalog
-from engine.spent_fuel import SpentFuelError, catalog as _spent_fuel_catalog
+from engine.spent_fuel import SpentFuelError, catalog as _spent_fuel_catalog, load_vector as _spent_fuel_vector
 from engine.photon_interp import OffGridError
 
 #: Expected, structured domain errors — surfaced loudly but without a traceback (the
@@ -415,6 +416,46 @@ def neutron_dose(handle: str, request_json: str) -> str:
                     [model.parent], quantity, geometry=geometry, photon_override=override
                 )
                 out["source_gamma"] = gm.dose_rate_series(activities, distance_m)
+        return _ok(out)
+    except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
+        return _err(exc)
+
+
+def spent_fuel_neutron_dose(handle: str, request_json: str) -> str:
+    """``{"times_s":[...], "source_id":"pwr-uox-45gwd-4pct", "quantity":"ambient_H10",
+        "distance_m":1.0, "geometry":null}`` ->
+    ``{ok, quantity, si_unit:"Sv", per, times_s, distance_m, source:"spent-fuel SF",
+       spectrum_source, spectrum_avg_coeff_pSv_cm2, rate_si, dropped_sf_frac, warnings,
+       source_gamma:null}``.
+
+    The §6.3 **spent-fuel** neutron dose — the MULTI-parent path (M9). Unlike :func:`neutron_dose`
+    (one tabulated source key), spent fuel emits from many actinides, so the source strength is
+    intrinsic to the loaded inventory: ``S(t)=Σ yield_n·A_n(t)`` off the handle's one Bateman
+    solve. ``yield_n`` and the representative SF spectrum come from the VALIDATED ``data/spent_fuel``
+    vector's ``neutron`` block (looked up by ``source_id``); the same DoseOk shape as
+    :func:`neutron_dose` so the JS cursor/stacked-bar consumers are reused unchanged.
+
+    SF only — (α,n) is unmodeled (lower bound), and the unmodeled-Cm-246 fraction at long cooling
+    rides in ``dropped_sf_frac`` + ``warnings`` (§11, never silent). ``source_gamma`` is always
+    null: spent-fuel γ is the ICRP-107 decay lines (scored by the γ path), not reaction γ."""
+    try:
+        req = json.loads(request_json)
+        solved = _get(handle)
+        activities = solved.evaluate(req["times_s"], axis="activity", unit="Bq")
+        rec = _spent_fuel_vector(req["source_id"])
+        nb = rec.get("neutron")
+        if not nb or not nb.get("yields_n_per_decay"):
+            raise SpentFuelError(f"{req['source_id']}: no SF neutron block (rebuild the vector)")
+        model = SpentFuelNeutronModel(
+            nb["yields_n_per_decay"],
+            nb["spectrum_source"],
+            req.get("quantity", "ambient_H10"),
+            geometry=req.get("geometry"),
+            dropped_sf_branch=nb.get("dropped_sf_branch"),
+            dropped_nubar_nominal=nb.get("dropped_nubar_nominal", 3.0),
+        )
+        out = model.dose_rate_series(activities, float(req["distance_m"]))
+        out["source_gamma"] = None
         return _ok(out)
     except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
         return _err(exc)

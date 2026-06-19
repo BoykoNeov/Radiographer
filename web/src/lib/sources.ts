@@ -34,6 +34,11 @@ export interface PrebuiltSource {
    *  neutron sources; its presence is the §6.3 gray-out gate that lights the neutron
    *  dose path (M7b). Absent ⇒ neutron stays grayed (a user-style inventory). */
   neutronSource?: string;
+  /** Spent-fuel SF neutron source id (`data/spent_fuel/<id>.json`) — present ONLY for spent-fuel
+   *  vectors that carry a `neutron` block (M9). The MULTI-parent neutron path: unlike
+   *  `neutronSource` (one tabulated key), the source strength is intrinsic to the loaded
+   *  inventory (S(t)=Σ yield_n·A_n(t)). Mutually exclusive with `neutronSource`. */
+  spentFuelNeutronId?: string;
   /** Optional extra teaching caveat surfaced beside the blurb (honesty, §11). */
   caveat?: string;
 }

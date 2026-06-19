@@ -17,7 +17,7 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # v2: discharge vector + per-nuclide SF neutron-yield block (M9)
 
 _DEFAULT_ROOT = Path(__file__).resolve().parents[1] / "data" / "spent_fuel"
 _data_root = _DEFAULT_ROOT
@@ -84,6 +84,9 @@ def catalog() -> list[dict]:
                 "referenceTimeS": rec.get("cooling_time_s", 0.0),
                 "burnup_GWd_tHM": rec["burnup_GWd_tHM"],
                 "enrichment_pct": rec["enrichment_pct"],
+                # M9: a spontaneous-fission neutron source rides this inventory (multi-parent,
+                # not a single tabulated key). The picker uses this to arm the neutron view.
+                "hasNeutron": bool(rec.get("neutron", {}).get("yields_n_per_decay")),
                 "entries": [
                     {"name": e["name"], "quantity": e["mass_g_per_tHM"], "unit": "g"}
                     for e in rec["entries"]

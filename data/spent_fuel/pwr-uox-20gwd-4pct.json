@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "id": "pwr-uox-20gwd-4pct",
   "label": "PWR spent fuel — 20 GWd/tHM, 4.0% (low burnup)",
   "reactor": "PWR UOX (Serpent2 pin-cell)",
@@ -283,6 +283,46 @@
       "mass_g_per_tHM": 2.703758971207454e-16
     }
   ],
+  "neutron": {
+    "model": "spontaneous-fission (SF) only — (α,n) on oxygen is NOT in the SCK-CEN dataset, so the modeled neutron output is a LOWER BOUND (the dangerous direction)",
+    "spectrum_source": "Cf-252",
+    "nubar_source": "IAEA NDS SF_n-Yield_20150313 Table 1 (JEFF-3.1 / Holden 1985); yield_per_decay = (_SF/_A)·ν_p",
+    "yields_n_per_decay": {
+      "Th-232": 2.1025831736132963e-11,
+      "U-232": 1.53639384432605e-12,
+      "U-234": 3.062089077760774e-11,
+      "U-235": 1.3464071079360015e-10,
+      "U-236": 1.7084536304319422e-09,
+      "U-238": 1.09199878308488e-06,
+      "Pu-238": 4.110591003917976e-09,
+      "Pu-239": 7.192002778904283e-12,
+      "Pu-240": 1.226069563363985e-07,
+      "Pu-242": 1.1775504312318475e-05,
+      "Am-241": 1.0737489611327141e-11,
+      "Cm-242": 1.5493995467604077e-07,
+      "Cm-244": 3.7536070350000387e-06,
+      "Bk-249": 1.5963998413224861e-09
+    },
+    "dropped_sf_branch": {
+      "Th-230": 2.49647732646482e-13,
+      "Pa-231": 2.9981592696576982e-12,
+      "Pu-244": 0.0012499097007440659,
+      "Am-242m": 1.60034211906679e-10,
+      "Am-243": 3.712222297216612e-11,
+      "Cm-246": 0.00026139889183421534,
+      "Cm-248": 0.08408880573993173,
+      "Cm-250": 0.7404255319148936,
+      "Cf-249": 5.223978059292151e-09,
+      "Cf-250": 0.0007651515151515152
+    },
+    "dropped_nubar_nominal": 3.0,
+    "dropped_sf_frac_at_discharge": 0.00019252090231495274,
+    "crosscheck_Cm244": {
+      "Cm244_n_per_decay": 3.7536070350000387e-06,
+      "Cm244_iaea_n_per_decay": 3.6735934382296785e-06,
+      "rel": 0.021780743600445657
+    }
+  },
   "dropped": {
     "nuclides": [
       "Se-82",
@@ -294,7 +334,7 @@
     "activity_frac": 1.7815577529658008e-19
   },
   "source_ref": "SCK-CEN UOX PWR Serpent2 discharge library, Mendeley Data DOI 10.17632/shv89y2zzd (UOX file, version 4), CC BY 4.0. Discharge (zero cooling); cooling = the §9 reference-time control.",
-  "neutron_caveat": "Cooled spent fuel emits neutrons (SF + (α,n), e.g. Cm-244) — the dataset carries _SF/_AN — but v1 does NOT model spent-fuel neutron output (no source key); only γ/β/decay-heat are computed. A future hook.",
+  "neutron_caveat": "Neutron output is SPONTANEOUS-FISSION only (chiefly Cm-244, plus Cm-242 at short cooling), folded against a representative SF spectrum. (α,n) on the oxygen in UO₂ is NOT in this dataset and is unmodeled, so the neutron dose is a LOWER BOUND. At multi-century cooling the unmodeled Cm-246 SF (no evaluated ν̄) grows in — surfaced as a dropped-fraction warning, never silently.",
   "selfcheck": {
     "cs137_Bq_per_tHM": 2349838284868984.0,
     "cs137_fission_yield_estimate_Bq_per_tHM": 2441398651088869.5,
@@ -302,6 +342,11 @@
       "t0": 5764.193491224087,
       "t10yr": 638.7484168827671,
       "t100yr": 164.23957796026573
+    },
+    "sf_neutron_n_per_s_per_tHM": {
+      "t0": 77333470.41415542,
+      "t10yr": 15735793.52601253,
+      "t100yr": 1963264.5002745134
     }
   }
 }
