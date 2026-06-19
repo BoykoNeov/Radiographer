@@ -1,8 +1,30 @@
 # M7 — Prebuilt sources + teaching demos + chart-of-nuclides
 
-**Status:** M7a + M7b + **M7c done** ✅ (gate green dev + built); M7d sourcing-gated, pending
-the user scope decision + citable data. The Pu/U **pit** (trivial α inventory) is
-ready to drop into the catalog whenever #5 is confirmed.
+**Status:** M7a + M7b + **M7c done** ✅; **M7d parts 1–3 done** ✅ (gate green dev + built).
+M7d remaining: the **bomb-fallout** vector (§13 #5 second half) is a documented DEFER — it
+needs a cited ENDF/JEFF cumulative fission-yield table decayed forward + validated against the
+Way–Wigner t⁻¹·² (7:10) law (an M7c-sized dataset build, NOT a memory reconstruction; §11). No
+local yield data; surfaced in the honesty register as a transparent defer, not a silent omission.
+
+**M7d (parts 1–3) — DONE.** Three commits, gate green:
+- *Part 1 — weapons-grade Pu pit* (`sources.ts`): an α/γ inventory (~93.5% Pu-239 / 6% Pu-240
+  / 0.5% Pu-241, 4 kg), the §13 #5 piece that ships regardless. Treated like `fresh-fuel` (a
+  UI manifest, no regression test). Teaching: external ≠ internal; in-growing Am-241 (59.5 keV
+  γ) from Pu-241. Pu-240 SF-neutron output is a LOUD card caveat (external underestimate), never
+  silently modelled — mirrors the M7c spent-fuel-neutron defer.
+- *Part 2 — AmBe (α,n) source* (`data/neutron_sources/AmBe.json` + `build_ambe()`): the M5-deferred
+  source, now SOURCED. Spectrum = IAEA TRS-403 (2001) Table 4.V ISO 8529 Am–Be column (open
+  access, CITED not reconstructed); folds to h̄ = 393.6 pSv·cm² vs the standard's published
+  H*(10) = 391 (+0.66%), cross-validated by folding the table's own Cf-252 column (378 vs 385)
+  the same way. neutrons_per_decay = 2.2e6 n/s/Ci → 5.95e-5 (the one construction-dependent
+  number, ±15% caveat). 4.438 MeV reaction γ at R=0.575 (Liu et al.). **Crux (advisor):** bin
+  edges are geometric midpoints between tabulated points (geomean = E_i) so bins don't OVERLAP
+  — a naïve E_i·r^±½ on the 10/decade grid stores overlapping bins that still sum to 1 and fold
+  correctly (a silent data-integrity trap). **source_gamma is the first non-empty path** (Cf-252
+  ships []): the 4.438 MeV line flows engine→bridge→UI, rendered as a γ-card sub-line + its own
+  stacked-bar segment summing into the Sv total.
+- *Part 3 — honesty surfacing*: a "Prebuilt source catalog (M7)" register group (pit SF-neutron
+  defer, AmBe provenance/yield-caveat, fallout-deferred).
 
 **M7c (spent fuel + decay heat) — DONE.** Three commits, gate green:
 - *Part 1 — decay-heat engine* (`engine/decay_heat.py`): W(t) = Σ A_n·Ē_rec,n, recoverable
