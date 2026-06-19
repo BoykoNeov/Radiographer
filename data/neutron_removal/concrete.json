@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "material": "concrete",
+  "rho_g_cm3": 2.3,
+  "rho_source": "data/attenuation/concrete.json (γ density source)",
+  "weight_fractions": {
+    "H": 0.0056,
+    "O": 0.4956,
+    "Na": 0.0171,
+    "Mg": 0.0011,
+    "Al": 0.0456,
+    "Si": 0.3135,
+    "K": 0.0192,
+    "Ca": 0.0826,
+    "Fe": 0.0122
+  },
+  "hydrogen_weight_fraction": 0.0056,
+  "sigma_r_mass_cm2_g": 0.042506,
+  "sigma_r_cm1": 0.097765,
+  "published_sigma_r_cm1": 0.09989,
+  "published_rho_g_cm3": 2.35,
+  "method": "published whole-material Σ_R (ordinary concrete, OC-2), mass-normalized and re-derived at the repo's γ-attenuation density for γ↔n slab consistency",
+  "citation": "Ahmed, R., Hassan, G.S., Scott, T. & Bakr, M. (2023), 'Assessment of Five Concrete Types as Candidate Shielding Materials for a Compact Radiation Source Based on the IECF', Materials 16(7) 2845, DOI 10.3390/ma16072845 (ordinary concrete OC-2: Σ_R = 0.09989 cm⁻¹ at ρ = 2.35 g/cm³)."
+}

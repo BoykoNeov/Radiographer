@@ -28,7 +28,12 @@ from engine import neutron_removal as nr
 SIGMA_MASS = {"H": 0.602, "C": 0.051, "O": 0.041}
 ATOMIC_W = {"H": 1.008, "C": 12.011, "O": 15.999}
 
-SHIPPED = ("water", "polyethylene", "pmma")
+#: Built from the elemental NCRP-20 measured values via the mixture rule (paraffin is pure H/C,
+#: the same method as polyethylene — no new empiricism). Concrete is NOT here: it ships a
+#: published whole-material Σ_R (its heavy elements have no measured value in the set above).
+SHIPPED_MIXTURE = ("water", "polyethylene", "pmma", "paraffin")
+#: Every hydrogenous removal material that ships (mixture-rule + the published concrete).
+SHIPPED = SHIPPED_MIXTURE + ("concrete",)
 
 
 def _compound_sigma_r(stoich: dict[str, int], rho: float) -> float:
@@ -76,11 +81,43 @@ def test_water_matches_independent_measurement():
     ("water", {"H": 2, "O": 1}),
     ("polyethylene", {"C": 1, "H": 2}),
     ("pmma", {"C": 5, "H": 8, "O": 2}),
+    ("paraffin", {"C": 25, "H": 52}),  # CₙH₂ₙ₊₂, n=25 — pure H/C, same method as polyethylene
 ])
 def test_shipped_values_match_independent_mixture_rule(material, stoich):
     """The committed Σ_R equals a from-scratch mixture-rule recompute at the file's density."""
     expected = _compound_sigma_r(stoich, nr.density(material))
     assert nr.sigma_r_cm1(material) == pytest.approx(expected, rel=1e-4)
+
+
+def test_paraffin_is_hydrogen_rich_and_brackets_polyethylene():
+    """Paraffin (CₙH₂ₙ₊₂) is ~15 wt% H — the textbook hydrogenous neutron shield, very close to
+    polyethylene per cm (both ≈ 0.12 cm⁻¹). A pure H/C mixture-rule build, no new empiricism."""
+    assert nr.hydrogen_weight_fraction("paraffin") == pytest.approx(0.149, abs=0.01)
+    # Per-cm removal sits in the hydrocarbon band, bracketing polyethylene within ~15%.
+    assert nr.sigma_r_cm1("paraffin") == pytest.approx(nr.sigma_r_cm1("polyethylene"), rel=0.15)
+    assert nr.sigma_r_cm1("paraffin") > nr.sigma_r_cm1("water")  # denser-in-H than water per cm
+
+
+# -- 3b. concrete: published whole-material Σ_R (Ahmed et al. 2023) -----------
+
+def test_concrete_matches_published_ahmed2023():
+    """Concrete ships a PUBLISHED whole-material removal cross-section, not a reconstruction: its
+    heavy elements (Si/Ca/Al/Fe…) have no measured Σ_R/ρ in the NCRP-20 light-element set, so a
+    mixture-rule build would lean on an unanchored empirical Z-fit (§11). Ahmed, Hassan, Scott &
+    Bakr (2023), *Materials* 16(7) 2845 (DOI 10.3390/ma16072845), Table give ordinary concrete
+    OC-2 Σ_R = 0.09989 cm⁻¹ at ρ = 2.35 g/cm³ → mass removal 0.04251 cm²/g. We mass-normalize and
+    re-derive Σ_R at the repo's γ-attenuation density (2.3) so the SAME slab feeds γ and n."""
+    mass = 0.09989 / 2.35  # density-independent material property from the published value
+    rho = nr.density("concrete")  # 2.3 from data/attenuation/concrete.json (γ↔n consistency)
+    assert nr.sigma_r_mass_cm2_g("concrete") == pytest.approx(mass, rel=2e-3)
+    assert nr.sigma_r_cm1("concrete") == pytest.approx(rho * mass, rel=2e-3)
+    # OC-2 is the LOWEST-H ordinary concrete in that study (errs safe: less attenuation, higher
+    # dose). It lands at the conservative low end of the published ordinary-concrete band.
+    assert 0.09 < nr.sigma_r_cm1("concrete") < 0.11
+    # The hydrogen-presence gate reads a real, sourced weight fraction (OC-2 Table 1: 0.56 wt%).
+    assert nr.hydrogen_weight_fraction("concrete") == pytest.approx(0.0056, abs=3e-4)
+    rec = nr.load_removal("concrete")
+    assert "Ahmed" in rec["citation"] and "published" in rec["method"]
 
 
 # -- 4. physical sanity ------------------------------------------------------

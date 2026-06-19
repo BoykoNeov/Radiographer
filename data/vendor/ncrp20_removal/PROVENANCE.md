@@ -52,14 +52,34 @@ For a compound of bulk density ρ and element weight fractions w_i:
 
 ## Shipped material set
 
-Only the **pure hydrogenous** shields whose composition is H/C/O are shipped (the §6.3
-"hydrogenous, not lead" set): **water, polyethylene (CH₂)ₙ, PMMA (C₅H₈O₂)**. Bulk densities
-are taken from the existing `data/attenuation/<material>.json` (single density source, γ↔n
-consistency).
+**Mixture-rule (pure H/C/O, measured elemental Σ_R/ρ):** **water, polyethylene (CH₂)ₙ,
+PMMA (C₅H₈O₂), paraffin (CₙH₂ₙ₊₂, n=25)**. Paraffin is pure H/C — the SAME measured elemental
+values as polyethylene, no new empiricism. Bulk densities come from the existing
+`data/attenuation/<material>.json` (single density source, γ↔n consistency); paraffin has no
+γ-attenuation file, so its density is declared inline: ρ = 0.93 g/cm³ (NIST/PNNL "Paraffin wax";
+grade-dependent 0.87–0.93 — the upper, standard-reference end).
 
-**Concrete, paraffin, borated poly are deferred:** concrete needs Si/Ca/Al/Fe Σ_R/ρ not sourced
-here; mixing the NCRP-20 measured light-element values with a Wood-formula heavy-element fit
-would be an inconsistent dataset (no-fabrication discipline — cf. the AmBe-spectrum deferral).
+**Published whole-material (concrete):** ordinary concrete's heavy elements (Si/Ca/Al/Fe/Na/K/…)
+have **no** measured Σ_R/ρ in the NCRP-20 light-element set above. Reconstructing them from the
+Wood (1982) empirical Z-fit is *unanchored* — we have no measured element above Z=8 to validate
+that branch, and a trial Wood reconstruction undershot the published whole-material value by
+~12%. So per the user's instruction order (*credible source first, empirical only as fallback*),
+concrete ships a **directly published** value:
+
+> Ahmed, R., Hassan, G.S., Scott, T. & Bakr, M. (2023). *Assessment of Five Concrete Types as
+> Candidate Shielding Materials for a Compact Radiation Source Based on the IECF.* Materials
+> **16**(7), 2845. DOI 10.3390/ma16072845. Ordinary concrete **OC-2**: Σ_R = **0.09989 cm⁻¹** at
+> ρ = 2.35 g/cm³ (composition Table 1; H 0.56 wt%).
+
+OC-2 is the **lowest-Σ_R / lowest-hydrogen** of the five concretes in that study — chosen
+deliberately because it *errs safe* (less attenuation → higher predicted dose). The published
+Σ_R is **mass-normalized** to its density-independent form Σ_R/ρ = 0.09989/2.35 = 0.04251 cm²/g,
+then **re-densified at the repo's γ-attenuation density** (ρ = 2.3 g/cm³, `data/attenuation/
+concrete.json`) → Σ_R = **0.0978 cm⁻¹**, so the SAME physical slab thickness drives both the γ
+and the neutron path. The published ordinary-concrete band itself is wide (OC-2 0.0999 →
+OC-1 0.1496 cm⁻¹), driven mostly by water/hydrogen content — see the honesty register.
+
+**Still deferred:** borated polyethylene (needs a boron capture term beyond fast-neutron removal).
 
 ## Honesty register (→ HANDOFF_PLAN §11, M10)
 
@@ -74,3 +94,11 @@ would be an inconsistent dataset (no-fabrication discipline — cf. the AmBe-spe
   (intermediate-neutron buildup) — the dangerous direction; order-of-magnitude grade.
 - **Composite-order not modeled.** "Enough hydrogen behind a heavy layer" is assumed, not
   checked (parallels the M8 γ layer-order limit).
+- **Concrete Σ_R is mix-dependent (±~50%).** The shipped concrete value is ONE published
+  ordinary-concrete mix (OC-2, low hydrogen). Real concrete Σ_R varies strongly with water
+  content, aggregate, and density — the same study spans 0.0999→0.1496 cm⁻¹ for "ordinary"
+  concrete, and heavy/serpentine concretes go higher (≈0.37). The shipped low-end value
+  under-states attenuation for wetter/denser mixes — the *safe* direction for a dose tool, but a
+  real ×1.5 uncertainty. (Surfaced in the UI's neutron dose-vs-thickness widget.)
+- **Paraffin density grade.** Σ_R scales with ρ; paraffin wax ρ varies 0.87–0.93 g/cm³ by grade,
+  a ~±3% band on the shipped Σ_R.

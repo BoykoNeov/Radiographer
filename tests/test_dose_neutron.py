@@ -261,3 +261,19 @@ def test_model_lead_shield_does_not_attenuate_and_warns():
     m = NeutronDoseModel("Cf-252", "ambient_H10", shield=[("lead", 10.0)])
     assert m.T_n == 1.0
     assert any(w.get("reason") == "no_hydrogenous_layer" for w in m.warnings)
+
+
+def test_concrete_now_attenuates_neutrons():
+    # Behavior change vs the M10 ship: concrete gained published removal data, so it is now a
+    # hydrogenous neutron shield, NOT transparent. (The lead/iron tests above still hold — those
+    # have no removal data.) Updated consciously because the premise changed, not to make green.
+    sig = nr.sigma_r_cm1("concrete")
+    T, warns = neutron_transmission([("concrete", 30.0)])
+    assert T == pytest.approx(math.exp(-sig * 30.0), rel=1e-12)
+    assert 0.0 < T < 1.0
+    assert not any(w.get("reason") == "no_hydrogenous_layer" for w in warns)
+    # A lead+concrete stack: lead transparent (flagged), concrete removes — mixed-order caveat.
+    Tm, wm = neutron_transmission([("lead", 5.0), ("concrete", 30.0)])
+    assert Tm == pytest.approx(T, rel=1e-12)
+    reasons = {w.get("reason") for w in wm}
+    assert "neutron_transparent" in reasons and "composite_order_unmodeled" in reasons

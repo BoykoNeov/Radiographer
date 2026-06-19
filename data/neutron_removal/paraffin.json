@@ -1,25 +1,22 @@
 {
   "schema_version": 1,
-  "material": "pmma",
-  "rho_g_cm3": 1.19,
-  "rho_source": "data/attenuation/pmma.json (γ density source)",
+  "material": "paraffin",
+  "rho_g_cm3": 0.93,
+  "rho_source": "NIST/PNNL Compendium of Material Composition Data, 'Paraffin wax' (ρ=0.93 g/cm³; grade-dependent 0.87–0.93).",
   "composition": {
-    "C": 5,
-    "H": 8,
-    "O": 2
+    "C": 25,
+    "H": 52
   },
   "weight_fractions": {
-    "C": 0.599848,
-    "H": 0.080546,
-    "O": 0.319606
+    "C": 0.851383,
+    "H": 0.148617
   },
-  "hydrogen_weight_fraction": 0.080546,
-  "sigma_r_mass_cm2_g": 0.092185,
-  "sigma_r_cm1": 0.1097,
+  "hydrogen_weight_fraction": 0.148617,
+  "sigma_r_mass_cm2_g": 0.132888,
+  "sigma_r_cm1": 0.123586,
   "elemental_sigma_r_mass_cm2_g": {
     "C": 0.051,
-    "H": 0.602,
-    "O": 0.041
+    "H": 0.602
   },
   "method": "NCRP-20 elemental Σ_R/ρ × mixture rule (Σ_R = ρ·Σ w_i·(Σ_R/ρ)_i)",
   "citation": "NCRP Report No. 20 (1957), Protection against Neutron Radiation up to 30 MeV, NBS Handbook 63; elemental Σ_R/ρ via Akyıldırım (2019), Erzincan Univ. J. Sci. Tech. 12(2) 1141–1148, DOI 10.18185/erzifbed.587514."
