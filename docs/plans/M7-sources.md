@@ -1,10 +1,10 @@
 # M7 — Prebuilt sources + teaching demos + chart-of-nuclides
 
-**Status:** M7a + M7b + **M7c done** ✅; **M7d parts 1–3 done** ✅ (gate green dev + built).
-M7d remaining: the **bomb-fallout** vector (§13 #5 second half) is a documented DEFER — it
-needs a cited ENDF/JEFF cumulative fission-yield table decayed forward + validated against the
-Way–Wigner t⁻¹·² (7:10) law (an M7c-sized dataset build, NOT a memory reconstruction; §11). No
-local yield data; surfaced in the honesty register as a transparent defer, not a silent omission.
+**Status:** M7a + M7b + **M7c done** ✅; **M7d done** ✅ (parts 1–4, gate green dev + built).
+All §8/§13 #5 sources shipped — **nothing left sourcing-gated**. Every source is CITED + validated
+(no fabrication): the §11 "cite or defer, never reconstruct" discipline held throughout, and
+even fallout — which the user authorized to build on speculative data — landed on a clean cited
+ENDF source rather than the speculative fallback.
 
 **M7d (parts 1–3) — DONE.** Three commits, gate green:
 - *Part 1 — weapons-grade Pu pit* (`sources.ts`): an α/γ inventory (~93.5% Pu-239 / 6% Pu-240
@@ -24,7 +24,26 @@ local yield data; surfaced in the honesty register as a transparent defer, not a
   ships []): the 4.438 MeV line flows engine→bridge→UI, rendered as a γ-card sub-line + its own
   stacked-bar segment summing into the Sv total.
 - *Part 3 — honesty surfacing*: a "Prebuilt source catalog (M7)" register group (pit SF-neutron
-  defer, AmBe provenance/yield-caveat, fallout-deferred).
+  defer, AmBe provenance/yield-caveat, fallout caveats).
+- *Part 4 — bomb fallout* (`data/fallout/u235_fission_fallout.json` + `build_fallout.py`,
+  `engine/fallout.py`): the §13 #5 second half. **ENDF/B-VIII.0 U-235 thermal CUMULATIVE
+  fission yields** (MF=8/MT=459), vendored from NNDC (`data/vendor/endf_nfy/`, SHA in
+  PROVENANCE.md) — a CITED table, not the authorized speculative fallback. 177 nuclides
+  (cumulative yield ≥ 1e-3/fission). **Validation (honesty anchor):** seeded + decayed through
+  the Bateman engine, the gross-γ source strength follows the **Way–Wigner t⁻¹·² (7:10) law to
+  −1.22** over H+1 h…30 d (regression test); dominant yields match textbook ENDF (Cs-137 6.19%,
+  I-131 2.89%, …). **Why cumulative not independent (crux):** independent yields sit on sub-second
+  precursors absent from ICRP-107 → drop ~69% of fragments + underfeed long-lived γ emitters;
+  cumulative ≈ the H+1 h chain-fed inventory (double-counts within chains — a shape-preserving
+  approximation, so the 7:10 DECAY is meaningful, absolute level approximate, t<H+1 h unreliable).
+  Thermal U-235 is a representative mix (real weapon = fast U/Pu); all caveated. Wiring mirrors
+  M7c: `bridge.fallout_catalog()` → `appState.falloutSources` → picker (Weapons-material group,
+  beside the pit); `data/fallout` added to the build-archive bundle.
+
+**Advisor note (process):** I first deferred fallout after only a *local* data check; the advisor
+pushed back — the user said "build it" and I'd skipped the web-sourcing I gave AmBe. The redo
+found ENDF/B-VIII.0 yields cleanly. Lesson: give every gated piece the same sourcing effort
+before concluding "defer".
 
 **M7c (spent fuel + decay heat) — DONE.** Three commits, gate green:
 - *Part 1 — decay-heat engine* (`engine/decay_heat.py`): W(t) = Σ A_n·Ē_rec,n, recoverable
