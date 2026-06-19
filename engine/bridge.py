@@ -25,6 +25,7 @@ from engine.beta_dose import BetaDoseError, BetaSkinDoseModel
 from engine.buildup import BuildupError
 from engine.chain import build_dag
 from engine.conversion import ConversionError
+from engine.decay_heat import DecayHeatError, DecayHeatModel
 from engine.dose import SCORING_FLOOR_MEV, DoseError, GammaDoseModel
 from engine.emissions import EmissionsError
 from engine.inventory import EngineError, SolvedInventory
@@ -37,6 +38,7 @@ from engine.photon_interp import OffGridError
 _EXPECTED_ERRORS = (
     EngineError,
     DoseError,
+    DecayHeatError,
     BetaDoseError,
     NeutronDoseError,
     NeutronSourceError,
@@ -383,6 +385,28 @@ def neutron_dose(handle: str, request_json: str) -> str:
                 )
                 out["source_gamma"] = gm.dose_rate_series(activities, distance_m)
         return _ok(out)
+    except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
+        return _err(exc)
+
+
+def decay_heat(handle: str, request_json: str) -> str:
+    """``{"times_s": [...]}`` -> ``{ok, quantity:"decay_heat", si_unit:"W", times_s,
+        total_W, by_nuclide_W, coeff_W_per_Bq, E_rec_MeV, channels_MeV, definition}``.
+
+    The §5 **decay heat** (thermal power, W) over a time grid, the §3 "solve once,
+    evaluate many" way: one Bateman solve (the handle), one ``DecayHeatModel`` (the fixed
+    per-nuclide recoverable-energy coefficient W/Bq, assembled once from the same bundled
+    ICRP-107 emission spectra the γ/β engines read — no new dataset), one matvec against
+    the activity series. DISTANCE- and quantity-free (heat is total locally-deposited power,
+    not a point-field quantity). ``total_W`` is Σ over nuclides; ``by_nuclide_W`` is the
+    §5/§9 dominant-contributor breakdown. ``definition`` carries the honesty-register
+    statement of exactly what is summed (bulk recoverable energy, antineutrino-excluded)."""
+    try:
+        req = json.loads(request_json)
+        solved = _get(handle)
+        activities = solved.evaluate(req["times_s"], axis="activity", unit="Bq")
+        model = DecayHeatModel(solved.names)
+        return _ok(model.heat_series(activities))
     except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
         return _err(exc)
 

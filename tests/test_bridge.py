@@ -184,6 +184,27 @@ def test_dose_round_trip_co60_air_kerma():
         bridge.release(handle)
 
 
+def test_decay_heat_round_trip_co60():
+    # Solve once, then ask for the decay-heat (W) series over the same handle. 1 g Co-60
+    # ≈ 4.18e13 Bq with ~2.60 MeV recoverable/decay → ~17.4 W (the §5 specific-power anchor).
+    res = json.loads(
+        bridge.solve(json.dumps({"entries": [{"name": "Co-60", "quantity": 1.0, "unit": "g"}]}))
+    )
+    handle = res["handle"]
+    try:
+        out = json.loads(bridge.decay_heat(handle, json.dumps({"times_s": [0.0]})))
+        assert out["ok"] is True
+        assert out["quantity"] == "decay_heat" and out["si_unit"] == "W"
+        assert out["total_W"][0] == pytest.approx(17.4, rel=0.03)
+        # Breakdown sums to the total; the honesty-register definition crosses the bridge.
+        assert out["total_W"][0] == pytest.approx(
+            sum(col[0] for col in out["by_nuclide_W"].values()), rel=1e-12
+        )
+        assert "recoverable" in out["definition"].lower()
+    finally:
+        bridge.release(handle)
+
+
 def test_dose_no_buildup_shield_is_structured_error_not_traceback():
     res = json.loads(bridge.solve(json.dumps({"nuclides": {"Co-60": 1.0e9}, "unit": "Bq"})))
     handle = res["handle"]
