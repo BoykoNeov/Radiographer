@@ -207,7 +207,17 @@ resolved → AP.**
   for one layer; the layered approximation isn't needed until multi-layer lands).
   Beta bremsstrahlung-in-shield from the existing `beta_dose` brems path.
 
-### M6h — Honesty-register surfacing + headless UI test + polish
+### M6h — Honesty-register surfacing + headless UI test + polish  ✅ DONE
+**See `docs/plans/M6h-honesty-persist-polish.md`.** Gate green dev + built (M6a–g + 4 M6h
+checks). Serializer bumped to **v2** with additive `view`/`dose`/`shield`/`cursor` sections
++ loud per-field validation in the deserializer (the load path bypasses the setters, so
+validation lives there); the round-trip test asserts **identical VIEWS** (non-default in
+every field → rendered values match, not just `serialize()` strings — a dropped field is
+invisible to a string compare). The M6d cursor ordering trap is handled (restore after
+`solve()`, clamp). A consolidated **Honesty** panel surfaces the §11 items with no inline
+home — chiefly the degraded-trust **H\*(10) provenance** (unmerged OpenMC PR). `Dose.svelte`
+gained the missing store→local sync for its entry fields (the stale-display §11 bug).
+**Deferred (explicit):** localStorage autosave + service-worker first-load caching → post-v1.
 - Surface §11 honesty items in-app (the register must be *visible*, §0): the
   "not for safety decisions" disclaimer, per-modality accuracy registers, scoring
   floor, degraded-table notes, point-source/no-air caveats — as tooltips/info

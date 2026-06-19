@@ -44,9 +44,21 @@
   let distEl = $state<HTMLDivElement | null>(null);
 
   // -- local input bindings (commit to the store on change) ----------------------
+  // `mode` (above) and `expUnit` are EPHEMERAL by design (M6h #4) — cosmetic / display-unit
+  // state, not persisted. `distanceStr`/`expVal` mirror the store inputs.
   let distanceStr = $state<string>("1");
   let expVal = $state<number | null>(1);
   let expUnit = $state<string>("h");
+
+  // Keep the entry fields in sync when the store changes them elsewhere — chiefly an M6h
+  // state LOAD. Without this, after a load that changes distance/exposure the input boxes
+  // show their stale initial value while the dose uses the loaded one — a §11 wrong-but-quiet
+  // display mismatch (mirrors Shield.svelte's thickStr sync). No feedback loop: the setters'
+  // no-op guards absorb a same-value write, and a Svelte effect does not fire change events.
+  $effect(() => {
+    distanceStr = String(appState.doseDistanceM);
+    expVal = appState.exposureS / toSeconds(1, expUnit);
+  });
 
   // Inputs snap BACK to the model on invalid entry — never leave the field showing a
   // value the dose isn't actually using (a UI-layer wrong-but-quiet; §11). The setters

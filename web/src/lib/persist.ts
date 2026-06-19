@@ -1,27 +1,79 @@
-// Versioned save/load of app state (HANDOFF_PLAN §9; M6-ui M6b).
+// Versioned save/load of app state (HANDOFF_PLAN §9; M6-ui M6b → M6h).
 //
-// M6b serializes the INVENTORY slice only (entries + precision + t=0). Later chunks
-// (M6d/f/g) add their own sections — distance, shield, geometry, time cursor — and
-// BUMP `STATE_VERSION`; each adds its section additively and teaches the loader to
-// read it. The full-state round-trip test lands in M6h.
+// M6b shipped v1: the INVENTORY slice only (entries + precision + t=0). M6h bumps to v2
+// and adds the rest of the output/view-affecting state as ADDITIVE sibling sections —
+// `view` (axis + units + log y), `dose` (distance, quantity, geometry, exposure),
+// `shield` (material, thickness), and the `cursor_offset_s` time cursor. A v1 file still
+// loads: the new sections are optional and fall back to the type defaults.
+//
+// What is and is NOT persisted is a CONSCIOUS decision (M6-ui M6h #4; §11 no-silent-drop):
+// purely cosmetic / write-only entry state is EPHEMERAL by design — the dose breakdown
+// `mode` (stacked↔grouped), the exposure-entry display unit, and the time control's "go
+// to"/"set" entry fields. Those are documented as ephemeral, not silently lost.
 //
 // No-silent-error contract (CLAUDE.md, §11) made concrete here: loading never
-// "best-efforts" a bad file. A wrong schema, a NEWER version than this build
-// understands (where unknown fields would otherwise be dropped silently), or a
-// malformed inventory all throw a loud `PersistError` the UI surfaces — we refuse
-// rather than load a partial, misleading state.
+// "best-efforts" a bad file. A wrong schema, a NEWER version than this build understands
+// (where unknown fields would otherwise be dropped silently), or ANY malformed/out-of-range
+// field throws a loud `PersistError` the UI surfaces — we refuse rather than load a
+// partial, misleading state. ALL field validation lives HERE because the store's
+// `loadFromText` restores by direct assignment (bypassing the setters' guards, M6h #2).
 
-import type { InventoryEntry, Precision } from "./types";
+import {
+  ACTIVITY_UNITS,
+  AXIS_OPTIONS,
+  DEFAULT_GEOMETRY,
+  DEFAULT_SHIELD_THICKNESS_CM,
+  DOSE_QUANTITY_OPTIONS,
+  GEOMETRY_OPTIONS,
+  MASS_UNITS,
+  type Axis,
+  type DoseQuantity,
+  type InventoryEntry,
+  type Precision,
+} from "./types";
 
-/** The inventory slice that M6b persists. Later chunks add sibling sections. */
+/** The full app-state slice that M6h persists. Defaults below fill any absent section. */
 export interface PersistableState {
+  // inventory (v1)
   entries: InventoryEntry[];
   precision: Precision;
   referenceTimeS: number;
+  // view (v2)
+  axis: Axis;
+  activityUnit: string;
+  massUnit: string;
+  logY: boolean;
+  // dose (v2)
+  doseDistanceM: number;
+  doseQuantity: DoseQuantity;
+  doseGeometry: string;
+  exposureS: number;
+  // shield (v2)
+  shieldMaterial: string | null;
+  shieldThicknessCm: number;
+  // time cursor (v2). null ⇒ the file did not specify one → keep the solve's default home
+  // (the geometric midpoint), rather than forcing the cursor to the range start (M6h #3).
+  cursorOffsetS: number | null;
 }
 
+/** The defaults for any section a (v1 or partial) file omits — mirror the store's initial
+ *  values so an omitted section round-trips to the same view as a fresh app. */
+export const PERSIST_DEFAULTS: Omit<PersistableState, "entries" | "precision" | "referenceTimeS"> = {
+  axis: "activity",
+  activityUnit: "Bq",
+  massUnit: "g",
+  logY: true,
+  doseDistanceM: 1.0,
+  doseQuantity: "ambient_H10",
+  doseGeometry: DEFAULT_GEOMETRY,
+  exposureS: 3600,
+  shieldMaterial: null,
+  shieldThicknessCm: DEFAULT_SHIELD_THICKNESS_CM,
+  cursorOffsetS: null,
+};
+
 export const STATE_SCHEMA = "radiographer.app-state";
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
 
 export class PersistError extends Error {
   constructor(message: string) {
@@ -29,6 +81,14 @@ export class PersistError extends Error {
     this.name = "PersistError";
   }
 }
+
+// Enum membership sets (the deserializer's allow-lists; #2). Derived from the single
+// source of truth in types.ts so they can't drift from the UI options.
+const AXIS_VALUES = new Set<string>(AXIS_OPTIONS.map((o) => o.value));
+const QUANTITY_VALUES = new Set<string>(DOSE_QUANTITY_OPTIONS.map((o) => o.value));
+const GEOMETRY_VALUES = new Set<string>(GEOMETRY_OPTIONS.map((o) => o.value));
+const ACTIVITY_UNIT_VALUES = new Set<string>(ACTIVITY_UNITS);
+const MASS_UNIT_VALUES = new Set<string>(MASS_UNITS);
 
 interface Envelope {
   schema: string;
@@ -38,6 +98,23 @@ interface Envelope {
     precision: Precision;
     reference_time_s: number;
   };
+  view: {
+    axis: Axis;
+    activity_unit: string;
+    mass_unit: string;
+    log_y: boolean;
+  };
+  dose: {
+    distance_m: number;
+    quantity: DoseQuantity;
+    geometry: string;
+    exposure_s: number;
+  };
+  shield: {
+    material: string | null;
+    thickness_cm: number;
+  };
+  cursor_offset_s: number | null;
 }
 
 /** Serialize app state into the versioned envelope (pretty JSON text). */
@@ -54,6 +131,23 @@ export function serializeState(state: PersistableState): string {
       precision: state.precision,
       reference_time_s: state.referenceTimeS,
     },
+    view: {
+      axis: state.axis,
+      activity_unit: state.activityUnit,
+      mass_unit: state.massUnit,
+      log_y: state.logY,
+    },
+    dose: {
+      distance_m: state.doseDistanceM,
+      quantity: state.doseQuantity,
+      geometry: state.doseGeometry,
+      exposure_s: state.exposureS,
+    },
+    shield: {
+      material: state.shieldMaterial,
+      thickness_cm: state.shieldThicknessCm,
+    },
+    cursor_offset_s: state.cursorOffsetS,
   };
   return JSON.stringify(env, null, 2);
 }
@@ -78,9 +172,38 @@ function parseEntry(raw: unknown, i: number): InventoryEntry {
   return { name, quantity, unit };
 }
 
+/** A finite number ≥ `min` at `path`, or `fallback` when the key is absent. Loud otherwise
+ *  (no silent clamp on load — the load path bypasses the setters' guards, M6h #2). */
+function reqNumber(obj: Record<string, unknown>, key: string, path: string, min: number, fallback: number): number {
+  if (obj[key] === undefined) return fallback;
+  const v = obj[key];
+  if (typeof v !== "number" || !Number.isFinite(v)) {
+    throw new PersistError(`${path} must be a finite number (got ${JSON.stringify(v)})`);
+  }
+  if (v < min) throw new PersistError(`${path} must be ≥ ${min} (got ${v})`);
+  return v;
+}
+
+/** A value from `allowed` at `path`, or `fallback` when absent. Loud on an off-enum value. */
+function reqEnum<T extends string>(
+  obj: Record<string, unknown>,
+  key: string,
+  path: string,
+  allowed: Set<string>,
+  fallback: T,
+): T {
+  if (obj[key] === undefined) return fallback;
+  const v = obj[key];
+  if (typeof v !== "string" || !allowed.has(v)) {
+    throw new PersistError(`${path} must be one of [${[...allowed].join(", ")}] (got ${JSON.stringify(v)})`);
+  }
+  return v as T;
+}
+
 /**
  * Parse + validate a state file into `PersistableState`. Throws `PersistError`
- * loudly on anything wrong — never returns a partial/fabricated state.
+ * loudly on anything wrong — never returns a partial/fabricated state. Absent
+ * sections fall back to `PERSIST_DEFAULTS` (forward/backward tolerance, e.g. v1 files).
  */
 export function deserializeState(text: string): PersistableState {
   let obj: unknown;
@@ -107,6 +230,7 @@ export function deserializeState(text: string): PersistableState {
     );
   }
 
+  // -- inventory (required; the v1 slice) --
   const inv = obj.inventory;
   if (!isObject(inv)) throw new PersistError("missing inventory section");
 
@@ -119,16 +243,78 @@ export function deserializeState(text: string): PersistableState {
     throw new PersistError(`inventory.precision must be "double" or "hp" (got ${JSON.stringify(precision)})`);
   }
 
-  // t=0 is optional for forward/backward tolerance, but a present value must be a number.
-  let referenceTimeS = 0;
-  if (inv.reference_time_s !== undefined) {
-    if (typeof inv.reference_time_s !== "number" || !Number.isFinite(inv.reference_time_s)) {
-      throw new PersistError("inventory.reference_time_s must be a finite number");
-    }
-    referenceTimeS = inv.reference_time_s;
+  // t=0 is optional for forward/backward tolerance, but a present value must be a number ≥ 0.
+  const referenceTimeS = reqNumber(inv, "reference_time_s", "inventory.reference_time_s", 0, 0);
+
+  // -- view (v2; optional → defaults) --
+  const view = obj.view === undefined ? {} : obj.view;
+  if (!isObject(view)) throw new PersistError("view section must be an object");
+  const axis = reqEnum<Axis>(view, "axis", "view.axis", AXIS_VALUES, PERSIST_DEFAULTS.axis);
+  const activityUnit = reqEnum(view, "activity_unit", "view.activity_unit", ACTIVITY_UNIT_VALUES, PERSIST_DEFAULTS.activityUnit);
+  const massUnit = reqEnum(view, "mass_unit", "view.mass_unit", MASS_UNIT_VALUES, PERSIST_DEFAULTS.massUnit);
+  let logY = PERSIST_DEFAULTS.logY;
+  if (view.log_y !== undefined) {
+    if (typeof view.log_y !== "boolean") throw new PersistError(`view.log_y must be a boolean (got ${JSON.stringify(view.log_y)})`);
+    logY = view.log_y;
   }
 
-  return { entries, precision, referenceTimeS };
+  // -- dose (v2; optional → defaults). distance > 0 (γ field singular at 0); exposure ≥ 0. --
+  const dose = obj.dose === undefined ? {} : obj.dose;
+  if (!isObject(dose)) throw new PersistError("dose section must be an object");
+  const doseDistanceM = reqNumberPositive(dose, "distance_m", "dose.distance_m", PERSIST_DEFAULTS.doseDistanceM);
+  const doseQuantity = reqEnum<DoseQuantity>(dose, "quantity", "dose.quantity", QUANTITY_VALUES, PERSIST_DEFAULTS.doseQuantity);
+  const doseGeometry = reqEnum(dose, "geometry", "dose.geometry", GEOMETRY_VALUES, PERSIST_DEFAULTS.doseGeometry);
+  const exposureS = reqNumber(dose, "exposure_s", "dose.exposure_s", 0, PERSIST_DEFAULTS.exposureS);
+
+  // -- shield (v2; optional → defaults). material null-or-string (the picker + engine
+  //    fail-loud are the backstop for an unknown id, M6g #3); thickness ≥ 0. --
+  const shield = obj.shield === undefined ? {} : obj.shield;
+  if (!isObject(shield)) throw new PersistError("shield section must be an object");
+  let shieldMaterial: string | null = PERSIST_DEFAULTS.shieldMaterial;
+  if (shield.material !== undefined && shield.material !== null) {
+    if (typeof shield.material !== "string" || shield.material.length === 0) {
+      throw new PersistError(`shield.material must be null or a non-empty string (got ${JSON.stringify(shield.material)})`);
+    }
+    shieldMaterial = shield.material;
+  }
+  const shieldThicknessCm = reqNumber(shield, "thickness_cm", "shield.thickness_cm", 0, PERSIST_DEFAULTS.shieldThicknessCm);
+
+  // -- time cursor (v2; optional → null = keep the solve's default home, M6h #3) --
+  let cursorOffsetS: number | null = PERSIST_DEFAULTS.cursorOffsetS;
+  if (obj.cursor_offset_s !== undefined && obj.cursor_offset_s !== null) {
+    if (typeof obj.cursor_offset_s !== "number" || !Number.isFinite(obj.cursor_offset_s)) {
+      throw new PersistError(`cursor_offset_s must be a finite number or null (got ${JSON.stringify(obj.cursor_offset_s)})`);
+    }
+    cursorOffsetS = obj.cursor_offset_s;
+  }
+
+  return {
+    entries,
+    precision,
+    referenceTimeS,
+    axis,
+    activityUnit,
+    massUnit,
+    logY,
+    doseDistanceM,
+    doseQuantity,
+    doseGeometry,
+    exposureS,
+    shieldMaterial,
+    shieldThicknessCm,
+    cursorOffsetS,
+  };
+}
+
+/** A finite number strictly > 0 at `path`, or `fallback` when absent (distance's contract). */
+function reqNumberPositive(obj: Record<string, unknown>, key: string, path: string, fallback: number): number {
+  if (obj[key] === undefined) return fallback;
+  const v = obj[key];
+  if (typeof v !== "number" || !Number.isFinite(v)) {
+    throw new PersistError(`${path} must be a finite number (got ${JSON.stringify(v)})`);
+  }
+  if (!(v > 0)) throw new PersistError(`${path} must be > 0 (got ${v})`);
+  return v;
 }
 
 // --- browser I/O (thin, side-effecting wrappers; the store calls these) -------
@@ -151,7 +337,9 @@ export function readStateFile(file: File): Promise<string> {
   return file.text();
 }
 
-// NOTE: localStorage autosave (the §9 "autosave convenience") is DEFERRED. The
-// portable file save/load above is the source-of-truth path and is gate-tested;
-// autosave needs boot-restore wiring + write-on-change and interacts with the M6h
-// full-state round-trip, so it lands with that, not as half-wired dead code here.
+// NOTE: localStorage autosave (the §9 "autosave convenience") stays DEFERRED past v1 — a
+// CONSCIOUS M6h decision (see docs/plans/M6h-honesty-persist-polish.md #7), not a
+// fall-through: the portable file save/load above is the source-of-truth path and IS
+// gate-tested (the full-state round-trip), whereas autosave needs boot-restore wiring that
+// interacts with the heavy Pyodide boot, and first-load service-worker caching is itself a
+// documented stretch. It is post-v1 polish, recorded loudly rather than half-wired here.

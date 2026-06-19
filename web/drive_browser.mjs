@@ -1348,6 +1348,258 @@ async function runM6g(page) {
   return { ok: checks.every((c) => c.pass), checks };
 }
 
+// --- M6h: honesty register + FULL-STATE save/load round-trip (identical views) ---
+//
+// The load-bearing check (advisor): M6b's round-trip is `serialize() before === after`,
+// which CANNOT catch the bug M6h exists to prevent — a view-affecting field MISSING from
+// the serializer is absent from both `before` and `after`, so the strings match while the
+// view silently reverts to default on load. §9 says "load JSON → IDENTICAL VIEWS". So this
+// gate sets a NON-DEFAULT value in EVERY persisted v2 field (if a saved value equals its
+// default, a dropped field is invisible), captures a RENDERED value per view, then
+// clear() → load → asserts each rendered value matches AND serialize matches. It also
+// asserts the deserializer rejects out-of-range fields LOUDLY (validation lives there, since
+// the load path bypasses the setters' guards), and that the §11 honesty register renders
+// (incl. the degraded-trust H*(10) provenance — the item with no inline home).
+
+async function runM6h(page) {
+  const checks = [];
+  const record = (name, pass, detail) => checks.push({ name, pass, detail });
+
+  const CURVES = '[data-testid="curves-plot"]';
+  const GAMMA = '[data-testid="dose-gamma"]';
+  const DIST = '[data-testid="dose-distance"]';
+  const EXP = '[data-testid="dose-exposure"]';
+  const GEOM = '[data-testid="dose-geometry"]';
+  const ATTEN = '[data-testid="shield-atten"]';
+
+  // Capture one RENDERED value per view (read off the DOM / Plotly, not the store). Each
+  // tracks a distinct persisted field, so a dropped field changes at least one of them:
+  //  yTitle/yaxisType ← axis+unit+logY · cursorX0 ← cursorOffsetS · gammaRate ← distance+
+  //  quantity+geometry+shield+t₀+cursor · atten ← shield · distanceField/exposureField ←
+  //  the Dose.svelte store→local sync (the stale-field fix) · geometrySelect ← geometry.
+  const captureViews = () =>
+    page.evaluate(
+      (sels) => {
+        const [curves, gamma, dist, exp, geom, atten] = sels;
+        const cv = document.querySelector(curves);
+        const g = document.querySelector(gamma);
+        const a = document.querySelector(atten);
+        return {
+          yTitle: cv?.layout?.yaxis?.title?.text ?? null,
+          yaxisType: cv?.layout?.yaxis?.type ?? null,
+          cursorX0: cv?.layout?.shapes?.[0]?.x0 ?? null,
+          gammaRate: g ? g.getAttribute("data-rate-si") : null,
+          atten: a ? a.innerText.trim() : null,
+          distanceField: document.querySelector(dist)?.value ?? null,
+          exposureField: document.querySelector(exp)?.value ?? null,
+          geometrySelect: document.querySelector(geom)?.value ?? null,
+        };
+      },
+      [CURVES, GAMMA, DIST, EXP, GEOM, ATTEN],
+    );
+
+  // 1) Establish Co-60 with a NON-DEFAULT value in every persisted v2 field, then let all
+  //    views render. (precision stays double — a v1 field already covered by M6b, and the HP
+  //    path is multi-second; the new risk is the v2 sections.)
+  await page.evaluate(async () => {
+    const app = window.__APP__;
+    await app.clear();
+    await app.addEntry("Co-60", 1.0e9, "Bq");
+    app.setReferenceTimeS(31_557_600); // 1 yr (default 0)
+    app.setAxis("mass"); // default activity
+    app.setMassUnit("kg"); // default g
+    app.setActivityUnit("Ci"); // default Bq (inactive on mass axis, but must round-trip)
+    app.setLogY(false); // default true
+    app.setDoseQuantity("effective"); // default ambient_H10
+    app.setDoseGeometry("PA"); // default AP
+    app.setDoseDistanceM(2.5); // default 1.0
+    app.setExposureS(172800); // 2 d (default 3600)
+    app.setShieldMaterial("lead"); // default null
+    app.setShieldThicknessCm(1.5); // default 1.0
+    // a cursor distinct from the reset midpoint (so a dropped cursor → midpoint differs)
+    const r = app.cursorRange;
+    app.setCursorOffsetS(Math.sqrt(r[0] * r[1]) * 7);
+  });
+  await page.waitForFunction(
+    `(() => { const app = window.__APP__;
+       return app.status === 'solved' && app.shieldActive && app.gammaDoseSeries &&
+         app.curve && app.curve.axis === 'mass'; })()`,
+    null,
+    { timeout: 30_000 },
+  );
+  // Wait for the rendered surfaces the capture reads: curves on the Mass(kg)/linear axis,
+  // the effective-dose geometry dropdown, and the shield attenuation readout.
+  await page.waitForFunction(
+    `(() => { const el = document.querySelector('${CURVES}');
+       return el && el.layout && el.layout.yaxis && el.layout.yaxis.title &&
+         el.layout.yaxis.title.text === 'Mass (kg)' && el.layout.yaxis.type === 'linear' &&
+         el.layout.shapes && el.layout.shapes.length >= 1; })()`,
+    null,
+    { timeout: 30_000 },
+  );
+  await page.waitForSelector(GEOM);
+  await page.waitForSelector(ATTEN);
+
+  const before = await page.evaluate(() => window.__APP__.serialize());
+  const renderedBefore = await captureViews();
+
+  // 2) clear() → load(before) → the rendered views must come back IDENTICAL, and serialize
+  //    must match. (The discriminating part: every field is non-default, so a silently
+  //    dropped field would surface as a mismatch in at least one rendered value.)
+  await page.evaluate(async () => {
+    const app = window.__APP__;
+    await app.clear();
+    window.__M6H_CLEARED__ = app.entries.length === 0 && app.handle === null;
+  });
+  const cleared = await page.evaluate(() => window.__M6H_CLEARED__ === true);
+  const loadErr = await page.evaluate((txt) => window.__APP__.loadFromText(txt), before);
+  await page.waitForFunction(
+    `(() => { const app = window.__APP__;
+       return app.status === 'solved' && app.shieldActive && app.gammaDoseSeries &&
+         app.curve && app.curve.axis === 'mass'; })()`,
+    null,
+    { timeout: 30_000 },
+  );
+  await page.waitForFunction(
+    `(() => { const el = document.querySelector('${CURVES}');
+       return el && el.layout && el.layout.yaxis && el.layout.yaxis.title &&
+         el.layout.yaxis.title.text === 'Mass (kg)' && el.layout.shapes &&
+         el.layout.shapes.length >= 1; })()`,
+    null,
+    { timeout: 30_000 },
+  );
+  await page.waitForSelector(GEOM);
+  await page.waitForSelector(ATTEN);
+  const after = await page.evaluate(() => window.__APP__.serialize());
+  const renderedAfter = await captureViews();
+
+  // Compare the rendered views field-by-field: strings exact, the two floats relative-close
+  // (same computation → effectively exact, allow 1e-9 for log/relayout jitter).
+  const relClose = (a, b) => {
+    const x = parseFloat(a);
+    const y = parseFloat(b);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+    return x === y || Math.abs(x - y) <= Math.abs(x) * 1e-9;
+  };
+  const viewKeys = ["yTitle", "yaxisType", "atten", "distanceField", "exposureField", "geometrySelect"];
+  const strOk = viewKeys.every((k) => renderedBefore[k] === renderedAfter[k]);
+  const numOk =
+    relClose(renderedBefore.cursorX0, renderedAfter.cursorX0) &&
+    relClose(renderedBefore.gammaRate, renderedAfter.gammaRate);
+  // Sanity: confirm the captured state is genuinely non-default (guards against a capture
+  // that happened to read defaults, which would make the equality vacuous).
+  const nonDefault =
+    renderedBefore.yTitle === "Mass (kg)" &&
+    renderedBefore.geometrySelect === "PA" &&
+    renderedBefore.distanceField === "2.5" &&
+    renderedBefore.exposureField === "48"; // 172800 s shown in hours
+  record(
+    "FULL-STATE round-trip: non-default every field → identical VIEWS + identical serialize (#1)",
+    cleared && loadErr === null && before === after && strOk && numOk && nonDefault,
+    `cleared=${cleared}, loadErr=${loadErr}, serialize identical=${before === after}, views str=${strOk} num=${numOk}, ` +
+      `nonDefault=${nonDefault} [yTitle=${renderedBefore.yTitle}, geom=${renderedBefore.geometrySelect}, ` +
+      `dist=${renderedBefore.distanceField}, exp=${renderedBefore.exposureField}, atten=${renderedBefore.atten}]`,
+  );
+
+  // 3) The deserializer rejects out-of-range / off-version fields LOUDLY, and the prior
+  //    state is untouched (a refused load never half-applies — §11). Validation lives in the
+  //    deserializer because the load path restores by direct assignment (bypassing setters).
+  const reject = await page.evaluate(async () => {
+    const app = window.__APP__;
+    const SCHEMA = "radiographer.app-state";
+    const okEntries = app.entries.length;
+    const okHandle = app.handle;
+    const mkInv = () => ({
+      entries: [{ name: "Co-60", quantity: 1e9, unit: "Bq" }],
+      precision: "double",
+      reference_time_s: 0,
+    });
+    // a) negative distance — must be > 0 (the γ field is singular at 0)
+    const badDist = await app.loadFromText(
+      JSON.stringify({ schema: SCHEMA, version: 2, inventory: mkInv(), dose: { distance_m: -1 } }),
+    );
+    // b) off-enum geometry
+    const badGeom = await app.loadFromText(
+      JSON.stringify({ schema: SCHEMA, version: 2, inventory: mkInv(), dose: { geometry: "SIDEWAYS" } }),
+    );
+    // c) a future version we don't understand
+    const badVer = await app.loadFromText(
+      JSON.stringify({ schema: SCHEMA, version: 999, inventory: mkInv() }),
+    );
+    return {
+      badDist,
+      badGeom,
+      badVer,
+      entriesUntouched: app.entries.length === okEntries,
+      handleUntouched: app.handle === okHandle,
+    };
+  });
+  record(
+    "deserializer rejects bad fields loudly; prior state untouched (#2, §11)",
+    /distance_m must be > 0/i.test(reject.badDist ?? "") &&
+      /geometry must be one of/i.test(reject.badGeom ?? "") &&
+      /newer version/i.test(reject.badVer ?? "") &&
+      reject.entriesUntouched &&
+      reject.handleUntouched,
+    `dist=${JSON.stringify(reject.badDist)}, geom=${JSON.stringify(reject.badGeom)}, ver=${JSON.stringify(reject.badVer)}, ` +
+      `entriesUntouched=${reject.entriesUntouched}, handleUntouched=${reject.handleUntouched}`,
+  );
+
+  // 4) The §11 honesty register is a VISIBLE in-app artifact (§0): the disclaimer and the
+  //    consolidated register render, and the register carries the degraded-trust H*(10)
+  //    provenance (the item with no inline home — its real job, M6h #6). The <details> text
+  //    is in the DOM even while collapsed.
+  await page.waitForSelector('[data-testid="honesty-register"]');
+  const honesty = await page.evaluate(() => {
+    const reg = document.querySelector('[data-testid="honesty-register"]');
+    const disc = document.querySelector('[data-testid="honesty-disclaimer"]');
+    // textContent (not innerText) so the COLLAPSED <details> body is read too — innerText
+    // omits text inside a closed <details> (display:none), which is exactly the register's
+    // detail. textContent reads the DOM faithfully regardless of visibility.
+    const text = reg ? reg.textContent : "";
+    return {
+      hasRegister: !!reg,
+      disclaimerText: disc ? disc.textContent : "",
+      mentionsUnmerged: /unmerged/i.test(text) && /H\*\(10\)/i.test(text),
+      mentionsPointSource: /point source/i.test(text),
+      mentionsBeta: /Hp\(0\.07\)/i.test(text),
+    };
+  });
+  record(
+    "honesty register + disclaimer render, incl. degraded-trust H*(10) provenance (#6, §0/§11)",
+    honesty.hasRegister &&
+      /not for real radiation-safety decisions/i.test(honesty.disclaimerText) &&
+      honesty.mentionsUnmerged &&
+      honesty.mentionsPointSource &&
+      honesty.mentionsBeta,
+    `register=${honesty.hasRegister}, disclaimer=${JSON.stringify(honesty.disclaimerText.replace(/\s+/g, " ").trim().slice(0, 64))}…, ` +
+      `H*(10)-unmerged=${honesty.mentionsUnmerged}, pointSource=${honesty.mentionsPointSource}, beta=${honesty.mentionsBeta}`,
+  );
+
+  // 5) No-silent-error WARNINGS render (M6-ui M6h spec, literal: "assert … that warnings
+  //    render"; §11). An exposure window stretched far past the modeled time range must
+  //    surface a VISIBLE truncation banner — the accumulated dose is the in-range part only,
+  //    never silently extrapolated. Fully test-controlled (deterministic), unlike a
+  //    nuclide-dependent scoring-floor skip. (Co-60 is still loaded from the round-trip.)
+  await page.evaluate(() => {
+    const app = window.__APP__;
+    app.setCursorOffsetS(app.cursorRange[0]);
+    app.setExposureS(app.cursorRange[1] * 1000); // window far beyond the modeled range
+  });
+  await page.waitForSelector('[data-testid="dose-truncated"]', { timeout: 30_000 });
+  const truncWarn = await page.evaluate(() => {
+    const el = document.querySelector('[data-testid="dose-truncated"]');
+    return el ? el.textContent.trim() : "";
+  });
+  record(
+    "no-silent-error: truncated-exposure warning RENDERS (§11; spec 'warnings render')",
+    /past the modeled time range/i.test(truncWarn) && /not silently extrapolated/i.test(truncWarn),
+    `warn=${JSON.stringify(truncWarn.replace(/\s+/g, " ").slice(0, 80))}`,
+  );
+
+  return { ok: checks.every((c) => c.pass), checks };
+}
+
 let exitCode = 1;
 let browser;
 let server;
@@ -1377,6 +1629,7 @@ try {
   let m6e = { ok: false, checks: [] };
   let m6f = { ok: false, checks: [] };
   let m6g = { ok: false, checks: [] };
+  let m6h = { ok: false, checks: [] };
   if (m6aOk) {
     m6b = await runM6b(page);
     if (m6b.ok) {
@@ -1389,23 +1642,28 @@ try {
             m6f = await runM6f(page);
             if (m6f.ok) {
               m6g = await runM6g(page);
+              if (m6g.ok) {
+                m6h = await runM6h(page);
+              } else {
+                console.log("[gate] skipping M6h — M6g checks failed");
+              }
             } else {
-              console.log("[gate] skipping M6g — M6f checks failed");
+              console.log("[gate] skipping M6g/M6h — M6f checks failed");
             }
           } else {
-            console.log("[gate] skipping M6f/M6g — M6e checks failed");
+            console.log("[gate] skipping M6f/M6g/M6h — M6e checks failed");
           }
         } else {
-          console.log("[gate] skipping M6e/M6f/M6g — M6d checks failed");
+          console.log("[gate] skipping M6e/M6f/M6g/M6h — M6d checks failed");
         }
       } else {
-        console.log("[gate] skipping M6d/M6e/M6f/M6g — M6c checks failed");
+        console.log("[gate] skipping M6d/M6e/M6f/M6g/M6h — M6c checks failed");
       }
     } else {
-      console.log("[gate] skipping M6c/M6d/M6e/M6f/M6g — M6b checks failed");
+      console.log("[gate] skipping M6c/M6d/M6e/M6f/M6g/M6h — M6b checks failed");
     }
   } else {
-    console.log("[gate] skipping M6b/M6c/M6d/M6e/M6f/M6g — boot self-check failed");
+    console.log("[gate] skipping M6b/M6c/M6d/M6e/M6f/M6g/M6h — boot self-check failed");
   }
 
   console.log("\n===== M6b inventory panel =====");
@@ -1438,11 +1696,16 @@ try {
     console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
   }
 
-  exitCode = m6aOk && m6b.ok && m6c.ok && m6d.ok && m6e.ok && m6f.ok && m6g.ok ? 0 : 1;
+  console.log("\n===== M6h honesty register + full-state round-trip =====");
+  for (const c of m6h.checks) {
+    console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
+  }
+
+  exitCode = m6aOk && m6b.ok && m6c.ok && m6d.ok && m6e.ok && m6f.ok && m6g.ok && m6h.ok ? 0 : 1;
   console.log(
     exitCode === 0
-      ? "\n✅ M6g PASS (real browser): boot + inventory + curves + time control + decay-chain DAG + dose + shield builder"
-      : "\n❌ M6g FAIL (real browser)",
+      ? "\n✅ M6h PASS (real browser): boot + inventory + curves + time + chain + dose + shield + honesty/round-trip"
+      : "\n❌ M6h FAIL (real browser)",
   );
 } catch (err) {
   console.error("Driver error:", err);

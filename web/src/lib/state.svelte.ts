@@ -918,6 +918,21 @@ export class AppState {
       entries: this.entries.map((e) => ({ ...e })),
       precision: this.precision,
       referenceTimeS: this.referenceTimeS,
+      // view (M6h)
+      axis: this.axis,
+      activityUnit: this.activityUnit,
+      massUnit: this.massUnit,
+      logY: this.logY,
+      // dose (M6h)
+      doseDistanceM: this.doseDistanceM,
+      doseQuantity: this.doseQuantity,
+      doseGeometry: this.doseGeometry,
+      exposureS: this.exposureS,
+      // shield (M6h)
+      shieldMaterial: this.shieldMaterial,
+      shieldThicknessCm: this.shieldThicknessCm,
+      // time cursor (M6h) — restored AFTER solve (the ordering trap, see loadFromText)
+      cursorOffsetS: this.cursorOffsetS,
     };
   }
 
@@ -942,10 +957,31 @@ export class AppState {
       this.errorMsg = `load failed — ${msg}`;
       return msg;
     }
+    // Restore every RECOMPUTE-AFFECTING field by direct assignment BEFORE solve(), so
+    // solve()'s internal recomputeCurves/recomputeDose pick up the loaded values in one
+    // pass (M6h #3). This bypasses the setters' guards on purpose — the deserializer has
+    // already validated ranges/enums loudly (M6h #2), so there is nothing left to clamp.
     this.entries = parsed.entries.map((e) => ({ ...e }));
     this.precision = parsed.precision;
     this.referenceTimeS = parsed.referenceTimeS;
+    this.axis = parsed.axis;
+    this.activityUnit = parsed.activityUnit;
+    this.massUnit = parsed.massUnit;
+    this.logY = parsed.logY;
+    this.doseDistanceM = parsed.doseDistanceM;
+    this.doseQuantity = parsed.doseQuantity;
+    this.doseGeometry = parsed.doseGeometry;
+    this.exposureS = parsed.exposureS;
+    this.shieldMaterial = parsed.shieldMaterial;
+    this.shieldThicknessCm = parsed.shieldThicknessCm;
+
     await this.solve();
+
+    // The cursor is restored AFTER solve(): solve() → resetCursor() homes it to the new
+    // range's midpoint, so a value set before would be clobbered (the M6d ordering trap,
+    // M6h #3). setCursorOffsetS clamps to the now-current cursorRange. A null offset (a v1
+    // file, or one without a cursor) leaves resetCursor's default home in place.
+    if (parsed.cursorOffsetS !== null) this.setCursorOffsetS(parsed.cursorOffsetS);
     return null;
   }
 

@@ -1,0 +1,212 @@
+<script lang="ts">
+  // Honesty register (M6-ui M6h; HANDOFF_PLAN §11, §0 "the register must be visible").
+  //
+  // A CONSOLIDATED, in-app surfacing of the §11 accuracy limits. Per-number caveats already
+  // live inline next to the values they qualify (Dose.svelte / Shield.svelte / Curves.svelte
+  // — the spec's "next to the numbers, not buried"); this panel COMPLEMENTS them, carrying
+  // the global limits and — its real job (M6h #6) — the items with NO inline home, chiefly
+  // the DATA-PROVENANCE / trust levels (the photon H*(10) table is transcribed from an
+  // UNMERGED OpenMC PR; see docs/plans/M2-conversion.md). A pure static renderer — no store
+  // reads, no physics. The headline disclaimer is always visible; the detail is collapsible.
+
+  interface Item {
+    title: string;
+    body: string;
+  }
+  interface Group {
+    heading: string;
+    items: Item[];
+  }
+
+  const GROUPS: Group[] = [
+    {
+      heading: "Scope of the model",
+      items: [
+        {
+          title: "Point source in air only (v1)",
+          body:
+            "Dose is computed for an idealised point source. Self-absorption and finite/dense " +
+            "source geometry are NOT modelled — results degrade for large or dense sources. " +
+            "There is also no intervening-air attenuation between source and detector: exact " +
+            "for penetrating gammas (662 keV transmits ~99% through 1 m of air), but soft " +
+            "photons are not removed by the air path. A 10 keV dose-scoring floor stands in for " +
+            "this (sub-10 keV lines are dropped from the dose sum — logged, never silent).",
+        },
+        {
+          title: "External dose only — external ≠ internal hazard",
+          body:
+            "Only external dose is computed. An α emitter reads almost nothing on an external " +
+            "survey meter (w_R=20 applies internally) yet can be deadly if inhaled — a Pu pit is " +
+            "the classic case. Internal / committed dose is out of scope for v1.",
+        },
+      ],
+    },
+    {
+      heading: "Per-modality accuracy registers",
+      items: [
+        {
+          title: "Gamma ≈ ±10–15% (the quantitative core)",
+          body:
+            "Point-kernel sum over emission lines × mass energy-absorption coefficients, " +
+            "inverse-square, with ANS-6.4.3 Geometric-Progression buildup. Buildup uses the " +
+            "air-kerma (exposure) factor B for ALL THREE quantities (air kerma, H*(10), " +
+            "effective) — a documented approximation: the buildup of dose-equivalent ≠ that of " +
+            "air kerma.",
+        },
+        {
+          title: "Beta ≈ ±20–30% — a skin-dose quantity, never summed with gamma",
+          body:
+            "Beta skin dose Hp(0.07) (Gy at 7 mg/cm², w_R=1) via the Loevinger endpoint kernel — " +
+            "NOT a spectrum fold; discrete IC/Auger electrons are excluded (e.g. Cs-137's 624 keV " +
+            "K-IC electron is not counted). Published skin-dose values themselves disagree ~50% " +
+            "(VARSKIN vs Kocher-Eckerman vs Delacroix); this model lands at their median. Beta is " +
+            "a contact / near-contact hazard validated within ~factor-2 through air gaps. Hp(0.07) " +
+            "is a DIFFERENT quantity from gamma H*(10)/effective — different depth, geometry, and " +
+            "meaning — and is shown on its own axis, never added into a gamma total.",
+        },
+        {
+          title: "Bremsstrahlung-in-shield — order-of-magnitude",
+          body:
+            "Radiated fraction f = 3.5e-4·Z·E_max over a thick-target spectrum; the brems is " +
+            "treated as exiting the (β-thin) shield unattenuated. It exists to TEACH the " +
+            "“more lead can increase dose” crossover (a high-Z shield emits penetrating " +
+            "X-rays a low-Z one does not), not for precise photon dose.",
+        },
+        {
+          title: "Neutron — tabulated, prebuilt sources only (arrives in M7)",
+          body:
+            "Neutron source terms are tabulated per prebuilt source (not derived), so neutron " +
+            "output is grayed out for user-defined inventories. The dose folds a spectrum against " +
+            "ICRP-74 (H*(10)) / ICRP-116 (effective) coefficients; source spectra are good to " +
+            "±factor, the dose is order-of-magnitude grade.",
+        },
+      ],
+    },
+    {
+      heading: "Data provenance & trust levels",
+      items: [
+        {
+          title: "Emission spectra — ICRP-107 (clean, validated)",
+          body:
+            "Photon lines + yields and beta endpoints/means are bundled from ICRP-107 RAD data " +
+            "(1252 nuclides), validated by a four-pillar regression suite. This is also the " +
+            "dataset behind the decay topology, so chain and source terms stay consistent.",
+        },
+        {
+          title: "H*(10) coefficients — DEGRADED TRUST (transcribed from an unmerged PR)",
+          body:
+            "The photon H*(10) fluence-to-dose table (ICRP-74 / ICRU-57 vintage) is transcribed " +
+            "from an UNMERGED OpenMC pull request (#3256) — OpenMC mainline has no H*(10) table " +
+            "yet. Its faithfulness is cross-checked independently (the derived H*(10)/Ka " +
+            "reproduces the ICRU-57 sphere response and matches an IAEA slab table at low- and " +
+            "MeV-energies), but the 50–200 keV interior and the >3 MeV tail rest on that " +
+            "transcription. Decay gammas essentially never exceed ~2.6 MeV, inside the validated " +
+            "range. Flagged, not silently shipped as exact.",
+        },
+        {
+          title: "Effective-dose coefficients — ICRP-116 (clean, verbatim)",
+          body:
+            "The effective-dose table (ICRP-116, incl. corrigendum) re-parses byte-identically " +
+            "from OpenMC mainline and matches a separate group's independent piecewise-poly fit " +
+            "to ≤1.2%. Clean provenance — distinct from the degraded H*(10) above.",
+        },
+      ],
+    },
+    {
+      heading: "Quantities are not interchangeable",
+      items: [
+        {
+          title: "H*(10) vs effective dose — different quantities AND vintages",
+          body:
+            "H*(10) (ambient dose equivalent, the survey-meter reading, ICRP-74/ICRU-57, no " +
+            "geometry) and effective dose E (ICRP-116, per body orientation AP/PA/…) are computed " +
+            "differently and are NOT directly comparable. Selecting effective dose forces a " +
+            "geometry assumption (default AP — a person facing the source). The neutron tables " +
+            "mirror this split (H*(10) = ICRP-74, effective = ICRP-116), also non-comparable.",
+        },
+        {
+          title: "Single-layer shields only (v1)",
+          body:
+            "Buildup is unambiguous for one layer. Layered (multi-material) shields have no clean " +
+            "buildup theory — whose B for a Pb-then-water stack? — so the layered approximation " +
+            "is deferred until the multi-layer UI lands (post-v1).",
+        },
+      ],
+    },
+  ];
+</script>
+
+<section class="honesty" data-testid="honesty-register">
+  <p class="disclaimer" data-testid="honesty-disclaimer" role="note">
+    ⚠ <strong>Educational / reference tool — not for real radiation-safety decisions.</strong>
+    Accuracy is near-quantitative to a documented precision (see below); real work needs
+    validated codes (MCNP, ORIGEN, VARSKIN) and a qualified health physicist. The first load
+    is heavy (the WASM scientific stack) — that is expected, not a bug.
+  </p>
+
+  <details class="register">
+    <summary>Accuracy &amp; limitations — the honesty register (HANDOFF_PLAN §11)</summary>
+    <p class="lead muted">
+      What this tool does well, and where it is approximate. Per-number caveats also appear
+      inline next to the values they qualify; this is the consolidated view.
+    </p>
+    {#each GROUPS as g (g.heading)}
+      <h3>{g.heading}</h3>
+      <dl>
+        {#each g.items as item (item.title)}
+          <dt>{item.title}</dt>
+          <dd>{item.body}</dd>
+        {/each}
+      </dl>
+    {/each}
+  </details>
+</section>
+
+<style>
+  .honesty {
+    border: 1px solid #8884;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-top: 1rem;
+  }
+  .disclaimer {
+    margin: 0;
+    padding: 0.6rem 0.8rem;
+    background: #fff3cd;
+    color: #664d03;
+    border-radius: 0.4rem;
+    font-size: 0.92rem;
+    line-height: 1.5;
+  }
+  .register {
+    margin-top: 0.75rem;
+    font-size: 0.88rem;
+  }
+  .register summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 1rem;
+  }
+  .lead {
+    margin: 0.6rem 0 0.2rem;
+  }
+  h3 {
+    font-size: 0.95rem;
+    margin: 1rem 0 0.3rem;
+  }
+  dl {
+    margin: 0;
+  }
+  dt {
+    font-weight: 600;
+    margin-top: 0.6rem;
+  }
+  dd {
+    margin: 0.15rem 0 0;
+    opacity: 0.85;
+    line-height: 1.5;
+  }
+  .muted {
+    opacity: 0.7;
+  }
+</style>
