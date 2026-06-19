@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "material": "water",
+  "rho_g_cm3": 1.0,
+  "composition": {
+    "H": 2,
+    "O": 1
+  },
+  "weight_fractions": {
+    "H": 0.111907,
+    "O": 0.888093
+  },
+  "hydrogen_weight_fraction": 0.111907,
+  "sigma_r_mass_cm2_g": 0.10378,
+  "sigma_r_cm1": 0.10378,
+  "elemental_sigma_r_mass_cm2_g": {
+    "H": 0.602,
+    "O": 0.041
+  },
+  "method": "NCRP-20 elemental Σ_R/ρ × mixture rule (Σ_R = ρ·Σ w_i·(Σ_R/ρ)_i)",
+  "citation": "NCRP Report No. 20 (1957), Protection against Neutron Radiation up to 30 MeV, NBS Handbook 63; elemental Σ_R/ρ via Akyıldırım (2019), Erzincan Univ. J. Sci. Tech. 12(2) 1141–1148, DOI 10.18185/erzifbed.587514."
+}
