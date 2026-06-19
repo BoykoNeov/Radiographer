@@ -1928,7 +1928,11 @@ async function runM7(page) {
     const sigmaC = app.neutronSweepSigmaR;
     const leadInfo = app.availableMaterials.find((m) => m.id === "lead");
     app.setNeutronSweepMaterial("water");
-    return { picker, sigmaW, bare, atSel, x0, monotone, bareWithLead, sigmaC, leadSigma: leadInfo ? leadInfo.sigma_r_cm1 : "missing" };
+    // The widget must actually RENDER (not just the getters that feed it) — touch the DOM node
+    // directly, since window.__APP__ is a separate singleton from the Svelte component tree.
+    const plotPresent = document.querySelector('[data-testid="dose-neutron-sweep-plot"]') !== null;
+    const pickerPresent = document.querySelector('[data-testid="dose-neutron-sweep-material"]') !== null;
+    return { picker, sigmaW, bare, atSel, x0, monotone, bareWithLead, sigmaC, plotPresent, pickerPresent, leadSigma: leadInfo ? leadInfo.sigma_r_cm1 : "missing" };
   });
   const closedForm = nSweep.bare * Math.exp(-nSweep.sigmaW * 20);
   const sweepOk =
@@ -1941,12 +1945,14 @@ async function runM7(page) {
     Math.abs(nSweep.x0 - nSweep.bare) / nSweep.bare < 1e-9 &&
     Math.abs(nSweep.atSel - closedForm) / closedForm < 1e-9 &&
     nSweep.monotone &&
-    Math.abs(nSweep.bareWithLead - nSweep.bare) / nSweep.bare < 1e-9;
+    Math.abs(nSweep.bareWithLead - nSweep.bare) / nSweep.bare < 1e-9 &&
+    nSweep.plotPresent &&
+    nSweep.pickerPresent;
   record(
     "M11 neutron dose-vs-thickness explorer: picker=has_removal set (incl. new paraffin/concrete, excl. lead), curve folds exp(−Σ_R·x) client-side, standalone vs the γ stack",
     sweepOk,
     `picker=[${nSweep.picker.join(", ")}], Σ_R(water)=${nSweep.sigmaW?.toFixed(4)} Σ_R(concrete)=${nSweep.sigmaC?.toFixed(4)} leadΣ_R=${nSweep.leadSigma}, ` +
-      `x0=${nSweep.x0?.toExponential(3)}==bare=${nSweep.bare?.toExponential(3)}, atSel=${nSweep.atSel?.toExponential(3)}==closedForm=${closedForm?.toExponential(3)}, monotone=${nSweep.monotone}, bareWithLead==bare=${Math.abs(nSweep.bareWithLead - nSweep.bare) / nSweep.bare < 1e-9}`,
+      `x0=${nSweep.x0?.toExponential(3)}==bare=${nSweep.bare?.toExponential(3)}, atSel=${nSweep.atSel?.toExponential(3)}==closedForm=${closedForm?.toExponential(3)}, monotone=${nSweep.monotone}, bareWithLead==bare=${Math.abs(nSweep.bareWithLead - nSweep.bare) / nSweep.bare < 1e-9}, plot=${nSweep.plotPresent} picker=${nSweep.pickerPresent}`,
   );
 
   // 2b) A QUANTITY (strength) edit RESCALES the neutron path, never kills it — neutron rides

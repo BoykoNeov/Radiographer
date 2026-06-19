@@ -180,7 +180,11 @@ neutron card renders regardless. This was forced by the discovery below.
   hydrogenous shield** (it has both flags). poly/PMMA stay validation-only. This is the intended
   M10 boundary — opening the picker to no-buildup materials would blank the γ panel (the γ engine
   raises without buildup). Revisit if a neutron-only shield UI is wanted later.
-- **Concrete / paraffin** removal data still deferred (heavy-element Σ_R/ρ unsourced — no-fab).
+- **Concrete / paraffin** removal data deferred at M10 (heavy-element Σ_R/ρ unsourced — no-fab).
+  **RESOLVED in M11:** paraffin via the measured H/C mixture rule; concrete via a published
+  whole-material Σ_R (Ahmed et al. 2023). Concrete is now a shared γ+n shield (no longer
+  neutron-transparent). A neutron-only shield UI also landed — the M11 dose-vs-thickness explorer
+  (its own has_removal picker, distinct from the γ has_buildup picker). See the M11 commits.
 
 **Follow-up surfaced (separate, pre-existing — NOT M10):** the γ G-P buildup **OverflowError**
 for a low-energy line through very thick high-Z (e.g. Am-241 59 keV + 5 cm lead, confirmed with a

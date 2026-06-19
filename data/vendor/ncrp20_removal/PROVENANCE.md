@@ -83,10 +83,11 @@ OC-1 0.1496 cm⁻¹), driven mostly by water/hydrogen content — see the honest
 
 ## Honesty register (→ HANDOFF_PLAN §11, M10)
 
-- **Hydrogenous shields only.** Non-hydrogenous / γ-oriented materials (lead, iron, concrete)
-  are neutron-transparent here (Σ_R = 0) + a loud warning — never a silently-low neutron dose.
-  The removal-cross-section method is only valid with hydrogen present (removed neutrons must
-  thermalize/capture in the medium).
+- **Hydrogenous shields only.** Non-hydrogenous / γ-oriented materials (lead, iron) are
+  neutron-transparent here (Σ_R = 0) + a loud warning — never a silently-low neutron dose. The
+  removal-cross-section method is only valid with hydrogen present (removed neutrons must
+  thermalize/capture in the medium). Concrete DOES attenuate (it has bound water / hydrogen and
+  ships a published Σ_R), so — like water — it is a shared γ+neutron shield, not transparent.
 - **Fission-spectrum / energy-lumped.** Σ_R is one number per material, calibrated for the
   ~2–12 MeV fission range; harder spectra (AmBe to ~11 MeV) are less accurate. No spectrum
   hardening is modeled (the shield scales the dose but not h̄).
