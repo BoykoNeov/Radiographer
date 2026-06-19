@@ -73,12 +73,14 @@
             "X-rays a low-Z one does not), not for precise photon dose.",
         },
         {
-          title: "Neutron — tabulated, prebuilt sources only (arrives in M7)",
+          title: "Neutron — tabulated, prebuilt sources only",
           body:
             "Neutron source terms are tabulated per prebuilt source (not derived), so neutron " +
             "output is grayed out for user-defined inventories. The dose folds a spectrum against " +
             "ICRP-74 (H*(10)) / ICRP-116 (effective) coefficients; source spectra are good to " +
-            "±factor, the dose is order-of-magnitude grade.",
+            "±factor, the dose is order-of-magnitude grade. NOTE: real spent fuel DOES emit " +
+            "neutrons (spontaneous fission + (α,n), chiefly Cm-244), but v1 does NOT model " +
+            "spent-fuel neutron output — only γ / β / decay heat are computed for it.",
         },
       ],
     },
@@ -109,6 +111,41 @@
             "The effective-dose table (ICRP-116, incl. corrigendum) re-parses byte-identically " +
             "from OpenMC mainline and matches a separate group's independent piecewise-poly fit " +
             "to ≤1.2%. Clean provenance — distinct from the degraded H*(10) above.",
+        },
+      ],
+    },
+    {
+      heading: "Spent fuel & decay heat (M7c)",
+      items: [
+        {
+          title: "Spent-fuel discharge vectors — SCK-CEN Serpent2 (CC-BY), per tonne HM",
+          body:
+            "The prebuilt spent-fuel sources are real PWR discharge inventories from the SCK-CEN " +
+            "Serpent2 library (Mendeley DOI 10.17632/shv89y2zzd, CC BY 4.0), shipped at chosen " +
+            "burnup/enrichment grid points (45 and 20 GWd/tHM at 4.0%), normalised to one tonne " +
+            "initial heavy metal. Activity is derived as λN from the dataset's mass-density " +
+            "(atom-inventory) columns — validated independently: the Cs-137 discharge activity " +
+            "matches a first-principles fission-yield estimate to ~5%, and the inferred fuel HM " +
+            "density (8.88 g/cm³) matches U-in-UO₂. Loaded at discharge (t=0); the time control " +
+            "IS the cooling-time axis (forward decay).",
+        },
+        {
+          title: "Decay heat = recoverable energy (neutrino-excluded)",
+          body:
+            "Decay heat W(t) = Σ A_n·Ē_rec,n is folded from the SAME ICRP-107 emission spectra as " +
+            "the γ/β dose (no separate dataset): mean β kinetic energy (antineutrino energy " +
+            "excluded — why decay heat ≠ Q-value), all photons, IC/Auger electrons, and α particle " +
+            "+ recoil-nucleus energy (Q_α = E_α·A/(A−4)). Spontaneous-fission/fragment energy is " +
+            "not included (negligible except SF sources, which are α-dominated anyway).",
+        },
+        {
+          title: "Short-cooling underestimate — valid for months+ of cooling",
+          body:
+            "The discharge vector tracks ~150 nuclides and OMITS sub-hour fission products, so " +
+            "spent-fuel decay heat and γ dose UNDERESTIMATE the first ~day after discharge (the " +
+            "prompt, very-short-lived component is missing). The model is intended for the cooling " +
+            "regime — months to millennia — where Cs-137/Sr-90 (+ daughters) set the plateau; the " +
+            "shipped grid points are validated against published decay heat at 10 and 100 years.",
         },
       ],
     },

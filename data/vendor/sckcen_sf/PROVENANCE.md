@@ -32,9 +32,17 @@ then `_A` (activity Bq), `_H` (decay heat W), `_SF`, `_GSRC`, `_ING_TOX`, `_INH_
 fixed geometry/smearing factor `_A/(λ·ρ/M·N_A) ≈ 0.535` (constant across nuclides) that the
 mass-density column does **not** — i.e. they are on different volume bases. The build therefore
 derives activity as `λN` from the mass-density (atom-inventory) columns via the engine's own decay
-constants, normalized to 1 tonne initial HM. Validated independently: the resulting Cs-137 discharge
-activity matches a from-scratch fission-yield estimate to ~5%. The `_H/_A` ratio (basis-independent)
-is used as an ICRP-107-vs-Serpent2/JEFF decay-energy cross-check on the dominant heat contributors.
+constants, normalized to 1 tonne initial HM. Two independent validations of this basis:
+
+1. **Cs-137 anchor** — the resulting Cs-137 discharge activity (45 GWd: 5.2 PBq/tHM) matches a
+   from-scratch fission-yield estimate (cumulative yield × fissions-per-burnup × λ) to ~5%.
+2. **HM-density cross-check** — the inferred initial HM density (Σ actinide mass densities at BU=0)
+   is **8.88 g/cm³**, which equals U-in-UO₂ (0.881 × ~10.1 g/cm³). This independently proves the
+   mass-density column is **per cm³ of fuel**: a smeared-over-cell basis would give ~3 g/cm³. So the
+   `_A` column (×0.535, a *different* volume basis) is demonstrably the wrong column to normalize by.
+
+The `_H/_A` ratio (basis-independent) is additionally used as an ICRP-107-vs-Serpent2/JEFF
+decay-energy cross-check on the dominant heat contributors.
 
 ## Drift guard
 

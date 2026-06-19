@@ -1,8 +1,31 @@
 # M7 — Prebuilt sources + teaching demos + chart-of-nuclides
 
-**Status:** M7a + M7b done ✅ (gate green dev + built); M7c/M7d sourcing-gated, pending
+**Status:** M7a + M7b + **M7c done** ✅ (gate green dev + built); M7d sourcing-gated, pending
 the user scope decision + citable data. The Pu/U **pit** (trivial α inventory) is
 ready to drop into the catalog whenever #5 is confirmed.
+
+**M7c (spent fuel + decay heat) — DONE.** Three commits, gate green:
+- *Part 1 — decay-heat engine* (`engine/decay_heat.py`): W(t) = Σ A_n·Ē_rec,n, recoverable
+  energy from the bundled ICRP-107 spectra (no new dataset); α-recoil Q_α = E_α·A/(A−4);
+  discrete-β path only (no double-count). Anchored to FETCHED published specific powers
+  (Pu-238 0.567 W/g = the recoil discriminator; Po-210; Co-60). Bridge `decay_heat`.
+- *Part 2 — discharge vectors* (`data/spent_fuel/*.json`, §13 #4 RESOLVED): CC-BY SCK-CEN
+  Serpent2 PWR UOX library (Mendeley DOI 10.17632/shv89y2zzd), shipped at 45 & 20 GWd/tHM
+  @4.0%. The §11 no-fabrication discipline met with a *citable, machine-readable* source,
+  NOT memory. **Basis pivot (the crux):** the dataset's `_A` activity column carries a fixed
+  ~0.535 geometry factor on a different volume basis than the mass-density column, so activity
+  is derived as λN from the mass-density (atom-inventory) columns. Doubly validated — Cs-137
+  matches a from-scratch fission-yield estimate to ~5%, and the inferred HM density 8.88 g/cm³
+  = U-in-UO₂. `build_spent_fuel.py` streams the gitignored 370 MB CSV; regression suite
+  re-derives every anchor from the committed JSON.
+- *Part 3 — UI wiring*: `engine/spent_fuel.py` + `bridge.spent_fuel_catalog()` turn the
+  vectors into §8 picker sources (inventory from `data/`, loaded `unit="g"`, at discharge);
+  `DecayHeat.svelte` readout (live at the cursor); Honesty.svelte + §11 carry the spent-fuel
+  provenance/basis, the short-cooling underestimate, and the spent-fuel-neutron defer.
+  Default cursor homes to ~2.7 yr cooling (4.9 kW/tHM) — sane, past the <1-day incomplete regime.
+
+**Explicit M7c defer:** spent-fuel *neutron* output (SF + (α,n), Cm-244) — the dataset carries
+`_SF`/`_AN`, but v1 models only γ/β/decay-heat for spent fuel (a future hook).
 **Milestone (HANDOFF_PLAN.md §10, §8):** the curated **prebuilt source catalog** —
 named inventories (+ optional tabulated neutron term) each with a one-line "what it
 teaches" — plus the teaching demos that fall out of §5 (secular / transient
