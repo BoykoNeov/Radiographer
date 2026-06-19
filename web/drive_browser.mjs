@@ -1845,6 +1845,59 @@ async function runM7(page) {
     `h̄=${neutron.coeff} pSv·cm² (anchor 383), rate_si=${neutron.rateAttr} Sv/s, nTrace=${neutron.nTrace}, registry=${neutron.registry}`,
   );
 
+  // 2a-M10) Neutron SHIELDING: the shared shield stack now attenuates the neutron dose via the
+  //   fast-neutron removal cross-section T_n = exp(−Σ_R·x). WATER (hydrogenous) drops the neutron
+  //   rate by T_n = exp(−Σ_R·x) < 1. LEAD is neutron-transparent: T_n = 1, no rate change, and a
+  //   `no_hydrogenous_layer` warning ("steer to hydrogenous", §6.3) — never a silently-low number.
+  //   The neutron card SURVIVES a γ failure (the SYMMETRIC orphan guard): thick lead overflows the
+  //   pre-existing G-P buildup edge in the γ path, but the neutron series must still render. All a
+  //   pure evaluate off the one solve (registry stays 1).
+  const nShield = await page.evaluate(() => {
+    const app = window.__APP__;
+    app.clearShield();
+    const bare = app.neutronRateAtCursor;
+    app.setShieldMaterial("water");
+    app.setShieldLayerThicknessCm(0, 20);
+    const water = {
+      rate: app.neutronRateAtCursor,
+      T: app.neutronTransmission,
+      transparent: app.neutronShieldTransparent,
+    };
+    // Thick LEAD: the γ path overflows (pre-existing edge), but neutron must survive (isolation).
+    app.setShieldMaterial("lead");
+    app.setShieldLayerThicknessCm(0, 20);
+    const lead = {
+      rate: app.neutronRateAtCursor,
+      T: app.neutronTransmission,
+      transparent: app.neutronShieldTransparent,
+      nErr: app.neutronDoseError,
+      gammaFailed: app.doseError.length > 0,
+    };
+    const reg = window.__BRIDGE__.registry_size();
+    app.clearShield();
+    return { bare, water, lead, registry: reg.ok ? reg.size : -1 };
+  });
+  const waterAtten =
+    nShield.water.rate < nShield.bare &&
+    nShield.water.T > 0 &&
+    nShield.water.T < 0.2 &&
+    !nShield.water.transparent &&
+    Math.abs(nShield.water.rate - nShield.bare * nShield.water.T) / nShield.bare < 1e-6;
+  // Lead: neutron card SURVIVES (rate present == bare, T_n=1, transparent-warning) even though the
+  // γ path failed on the thick-lead overflow — the symmetric orphan guard proven end-to-end.
+  const leadTransparent =
+    Number.isFinite(nShield.lead.rate) &&
+    Math.abs(nShield.lead.rate - nShield.bare) / nShield.bare < 1e-9 &&
+    nShield.lead.T === 1 &&
+    nShield.lead.transparent &&
+    nShield.lead.nErr === "";
+  record(
+    "M10 neutron shield: water attenuates (T_n<1); lead transparent (T_n=1 + steer-to-hydrogenous) and the neutron card SURVIVES the γ overflow (symmetric orphan guard)",
+    waterAtten && leadTransparent && nShield.registry === 1,
+    `bare=${nShield.bare?.toExponential(3)}, water rate=${nShield.water.rate?.toExponential(3)} T=${nShield.water.T?.toExponential(3)}, ` +
+      `lead rate=${nShield.lead.rate?.toExponential(3)} T=${nShield.lead.T} transparent=${nShield.lead.transparent} nErr=${JSON.stringify(nShield.lead.nErr)} γFailed=${nShield.lead.gammaFailed}, registry=${nShield.registry}`,
+  );
+
   // 2b) A QUANTITY (strength) edit RESCALES the neutron path, never kills it — neutron rides
   //     the parent's activity (S(t)=n_per_decay·A_parent(t), M5/§6.3), so doubling the Cf-252
   //     mass ~doubles the neutron rate with the source key intact. Guards the orphan-guard from

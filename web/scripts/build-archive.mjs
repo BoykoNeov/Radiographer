@@ -20,7 +20,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const OUT = path.resolve(ROOT, "web", "public", "radiographer-runtime.zip");
 
 // Runtime data dirs (NOT vendor/build/raw — those are build inputs, ~17 MB).
-const DATA_DIRS = ["emissions", "conversion", "attenuation", "buildup", "neutron_sources", "spent_fuel", "fallout"];
+const DATA_DIRS = ["emissions", "conversion", "attenuation", "buildup", "neutron_sources", "neutron_removal", "spent_fuel", "fallout"];
 
 const force = process.argv.includes("--force");
 

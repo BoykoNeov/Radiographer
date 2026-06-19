@@ -162,13 +162,20 @@ export interface DoseOk {
    *  from emitters without an evaluated ν̄ (chiefly Cm-246 at long cooling) — NOT in the dose.
    *  The honest lower-bound gap, surfaced for the UI to show (the dangerous under-count). */
   dropped_sf_frac?: number[];
+  /** neutron dose responses only (M10): the fast-neutron shield transmission T_n = exp(−Σ_R·x)
+   *  applied to the dose. 1.0 when unshielded OR when the stack has no hydrogenous layer (then a
+   *  `no_hydrogenous_layer` warning is present — the §6.3 "steer to hydrogenous" teaching point). */
+  neutron_transmission?: number;
 }
 
-/** One shield material for the M6g picker. `has_buildup` is the γ-shield gate (a material
- *  without ANS-6.4.3 buildup raises in the γ engine; the UI filters the γ picker to it). */
+/** One shield material for the picker. `has_buildup` is the γ-shield gate (a material without
+ *  ANS-6.4.3 buildup raises in the γ engine; the UI filters the γ picker to it). `has_removal`
+ *  (M10) is the neutron-shield gate: a hydrogenous material attenuates the neutron dose; one
+ *  without removal data is neutron-transparent (the neutron path warns, never under-counts). */
 export interface MaterialInfo {
   id: string;
   has_buildup: boolean;
+  has_removal: boolean;
   density_g_cm3: number;
 }
 

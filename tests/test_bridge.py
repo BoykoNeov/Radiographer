@@ -313,6 +313,15 @@ def test_materials_lists_buildup_flag_and_density():
     # (surfaced, not hidden) so the γ picker excludes them rather than erroring out (§11).
     for m in ("pmma", "polyethylene", "tissue_soft"):
         assert by_id[m]["has_buildup"] is False
+    # M10: has_removal is the NEUTRON-shield gate. The hydrogenous set attenuates neutrons;
+    # water has BOTH flags (works in a shared γ+neutron stack), poly/PMMA are neutron-only.
+    for m in ("water", "polyethylene", "pmma"):
+        assert by_id[m]["has_removal"] is True
+    assert by_id["water"]["has_buildup"] is True and by_id["water"]["has_removal"] is True
+    # γ-oriented high-Z shields have NO removal data → neutron-transparent (the neutron path
+    # warns + does not silently under-count, §6.3).
+    for m in ("lead", "iron", "tungsten", "aluminium"):
+        assert by_id[m]["has_removal"] is False
     # lead is denser than aluminium (a sanity tag the UI may display)
     assert by_id["lead"]["density_g_cm3"] > by_id["aluminium"]["density_g_cm3"]
 
@@ -528,6 +537,39 @@ def test_neutron_dose_round_trip_cf252():
         assert out["spectrum_avg_coeff_pSv_cm2"] == pytest.approx(373.0, rel=0.05)
         assert out["rate_si"][0] * 3.6e8 == pytest.approx(2.5, rel=0.10)  # Sv/s → mrem/h
         assert out["source_gamma"] is None  # Cf-252 prompt-fission γ unmodeled (§11)
+        assert out["neutron_transmission"] == 1.0  # unshielded
+    finally:
+        bridge.release(handle)
+
+
+def test_neutron_dose_shield_through_bridge():
+    # M10: the neutron dose responds to the shared shield stack. Water (hydrogenous) attenuates;
+    # lead is neutron-transparent + warned — the §6.3 "steer to hydrogenous" teaching point.
+    res = json.loads(bridge.solve(json.dumps({"nuclides": {"Cf-252": 1.0}, "unit": "ug"})))
+    handle = res["handle"]
+    try:
+        bare = json.loads(
+            bridge.neutron_dose(handle, json.dumps(
+                {"times_s": [0.0], "source": "Cf-252", "distance_m": 1.0}))
+        )
+        water = json.loads(
+            bridge.neutron_dose(handle, json.dumps(
+                {"times_s": [0.0], "source": "Cf-252", "distance_m": 1.0,
+                 "shield": [["water", 20.0]]}))
+        )
+        lead = json.loads(
+            bridge.neutron_dose(handle, json.dumps(
+                {"times_s": [0.0], "source": "Cf-252", "distance_m": 1.0,
+                 "shield": [["lead", 20.0]]}))
+        )
+        assert bare["ok"] and water["ok"] and lead["ok"]
+        # 20 cm water removes ~7× (Σ_R≈0.104 → exp(−2.08)); the dose drops accordingly.
+        assert 0.0 < water["neutron_transmission"] < 0.2
+        assert water["rate_si"][0] == pytest.approx(bare["rate_si"][0] * water["neutron_transmission"], rel=1e-9)
+        # Lead does NOTHING to neutrons — same dose as bare + a loud steer-to-hydrogenous warning.
+        assert lead["neutron_transmission"] == 1.0
+        assert lead["rate_si"][0] == pytest.approx(bare["rate_si"][0], rel=1e-12)
+        assert any(w.get("reason") == "no_hydrogenous_layer" for w in lead["warnings"])
     finally:
         bridge.release(handle)
 
@@ -559,6 +601,34 @@ def test_neutron_dose_ambe_carries_reaction_gamma():
         assert sg is not None, "AmBe 4.438 MeV reaction γ must be scored, not dropped"
         assert sg["si_unit"] == "Sv"  # same quantity as the neutron H*(10) → they sum
         assert sg["rate_si"][0] > 0.0
+    finally:
+        bridge.release(handle)
+
+
+def test_neutron_dose_source_gamma_failure_does_not_blank_neutron(monkeypatch):
+    # M10 symmetric orphan guard at the BRIDGE tier: the good neutron result must survive a
+    # failure scoring the source-correlated γ (e.g. a future low-energy reaction γ overflowing
+    # the G-P buildup through a thick high-Z shield). Inject a raising GammaDoseModel and assert
+    # the neutron dose is still returned, with source_gamma=null + a loud source_gamma_failed
+    # warning — never a discarded neutron result.
+    def _boom(*a, **k):
+        raise OverflowError("(34, 'Result too large')")
+
+    monkeypatch.setattr(bridge, "GammaDoseModel", _boom)
+    res = json.loads(bridge.solve(json.dumps({"nuclides": {"Am-241": 1.0}, "unit": "Ci"})))
+    handle = res["handle"]
+    try:
+        out = json.loads(
+            bridge.neutron_dose(
+                handle,
+                json.dumps({"times_s": [0.0], "source": "AmBe", "quantity": "ambient_H10",
+                            "distance_m": 1.0, "shield": [["lead", 30.0]]}),
+            )
+        )
+        assert out["ok"] is True, "a source-γ failure must NOT discard the neutron dose"
+        assert out["rate_si"][0] > 0.0 and out["source"] == "AmBe"
+        assert out["source_gamma"] is None
+        assert any(w.get("reason") == "source_gamma_failed" for w in out["warnings"])
     finally:
         bridge.release(handle)
 

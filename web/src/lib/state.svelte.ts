@@ -188,12 +188,14 @@ export class AppState {
   // `neutron_dose` evaluate per (source × distance × quantity × geometry) over `curveX`,
   // the cursor indexes it. γ and n are the SAME quantity (both Sv, H*(10)/effective) so
   // they DO sum in the breakdown total (unlike β's Gy) — invariant #5 is γ-vs-β only.
-  // Neutron is UNSHIELDED in v1: the M6g shield list is γ-buildup materials; hydrogenous
-  // neutron shielding is deferred (§6.3), so a present γ shield does NOT attenuate n (a
-  // surfaced caveat in the UI, not a silent pass-through). A neutron failure sets its OWN
-  // error and nulls only its series — it never blanks the γ/β breakdown (advisor: orphan
-  // guard). `source_gamma` (reaction γ) is null for Cf-252 (prompt-fission γ unmodeled,
-  // §11); it lands with AmBe (M7d), folded into the γ total then.
+  // M10: the neutron dose responds to the SHARED shield stack via the fast-neutron removal
+  // cross-section (T_n = exp(−Σ_R·x), folded into coeff_si — h̄ untouched, no spectrum
+  // hardening). A hydrogenous layer (water) attenuates; a γ-oriented layer (lead) is
+  // neutron-transparent and the response carries a `no_hydrogenous_layer` warning rather than
+  // a silently-low number (§6.3 "steer to hydrogenous"). A neutron failure sets its OWN error
+  // and nulls only its series — it never blanks the γ/β breakdown (advisor: orphan guard).
+  // `source_gamma` (reaction γ) is null for Cf-252 (prompt-fission γ unmodeled, §11); it lands
+  // with AmBe (M7d), folded into the γ total then, and is now shielded by the same stack.
   /** Neutron dose-rate series (Sv/s) over `curveX`; null when no neutron source / stale. */
   neutronDoseSeries = $state<DoseOk | null>(null);
   /** Loud neutron-path error (#3) — its own field so a neutron failure can't blank γ/β. */
@@ -364,6 +366,25 @@ export class AppState {
     const s = this.neutronDoseSeries;
     if (!s || !s.dropped_sf_frac) return null;
     return interpAt(this.curveX, s.dropped_sf_frac, this.cursorOffsetS);
+  }
+
+  /** M10: the fast-neutron shield transmission T_n = exp(−Σ_R·x) applied to the neutron dose;
+   *  null when no neutron series. 1.0 means the shield did NOT attenuate neutrons (no shield,
+   *  or a γ-oriented stack with no hydrogenous layer — see {@link neutronShieldTransparent}). */
+  get neutronTransmission(): number | null {
+    const t = this.neutronDoseSeries?.neutron_transmission;
+    return typeof t === "number" ? t : null;
+  }
+  /** M10: a shield is active but contains NO hydrogenous layer, so it does not attenuate the
+   *  neutron dose (T_n=1) — the §6.3 "steer neutron to a hydrogenous shield" teaching point.
+   *  Driven off the engine warning, never inferred client-side. */
+  get neutronShieldTransparent(): boolean {
+    return (this.neutronDoseSeries?.warnings ?? []).some((w) => w.reason === "no_hydrogenous_layer");
+  }
+  /** M10: a mixed hydrogenous + γ-oriented stack — removal theory does not model layer order
+   *  (a heavy layer placed last may over-state the true neutron attenuation). §11 caveat. */
+  get neutronShieldCompositeOrder(): boolean {
+    return (this.neutronDoseSeries?.warnings ?? []).some((w) => w.reason === "composite_order_unmodeled");
   }
 
   // -- source-correlated reaction γ (M7d; e.g. AmBe 4.438 MeV) ---------------
@@ -1006,21 +1027,40 @@ export class AppState {
    * coordinate (evaluated at the absolute times `referenceTimeS + curveX`), so the
    * cursor getters index them 1:1 with the curves.
    */
+  /**
+   * Recompute the dose breakdown off the live handle (pure evaluate, never a re-solve, §3).
+   * The γ/β path and the neutron path are computed INDEPENDENTLY so neither can blank the other
+   * (SYMMETRIC orphan guard, §11): a γ failure — e.g. the G-P buildup overflow for a low-energy
+   * line through very thick high-Z lead, a pre-existing γ-engine edge — sets `doseError` and
+   * clears only the γ/β series, while the neutron card still renders (M10: lead → T_n=1 +
+   * steer-to-hydrogenous). A neutron failure sets `neutronDoseError` and never touches γ/β.
+   */
   private recomputeDose(): void {
-    this.doseError = "";
     const meta = this.solveMeta;
     if (!this.client || !this.handle || !meta || this.curveX.length === 0) {
       this.clearDoseSeries();
+      this.doseError = "";
       return;
     }
     const t0 = this.referenceTimeS;
     const times = t0 > 0 ? this.curveX.map((x) => x + t0) : this.curveX.slice();
     const geometry = this.doseQuantity === "effective" ? this.doseGeometry : null;
+    this.recomputeGammaBeta(times, geometry);
+    this.recomputeNeutron(times, geometry);
+  }
+
+  /**
+   * γ + β (+ shield extras) dose series. Isolated from the neutron path: on failure it clears
+   * ONLY the γ/β-family series and sets `doseError`, never the neutron series (§11).
+   */
+  private recomputeGammaBeta(times: number[], geometry: string | null): void {
+    this.doseError = "";
+    if (!this.client || !this.handle) return;
     const shield = this.shield; // ordered layer list [[material, cm], …] | null (M8)
     const betaShield = this.betaShield; // β stops in the source-side layer only (M8)
 
     const fail = (e: { type: string; message: string }): void => {
-      this.clearDoseSeries();
+      this.clearGammaBetaSeries();
       this.doseError = `${e.type}: ${e.message}`;
     };
 
@@ -1105,14 +1145,25 @@ export class AppState {
     this.gammaDoseSeriesReversed = reversed;
     this.bremsSeries = b.bremsstrahlung ?? null;
     this.gammaThicknessCoeffs = thickness;
+  }
 
-    // Neutron (M7b, §6.3): only for a prebuilt neutron source. Computed SEPARATELY from the
-    // γ/β path — a neutron failure sets its own error and nulls only its series, never
-    // blanking the γ/β breakdown (advisor orphan guard; #3). UNSHIELDED in v1 (no `shield`
-    // arg — hydrogenous neutron shielding is deferred, §6.3); a present γ shield is surfaced
-    // in the UI as not attenuating n, not silently applied. Same quantity/geometry as γ so
-    // the two are directly comparable and summable (both Sv).
+  /**
+   * Neutron dose series (M7b/M9, §6.3) — only for a prebuilt neutron source / spent-fuel SF
+   * source (the gray-out gate). Isolated from the γ/β path (SYMMETRIC orphan guard): runs
+   * regardless of γ's outcome, and a neutron failure sets only `neutronDoseError`. M10: the
+   * neutron dose now responds to the SHARED shield stack via the fast-neutron removal cross-
+   * section (T_n = exp(−Σ_R·x)): a hydrogenous layer (water) attenuates; a γ-oriented layer
+   * (lead) is neutron-transparent and the response carries a `no_hydrogenous_layer` /
+   * `neutron_transparent` warning instead of a silently-low number. Same quantity/geometry as
+   * γ so the two are comparable/summable (both Sv).
+   */
+  private recomputeNeutron(times: number[], geometry: string | null): void {
     this.neutronDoseError = "";
+    if (!this.client || !this.handle) {
+      this.neutronDoseSeries = null;
+      return;
+    }
+    const shield = this.shield; // the SAME stack the γ path uses; only hydrogenous layers remove n
     if (this.neutronSource) {
       const nq = this.client.neutron_dose(this.handle, {
         times_s: times,
@@ -1120,6 +1171,7 @@ export class AppState {
         quantity: this.doseQuantity,
         distance_m: this.doseDistanceM,
         geometry,
+        shield,
       });
       if (nq.ok) {
         this.neutronDoseSeries = nq;
@@ -1136,6 +1188,7 @@ export class AppState {
         quantity: this.doseQuantity,
         distance_m: this.doseDistanceM,
         geometry,
+        shield,
       });
       if (nq.ok) {
         this.neutronDoseSeries = nq;
@@ -1167,8 +1220,9 @@ export class AppState {
     return xs;
   }
 
-  /** Null every dose-path series (M6f + M6g). Shared by the failure branches and clearDose. */
-  private clearDoseSeries(): void {
+  /** Null only the γ/β-family series (M6f + M6g). Used by the γ/β failure branch so a γ error
+   *  (e.g. the thick-lead buildup overflow) cannot blank the independent neutron card (§11). */
+  private clearGammaBetaSeries(): void {
     this.gammaDoseSeries = null;
     this.betaDoseSeries = null;
     this.gammaLines = null;
@@ -1176,6 +1230,11 @@ export class AppState {
     this.gammaDoseSeriesReversed = null;
     this.bremsSeries = null;
     this.gammaThicknessCoeffs = null;
+  }
+
+  /** Null every dose-path series (γ/β AND neutron). For an empty/failed solve via clearDose. */
+  private clearDoseSeries(): void {
+    this.clearGammaBetaSeries();
     this.neutronDoseSeries = null;
     this.neutronDoseError = "";
   }

@@ -37,8 +37,10 @@ from __future__ import annotations
 import math
 from typing import Optional
 
+from engine import neutron_removal as nr
 from engine import neutron_source as nsrc
 from engine import photon_interp as pi
+from engine.dose import _normalize_shield  # single owner of the shield-spec shape (order-free here)
 
 #: Supported dose quantities (§6.4). Both are Sv; ``effective`` needs an ICRP-116 geometry.
 QUANTITIES: tuple[str, ...] = ("ambient_H10", "effective")
@@ -94,6 +96,94 @@ def fold_spectrum(source_key: str, quantity: str, geometry: Optional[str]) -> tu
     return hbar, warnings
 
 
+def neutron_transmission(shield) -> tuple[float, list[dict]]:
+    """Fast-neutron dose transmission ``T_n = exp(−Σ Σ_R·x)`` of a shield stack (M10, §6.3).
+
+    The fast-neutron analog of :func:`engine.dose.stack_transmission`, but structurally simpler
+    by design (docs/plans/M10-neutron-shielding.md): a **single energy-independent scalar**, not
+    a per-line/per-bin factor, and with **no buildup factor** — the effective removal cross-section
+    Σ_R (NCRP-20, see :mod:`engine.neutron_removal`) is already dose-calibrated against
+    fission-spectrum measurements. Because it factors out of the spectrum fold, ``h̄`` is unchanged
+    and ``T_n`` scales the dose exactly like distance does (solve-once/evaluate-many preserved); this
+    correctly encodes "no spectrum hardening modeled."
+
+    The hydrogen-presence validity gate (the correctness crux): Σ_R is only valid where hydrogen
+    is present to thermalize/capture the removed neutrons. So, per layer:
+
+    * a **hydrogenous** layer (has removal data, H weight fraction > 0) contributes ``Σ_R·x`` to
+      the exponent;
+    * a **γ-oriented** layer (lead, iron, … — no removal data) is **neutron-transparent** (Σ_R = 0)
+      and flagged with a ``neutron_transparent`` warning. This errs SAFE (over-counts dose) and
+      keeps a mixed γ/n stack working — never a silent under-count from misapplying a removal value.
+
+    Two stack-level honesty signals (§11), surfaced never silent:
+
+    * a **non-hydrogenous-ONLY** stack (bare lead/iron) → ``T_n = 1.0`` + a loud ``no_hydrogenous_layer``
+      warning. The shield does nothing to neutrons; emitting a falsely-low number here is the
+      dangerous direction. (This IS the "steer neutron to a hydrogenous shield" teaching point.)
+    * a **mixed** stack (≥1 hydrogenous AND ≥1 transparent layer) → a ``composite_order_unmodeled``
+      caveat: removal theory assumes enough hydrogen *behind* the heavy layer to thermalize, which
+      the order-free scalar does not model (parallels the M8 last-layer order sensitivity).
+
+    Returns ``(T_n, warnings)``. ``T_n`` is dimensionless in [0, 1].
+    """
+    layers = _normalize_shield(shield)
+    if not layers:
+        return 1.0, []
+
+    warnings: list[dict] = []
+    sigma_x = 0.0
+    n_hydrogenous = 0
+    n_transparent = 0
+    for material, thickness_cm in layers:
+        if nr.has_material(material) and nr.hydrogen_weight_fraction(material) > 0.0:
+            sigma_x += nr.sigma_r_cm1(material) * thickness_cm
+            n_hydrogenous += 1
+        else:
+            n_transparent += 1
+            warnings.append(
+                {
+                    "material": material,
+                    "thickness_cm": thickness_cm,
+                    "reason": "neutron_transparent",
+                    "message": (
+                        f"{material} has no fast-neutron removal data (it is not a hydrogenous "
+                        "shield) — treated as neutron-transparent; it does NOT attenuate the "
+                        "neutron dose. Steer neutrons to a hydrogenous shield (water, polyethylene)."
+                    ),
+                }
+            )
+
+    if n_hydrogenous == 0:
+        warnings.append(
+            {
+                "reason": "no_hydrogenous_layer",
+                "message": (
+                    "the shield stack contains no hydrogenous layer, so it does NOT attenuate the "
+                    "neutron dose (T = 1). Fast neutrons are removed by hydrogen (water, "
+                    "polyethylene), not by γ-oriented high-Z shields — this is a real effect, not a "
+                    "missing-data fallback."
+                ),
+            }
+        )
+        return 1.0, warnings
+
+    if n_transparent > 0:
+        warnings.append(
+            {
+                "reason": "composite_order_unmodeled",
+                "message": (
+                    "mixed hydrogenous + non-hydrogenous stack: the removal-cross-section method "
+                    "assumes enough hydrogen behind any heavy layer to thermalize the removed "
+                    "neutrons. The order of layers is NOT modeled (a single scalar T_n), so a "
+                    "heavy layer placed last may over-state the true attenuation."
+                ),
+            }
+        )
+
+    return math.exp(-sigma_x), warnings
+
+
 class NeutronDoseModel:
     """Solve-once neutron dose coefficient for a fixed (source, quantity, geometry).
 
@@ -107,6 +197,7 @@ class NeutronDoseModel:
         quantity: str = "ambient_H10",
         *,
         geometry: Optional[str] = None,
+        shield=None,
     ):
         if quantity not in QUANTITIES:
             raise NeutronDoseError(
@@ -134,8 +225,12 @@ class NeutronDoseModel:
         self.warnings: list[dict] = []
         #: Spectrum-averaged coefficient h̄ in pSv·cm² (exposed for transparency/validation).
         self.hbar_pSv_cm2 = self._fold_spectrum()
+        #: Fast-neutron shield transmission T_n (M10) — a single scalar folded into ``coeff_si``;
+        #: h̄ is untouched (no spectrum hardening modeled). 1.0 when unshielded / non-hydrogenous.
+        self.T_n, shield_warnings = neutron_transmission(shield)
+        self.warnings.extend(shield_warnings)
         #: Per-PARENT-DECAY SI dose coefficient (Sv·m² per decay): dose_rate = (C/4πd²)·A_parent.
-        self.coeff_si = self.neutrons_per_decay * self.hbar_pSv_cm2 * PSV_CM2_TO_SV_M2
+        self.coeff_si = self.neutrons_per_decay * self.hbar_pSv_cm2 * PSV_CM2_TO_SV_M2 * self.T_n
 
     # -- coefficient assembly (solve once) --------------------------------
 
@@ -205,6 +300,7 @@ class NeutronDoseModel:
             "parent": self.parent,
             "neutrons_per_decay": self.neutrons_per_decay,
             "spectrum_avg_coeff_pSv_cm2": self.hbar_pSv_cm2,
+            "neutron_transmission": self.T_n,
             "rate_si": rates,
             "warnings": list(self.warnings),
         }

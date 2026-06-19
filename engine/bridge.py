@@ -19,7 +19,7 @@ import traceback
 
 import radioactivedecay as rd
 
-from engine import attenuation, buildup
+from engine import attenuation, buildup, neutron_removal
 from engine.attenuation import AttenuationError
 from engine.beta_dose import BetaDoseError, BetaSkinDoseModel
 from engine.buildup import BuildupError
@@ -107,21 +107,26 @@ def nuclides() -> str:
 
 
 def materials() -> str:
-    """``-> {ok, materials: [{id, has_buildup, density_g_cm3}]}`` — the M6g shield-builder
+    """``-> {ok, materials: [{id, has_buildup, has_removal, density_g_cm3}]}`` — the shield-builder
     material list, the no-drift source for the §9 picker. Every material with a bundled
-    attenuation file, tagged with ``has_buildup`` (an ANS-6.4.3 G-P buildup file exists).
+    attenuation file, tagged with ``has_buildup`` (an ANS-6.4.3 G-P buildup file exists) and
+    ``has_removal`` (a NCRP-20 fast-neutron removal-cross-section file exists, M10).
 
     ``has_buildup`` is the **γ-shield gate**: ``GammaDoseModel`` *raises* for a shield
     material with no buildup (dose.py — a shield without scatter buildup is a data hole,
     not a transparent medium), so the UI filters the γ picker to ``has_buildup`` rather
-    than letting a selection error out the whole γ panel (§11). Low-Z hydrogenous materials
-    (PMMA, polyethylene) are listed with ``has_buildup=false`` — surfaced, not hidden — and
-    become selectable for β/neutron once those consumers land (M7)."""
+    than letting a selection error out the whole γ panel (§11). ``has_removal`` is the
+    **neutron-shield gate** (M10, §6.3): a hydrogenous material attenuates the neutron dose
+    (``T_n = exp(−Σ_R·x)``); a material WITHOUT removal data is neutron-transparent and the
+    neutron path warns rather than silently under-counting. Low-Z hydrogenous materials
+    (PMMA, polyethylene) are listed with ``has_buildup=false, has_removal=true`` — surfaced,
+    not hidden; water has BOTH so it works in a shared γ+neutron stack."""
     try:
         out = [
             {
                 "id": m,
                 "has_buildup": buildup.has_material(m),
+                "has_removal": neutron_removal.has_material(m),
                 "density_g_cm3": attenuation.density(m),
             }
             for m in sorted(attenuation.available_materials())
@@ -403,19 +408,45 @@ def neutron_dose(handle: str, request_json: str) -> str:
         activities = solved.evaluate(req["times_s"], axis="activity", unit="Bq")
         quantity = req.get("quantity", "ambient_H10")
         geometry = req.get("geometry")
-        model = NeutronDoseModel(req["source"], quantity, geometry=geometry)
+        shield = req.get("shield")
+        model = NeutronDoseModel(
+            req["source"], quantity, geometry=geometry, shield=shield if shield else None
+        )
         distance_m = float(req["distance_m"])
         out = model.dose_rate_series(activities, distance_m)
         out["source_gamma"] = None
         if req.get("include_source_gamma", True):
             override = model.source_gamma_override()
             if any(override.values()):
-                # Source-correlated γ scored in the SAME quantity/geometry as the neutron
-                # dose, so the two are directly comparable in the breakdown.
-                gm = GammaDoseModel(
-                    [model.parent], quantity, geometry=geometry, photon_override=override
-                )
-                out["source_gamma"] = gm.dose_rate_series(activities, distance_m)
+                # Source-correlated γ scored in the SAME quantity/geometry AND SHIELD STACK as
+                # the neutron dose, so the two are directly comparable and a present shield
+                # attenuates the reaction γ too (the γ engine uses the full stack — high-Z layers
+                # attenuate γ even though they are neutron-transparent). The §9 γ picker is
+                # filtered to ``has_buildup``, so any UI-built stack is γ-valid here.
+                #
+                # Isolated like the UI's symmetric orphan guard (M10): the GOOD neutron ``out`` is
+                # already computed, so a failure scoring the source-γ (e.g. a future low-energy
+                # reaction γ overflowing the G-P buildup through a thick high-Z shield — see
+                # docs/plans/gamma-buildup-overflow.md) must NOT discard the neutron result. It
+                # drops the source-γ to null + a loud warning, never blanks the neutron dose.
+                try:
+                    gm = GammaDoseModel(
+                        [model.parent], quantity, geometry=geometry, photon_override=override,
+                        shield=shield if shield else None,
+                    )
+                    out["source_gamma"] = gm.dose_rate_series(activities, distance_m)
+                except (DoseError, BuildupError, AttenuationError, OffGridError, OverflowError) as exc:
+                    out["warnings"] = [
+                        *out.get("warnings", []),
+                        {
+                            "reason": "source_gamma_failed",
+                            "message": (
+                                "the source-correlated reaction γ could not be scored (often a thick "
+                                f"high-Z shield through the γ engine): {type(exc).__name__}: {exc}. "
+                                "The neutron dose above is unaffected; only the reaction-γ add-on is omitted."
+                            ),
+                        },
+                    ]
         return _ok(out)
     except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
         return _err(exc)
@@ -446,6 +477,7 @@ def spent_fuel_neutron_dose(handle: str, request_json: str) -> str:
         nb = rec.get("neutron")
         if not nb or not nb.get("yields_n_per_decay"):
             raise SpentFuelError(f"{req['source_id']}: no SF neutron block (rebuild the vector)")
+        shield = req.get("shield")
         model = SpentFuelNeutronModel(
             nb["yields_n_per_decay"],
             nb["spectrum_source"],
@@ -453,6 +485,7 @@ def spent_fuel_neutron_dose(handle: str, request_json: str) -> str:
             geometry=req.get("geometry"),
             dropped_sf_branch=nb.get("dropped_sf_branch"),
             dropped_nubar_nominal=nb.get("dropped_nubar_nominal", 3.0),
+            shield=shield if shield else None,
         )
         out = model.dose_rate_series(activities, float(req["distance_m"]))
         out["source_gamma"] = None

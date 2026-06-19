@@ -92,8 +92,24 @@
             "oxygen is NOT in the dataset and is unmodeled (typically tens-of-% of the source), so " +
             "the neutron dose is a lower bound — it UNDER-counts, the dangerous direction. Any " +
             "residual SF rate from minor emitters still lacking an evaluated ν̄ (<0.1% out to 1 Myr " +
-            "for the shipped vectors) is shown on the neutron card, never silently. Neutron shielding " +
-            "is still not modeled.",
+            "for the shipped vectors) is shown on the neutron card, never silently.",
+        },
+        {
+          title: "Neutron shielding — hydrogenous removal cross-section (energy-lumped)",
+          body:
+            "The shield now attenuates the neutron dose: T = exp(−Σ_R·x), the fast-neutron " +
+            "effective REMOVAL cross-section Σ_R (NCRP-20 measured H/C/O mass values via the " +
+            "mixture rule). It is a single energy-independent scalar, not per-line — there is no " +
+            "buildup factor (Σ_R is already dose-calibrated against fission-spectrum measurements) " +
+            "and NO spectrum hardening is modeled (h̄ is unchanged by the shield). Σ_R is only valid " +
+            "where HYDROGEN is present to thermalize the removed neutrons, so only hydrogenous " +
+            "shields (water, polyethylene, PMMA) carry removal data; a γ-oriented high-Z shield " +
+            "(lead, iron) is neutron-transparent and the neutron card says so — never a silently-low " +
+            "number (the safe, over-count direction; the §6.3 “steer neutrons to hydrogen” point). " +
+            "It is calibrated to a FISSION spectrum, so a harder source (AmBe) is less accurate; the " +
+            "layer order in a mixed stack is not modeled; and for THICK shields removal UNDER-counts " +
+            "the dose (deep-penetration intermediate-neutron buildup) — the dangerous direction, " +
+            "opposite to the lead case.",
         },
       ],
     },

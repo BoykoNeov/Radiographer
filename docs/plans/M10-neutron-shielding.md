@@ -1,6 +1,10 @@
 # M10 — neutron shielding
 
-**Status:** planning (blocked on data sourcing)
+**Status:** ✅ COMPLETE (engine + bridge + UI shipped; gate green dev+built). See the
+"COMPLETION" section at the bottom for what landed, the conscious deferrals, and the one
+follow-up surfaced (the pre-existing γ buildup overflow → `docs/plans/gamma-buildup-overflow.md`).
+
+**Status (history):** planning (blocked on data sourcing)
 **Milestone (HANDOFF_PLAN.md §6.3 / §9 / honesty register):** close the flagged
 "neutron shielding remains unmodeled" gap — the γ shield does not attenuate neutrons.
 
@@ -141,3 +145,46 @@ so prefer the elemental-table + bulk-density route for the shipped material set.
 - NCRP-20 (1957) elemental Σ_R/ρ table — the primary; need a clean copy.
 - IOP *J. Radiol. Prot.* (2026) "Neutron tenth-value layers in polyethylene…" — paywalled PDF.
 - Vega-Carrillo / IAEA shielding tabulations for Cf-252 attenuation.
+
+## COMPLETION (2026-06-19)
+
+**Shipped — the full vertical slice, all touch points 1–7 closed:**
+1. **Data** (already landed): `data/neutron_removal/{water,polyethylene,pmma}.json` (NCRP-20
+   Σ_R/ρ × mixture rule) + `tests/test_neutron_removal.py`. M10 added `neutron_removal` to the
+   web runtime archive (`web/scripts/build-archive.mjs` `DATA_DIRS`) — it was missing, so the
+   browser engine couldn't load Σ_R until this fix (caught by the harness, not unit tests).
+2. **Engine** `engine/neutron_dose.py`: `neutron_transmission(shield) → (T_n, warnings)` —
+   `T_n = exp(−Σ Σ_R·x)` over hydrogenous layers; non-removal layers transparent + warned;
+   non-hydrogenous-only stack → `T_n=1` + loud `no_hydrogenous_layer`; mixed → `composite_order`
+   caveat. `NeutronDoseModel` **and** `SpentFuelNeutronModel` take `shield=`, fold `T_n` into
+   `coeff_si` once (h̄ untouched → no spectrum hardening). `T_n` surfaced in the result dict.
+3. **Bridge**: `neutron_dose` + `spent_fuel_neutron_dose` accept/pass `shield`; the source-
+   correlated γ (AmBe) is shielded by the SAME stack through the γ engine. `materials()` gains
+   `has_removal`. Tests in `test_bridge.py`, `test_dose_neutron.py`, `test_dose_spent_fuel_neutron.py`.
+4. **UI**: the shared shield stack now drives the neutron dose (`state.svelte.ts`
+   `recomputeNeutron`); the Dose card shows the attenuation factor / the "steer-to-hydrogenous"
+   warning; Honesty gains the removal-method §11 item; Shield note updated. Harness check added
+   (water attenuates, lead transparent + neutron card survives the γ overflow).
+
+**Symmetric orphan guard (M10-scoped fix, advisor):** `recomputeDose` was split into
+`recomputeGammaBeta` + `recomputeNeutron` so a γ failure clears ONLY the γ/β series — the
+neutron card renders regardless. This was forced by the discovery below.
+
+**Conscious deferrals (NOT silent gaps):**
+- **Neutron dose-vs-thickness band (touch point 7):** the γ Shield panel has a dose-vs-thickness
+  sweep; the neutron equivalent (a single `exp(−Σ_R·x)` curve) is NOT added. The neutron dose
+  DOES respond to the shield at the cursor (the core deliverable); the thickness *sweep widget*
+  for neutrons is deferred — low value (trivial exponential, no per-line structure) vs. UI cost.
+- **Picker boundary:** poly/PMMA carry `has_removal=true` but are NOT selectable in the shield
+  picker (it filters to `has_buildup`, and they have none). **Water is the only UI-selectable
+  hydrogenous shield** (it has both flags). poly/PMMA stay validation-only. This is the intended
+  M10 boundary — opening the picker to no-buildup materials would blank the γ panel (the γ engine
+  raises without buildup). Revisit if a neutron-only shield UI is wanted later.
+- **Concrete / paraffin** removal data still deferred (heavy-element Σ_R/ρ unsourced — no-fab).
+
+**Follow-up surfaced (separate, pre-existing — NOT M10):** the γ G-P buildup **OverflowError**
+for a low-energy line through very thick high-Z (e.g. Am-241 59 keV + 5 cm lead, confirmed with a
+plain `bridge.dose()`, no neutrons) — the buildup fit is evaluated hundreds of mfp past its
+validated ~40 mfp range. M10 only made it routine (lead-on-a-neutron-source) and contained the
+blast radius (symmetric isolation). The fix (cap the buildup *argument* at the table's valid mfp,
+§11-noted) is its own γ-engine task → `docs/plans/gamma-buildup-overflow.md`.

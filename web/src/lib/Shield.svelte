@@ -268,9 +268,10 @@
         <p class="note muted">
           Add a layer to attenuate the γ dose. Only materials with ANS-6.4.3 buildup data are
           offered (a shield without scatter buildup is a data hole, not a transparent medium —
-          §11); PMMA / polyethylene and neutron-hydrogenous steering arrive with the neutron
-          sources (M7). Stack multiple layers source-side → detector-side — <strong>order
-          matters</strong> for buildup (§6.4).
+          §11). When a neutron source is active the same stack also drives the neutron dose:
+          <strong>water</strong> is hydrogenous and removes fast neutrons, while high-Z γ shields
+          (lead) are neutron-transparent — the neutron card says so (§6.3). Stack multiple layers
+          source-side → detector-side — <strong>order matters</strong> for buildup (§6.4).
         </p>
       {:else}
         <!-- With / without + attenuation factor (γ, at the cursor) -->

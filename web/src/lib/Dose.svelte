@@ -97,6 +97,11 @@
   // Cm-246/248 are sourced) — surfaced beside the n number, never silent.
   const isSpentFuelN = $derived(appState.spentFuelNeutronId !== null);
   const nDroppedFrac = $derived(appState.neutronDroppedSfFracAtCursor); // 0..1, null unless spent-fuel n
+  // M10 neutron shielding: T_n = exp(−Σ_R·x) now folds into the neutron dose. A hydrogenous
+  // layer (water) attenuates; a γ-oriented stack (lead) is neutron-transparent (T_n=1) + warned.
+  const nTransmission = $derived(appState.neutronTransmission); // 0..1, null when no n series
+  const nShieldTransparent = $derived(appState.neutronShieldTransparent); // stack has no hydrogenous layer
+  const nShieldCompositeOrder = $derived(appState.neutronShieldCompositeOrder); // mixed stack order caveat
 
   // Source-correlated reaction γ (M7d; e.g. AmBe 4.438 MeV): a γ contribution NOT in the
   // decay lines, scored in the same Sv quantity. It stacks into the breakdown total as its
@@ -532,11 +537,24 @@
       </div>
 
       {#if hasNeutron && appState.shieldActive}
-        <p class="note warn" data-testid="dose-neutron-unshielded">
-          ⚠ the shield attenuates γ only — neutron dose is shown UNSHIELDED (hydrogenous
-          neutron shielding is not modeled in v1, §6.3), so the γ+n total understates the
-          shield's neutron transparency, not overstates it.
-        </p>
+        {#if nShieldTransparent}
+          <p class="note warn" data-testid="dose-neutron-transparent">
+            ⚠ this shield does NOT attenuate the neutron dose — fast neutrons are removed by
+            hydrogen (water, polyethylene), not by γ-oriented high-Z shields. Add a hydrogenous
+            layer to shield neutrons (§6.3). (γ is still attenuated by the current stack.)
+          </p>
+        {:else if nTransmission != null}
+          <p class="note" data-testid="dose-neutron-shielded">
+            neutron dose attenuated ×{nTransmission < 0.001
+              ? nTransmission.toExponential(1)
+              : nTransmission.toPrecision(2)} by the hydrogenous layer(s) — fast-neutron removal
+            cross-section T = exp(−Σ_R·x), NCRP-20 (§6.3). γ is attenuated separately by the full stack.
+            {#if nShieldCompositeOrder}
+              <br />⚠ mixed hydrogenous + high-Z stack: removal theory does not model layer order, so
+              a heavy layer placed last may over-state the true neutron attenuation (§11).
+            {/if}
+          </p>
+        {/if}
       {/if}
 
       <!-- Breakdown bar: dual-axis (γ→Sv, β→Gy); never one summed scale (#1). The

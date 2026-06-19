@@ -23,11 +23,18 @@ Internally everything is SI (Sv/s); we convert to mrem/h / µSv/h at the boundar
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
+from engine import neutron_removal as nr
 from engine import neutron_source as nsrc
 from engine.inventory import SolvedInventory
-from engine.neutron_dose import NeutronDoseError, NeutronDoseModel
+from engine.neutron_dose import (
+    NeutronDoseError,
+    NeutronDoseModel,
+    neutron_transmission,
+)
 from engine.photon_interp import ABOVE_GRID
 
 SV_S_TO_MREM_H = 3.6e8        # Sv/s → mrem/h  (×3600 s/h × 1e5 mrem/Sv)
@@ -176,3 +183,81 @@ def test_above_grid_spectrum_bin_raises(monkeypatch):
         NeutronDoseModel("Cf-252", "ambient_H10")
     # sanity: the real data is unaffected (monkeypatch is scoped to the test)
     assert real_spec[2] and real_reps
+
+
+# --- M10 neutron shielding: fast-neutron removal-cross-section transmission ------------
+# T_n = exp(−Σ Σ_R·x) over hydrogenous layers (NCRP-20 Σ_R, validated in test_neutron_removal).
+# A single energy-independent scalar folded into coeff_si (no buildup, no per-line, h̄ unchanged
+# → "no spectrum hardening" — §6.3, docs/plans/M10-neutron-shielding.md). Three structural rules:
+# hydrogenous layers attenuate; γ-oriented (no-removal) layers are TRANSPARENT + warned (errs
+# SAFE / over-counts, never a silent under-count); a non-hydrogenous-ONLY stack is T=1 + a loud
+# "steer to hydrogenous" warning (the dangerous direction guarded).
+
+
+def test_neutron_transmission_water_is_exp_minus_sigma_x():
+    sig = nr.sigma_r_cm1("water")
+    for x in (1.0, 9.6, 30.0):
+        T, _ = neutron_transmission([("water", x)])
+        assert T == pytest.approx(math.exp(-sig * x), rel=1e-12)
+    # one relaxation length 1/Σ_R removes 1−1/e ≈ 63 % (the validated ~9.6 cm anchor).
+    T, _ = neutron_transmission([("water", 1.0 / sig)])
+    assert T == pytest.approx(math.exp(-1.0), rel=1e-9)
+
+
+def test_neutron_transmission_no_shield_is_unity():
+    assert neutron_transmission(None) == (1.0, [])
+    assert neutron_transmission([]) == (1.0, [])
+
+
+def test_neutron_transmission_layers_add_in_exponent():
+    # Removal is a product of exponentials → 2 cm + 3 cm of water == 5 cm (order-independent).
+    T_one, _ = neutron_transmission([("water", 5.0)])
+    T_split, _ = neutron_transmission([("water", 2.0), ("water", 3.0)])
+    assert T_split == pytest.approx(T_one, rel=1e-12)
+
+
+def test_non_hydrogenous_only_stack_is_transparent_with_loud_warning():
+    # Lead has NO removal data — the §6.3 teaching point: lead does NOTHING to neutrons. Must be
+    # T=1 + a loud warning, NEVER a silently-low (under-count) dose (the dangerous direction).
+    T, warns = neutron_transmission([("lead", 10.0)])
+    assert T == 1.0
+    assert any(w.get("reason") == "no_hydrogenous_layer" for w in warns)
+
+
+def test_mixed_stack_attenuates_only_hydrogenous_with_composite_caveat():
+    sig = nr.sigma_r_cm1("water")
+    T, warns = neutron_transmission([("lead", 5.0), ("water", 10.0)])
+    # The lead layer contributes nothing (transparent); only the water removes neutrons.
+    assert T == pytest.approx(math.exp(-sig * 10.0), rel=1e-12)
+    reasons = {w.get("reason") for w in warns}
+    assert "neutron_transparent" in reasons          # the lead layer is flagged, not silent
+    assert "composite_order_unmodeled" in reasons    # mixed-stack order caveat (parallels M8)
+
+
+def test_model_folds_transmission_into_coeff_leaving_hbar_untouched():
+    bare = NeutronDoseModel("Cf-252", "ambient_H10")
+    shielded = NeutronDoseModel("Cf-252", "ambient_H10", shield=[("water", 10.0)])
+    sig = nr.sigma_r_cm1("water")
+    assert shielded.T_n == pytest.approx(math.exp(-sig * 10.0), rel=1e-12)
+    assert shielded.coeff_si == pytest.approx(bare.coeff_si * shielded.T_n, rel=1e-12)
+    # h̄ is UNCHANGED by the shield — the removal method models no spectrum hardening (§11).
+    assert shielded.hbar_pSv_cm2 == pytest.approx(bare.hbar_pSv_cm2, rel=1e-12)
+    assert bare.T_n == 1.0
+
+
+def test_model_dose_rate_scales_by_transmission():
+    inv = SolvedInventory.from_spec({"Cf-252": 1.0}, "ug")
+    res = inv.evaluate([0.0], axis="activity", unit="Bq")
+    acts = {n: res["series"][n][0] for n in res["nuclides"]}
+    sig = nr.sigma_r_cm1("water")
+    bare = NeutronDoseModel("Cf-252", "ambient_H10").dose_rate(acts, 1.0)
+    shielded = NeutronDoseModel(
+        "Cf-252", "ambient_H10", shield=[("water", 9.6)]
+    ).dose_rate(acts, 1.0)
+    assert shielded / bare == pytest.approx(math.exp(-sig * 9.6), rel=1e-9)
+
+
+def test_model_lead_shield_does_not_attenuate_and_warns():
+    m = NeutronDoseModel("Cf-252", "ambient_H10", shield=[("lead", 10.0)])
+    assert m.T_n == 1.0
+    assert any(w.get("reason") == "no_hydrogenous_layer" for w in m.warnings)

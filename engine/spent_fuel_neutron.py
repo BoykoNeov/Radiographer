@@ -40,6 +40,7 @@ from engine.neutron_dose import (
     QUANTITIES,
     NeutronDoseError,
     fold_spectrum,
+    neutron_transmission,
 )
 
 _FOUR_PI = 4.0 * math.pi
@@ -65,6 +66,7 @@ class SpentFuelNeutronModel:
         geometry: Optional[str] = None,
         dropped_sf_branch: Optional[dict[str, float]] = None,
         dropped_nubar_nominal: float = 3.0,
+        shield=None,
     ):
         if quantity not in QUANTITIES:
             raise NeutronDoseError(f"unknown dose quantity {quantity!r}; expected one of {QUANTITIES}")
@@ -91,7 +93,12 @@ class SpentFuelNeutronModel:
         #: Spectrum-averaged coefficient h̄ (pSv·cm²) and per-neutron SI dose coefficient.
         self.hbar_pSv_cm2, warns = fold_spectrum(spectrum_source, quantity, geometry)
         self.warnings.extend(warns)
-        self.coeff_si = self.hbar_pSv_cm2 * PSV_CM2_TO_SV_M2
+        #: Fast-neutron shield transmission T_n (M10) — a single scalar folded into ``coeff_si``;
+        #: h̄ is untouched (no spectrum hardening). The same removal-cross-section gate as the
+        #: single-source path (hydrogenous attenuates; γ-oriented stack → T_n=1 + loud warning).
+        self.T_n, shield_warnings = neutron_transmission(shield)
+        self.warnings.extend(shield_warnings)
+        self.coeff_si = self.hbar_pSv_cm2 * PSV_CM2_TO_SV_M2 * self.T_n
 
     def _geometric_factor(self, distance_m: float) -> float:
         if distance_m <= 0.0:
@@ -155,6 +162,7 @@ class SpentFuelNeutronModel:
             "source": "spent-fuel SF",
             "spectrum_source": self.spectrum_source,
             "spectrum_avg_coeff_pSv_cm2": self.hbar_pSv_cm2,
+            "neutron_transmission": self.T_n,
             "rate_si": rates,
             "dropped_sf_frac": dropped_frac,
             "warnings": list(self.warnings),

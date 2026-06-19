@@ -128,3 +128,35 @@ def test_missing_emitter_is_loud(vector, solved):
     act["series"].pop("Cm-244")
     with pytest.raises(NeutronDoseError):
         m.dose_rate_series(act, 1.0)
+
+
+# --- M10 neutron shielding: the SAME removal-cross-section gate as the single-source path ----
+
+def test_water_shield_attenuates_spent_fuel_neutron_dose(vector, solved):
+    # A hydrogenous shield attenuates the SF neutron dose by the removal scalar T_n; h̄ is
+    # unchanged (no spectrum hardening), so the whole series scales by exactly exp(−Σ_R·x).
+    from engine import neutron_removal as nr
+
+    n = vector["neutron"]
+    act = solved.evaluate([10.0 * _YEAR_S], axis="activity", unit="Bq")
+    bare = _model(vector).dose_rate_series(act, 1.0)["rate_si"][0]
+    shielded_model = SpentFuelNeutronModel(
+        n["yields_n_per_decay"], n["spectrum_source"], "ambient_H10",
+        dropped_sf_branch=n["dropped_sf_branch"], dropped_nubar_nominal=n["dropped_nubar_nominal"],
+        shield=[("water", 20.0)],
+    )
+    out = shielded_model.dose_rate_series(act, 1.0)
+    T = math.exp(-nr.sigma_r_cm1("water") * 20.0)
+    assert shielded_model.T_n == pytest.approx(T, rel=1e-12)
+    assert out["neutron_transmission"] == pytest.approx(T, rel=1e-12)
+    assert out["rate_si"][0] == pytest.approx(bare * T, rel=1e-12)
+
+
+def test_lead_shield_does_not_attenuate_spent_fuel_and_warns(vector):
+    # γ-oriented stack → T_n=1 + loud "steer to hydrogenous" warning (never a silent under-count).
+    n = vector["neutron"]
+    m = SpentFuelNeutronModel(
+        n["yields_n_per_decay"], n["spectrum_source"], "ambient_H10", shield=[("lead", 15.0)],
+    )
+    assert m.T_n == 1.0
+    assert any(w.get("reason") == "no_hydrogenous_layer" for w in m.warnings)
