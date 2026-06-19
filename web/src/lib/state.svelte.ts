@@ -24,8 +24,10 @@ import {
   type ChainOk,
   type DoseLinesOk,
   type DoseOk,
+  type DoseThicknessOk,
   type EvaluateOk,
   type Handle,
+  type MaterialInfo,
   type SolveEntry,
   type SolveOk,
 } from "./bridge";
@@ -42,6 +44,7 @@ import {
 import {
   ATOMS_UNIT,
   DEFAULT_GEOMETRY,
+  DEFAULT_SHIELD_THICKNESS_CM,
   DEFAULT_UNIT,
   type Axis,
   type DoseQuantity,
@@ -156,6 +159,31 @@ export class AppState {
   /** Loud dose-path error (#3) — surfaced, never a silent blank breakdown. */
   doseError = $state<string>("");
 
+  // -- shield builder (M6g, §9) ---------------------------------------------
+  // A single-layer shield (§13 #2; multi-layer is post-v1). A shield change is a pure
+  // EVALUATE off the live handle (re-fold the per-decay coefficients through the shield
+  // transmission) — NEVER a re-solve (#1). When a shield is active the whole dose path
+  // (γ series, dose_lines, β) is recomputed THROUGH it, plus an UNSHIELDED γ baseline
+  // (for the at-cursor attenuation factor, M6g #5) and the dose-vs-thickness coefficient
+  // grid (M6g #4). Thickness is in CENTIMETRES — the engine's shield unit (§12). State is
+  // TRANSIENT in M6g: persistence + round-trip land in M6h with the dose inputs (#7).
+  // See docs/plans/M6g-shield.md.
+  /** Shield material id (a `materials()` id with buildup), or null for no shield. */
+  shieldMaterial = $state<string | null>(null);
+  /** Shield thickness in CM (the engine's shield unit). Inactive while material is null. */
+  shieldThicknessCm = $state<number>(DEFAULT_SHIELD_THICKNESS_CM);
+  /** The shield material list for the picker (id, has_buildup, density); fetched once. */
+  availableMaterials = $state<MaterialInfo[]>([]);
+  /** UNSHIELDED γ dose-rate series (Sv/s) — the baseline for the at-cursor attenuation
+   *  factor; null when no shield is active (factor is then 1). */
+  gammaDoseSeriesBare = $state<DoseOk | null>(null);
+  /** Secondary β-bremsstrahlung γ-dose series (the "more lead → more dose" effect); null
+   *  when no shield, no finite distance, or no β converting to photons. A γ (Sv) quantity. */
+  bremsSeries = $state<DoseOk | null>(null);
+  /** Dose-vs-thickness γ coefficient grid (Design-A, M6g #4): distance/time-free per-nuclide
+   *  C_n(x) over a thickness sweep; the cursor getter folds 1/4πd² + activity (zero re-fetch). */
+  gammaThicknessCoeffs = $state<DoseThicknessOk | null>(null);
+
   // -- chain view (M6e, §8/§9) ----------------------------------------------
   // The decay-chain DAG. Topology (`chainDag`: nodes+edges) is TIME-INDEPENDENT —
   // it changes only with the inventory, so it is fetched once per solve (never on a
@@ -251,6 +279,70 @@ export class AppState {
     return trapzWindow(this.curveX, s.rate_si, this.cursorOffsetS, this.cursorOffsetS + this.exposureS);
   }
 
+  // -- shield (M6g) ---------------------------------------------------------
+
+  /** The active shield as the engine's `[material, thickness_cm]`, or null when no material
+   *  is selected or the thickness is non-positive (then the dose path runs unshielded). */
+  get shield(): [string, number] | null {
+    return this.shieldMaterial && this.shieldThicknessCm > 0
+      ? [this.shieldMaterial, this.shieldThicknessCm]
+      : null;
+  }
+  /** True while a shield is actually attenuating (material set AND thickness > 0). */
+  get shieldActive(): boolean {
+    return this.shield !== null;
+  }
+
+  /** UNSHIELDED γ dose-RATE (Sv/s) at the cursor — the attenuation-factor baseline. Falls
+   *  back to the (then-unshielded) main γ series when no shield is active. */
+  get gammaRateBareAtCursor(): number | null {
+    const s = this.gammaDoseSeriesBare ?? this.gammaDoseSeries;
+    return s ? interpAt(this.curveX, s.rate_si, this.cursorOffsetS) : null;
+  }
+  /** γ transmission factor (shielded / unshielded) AT THE CURSOR — a spectrum- and
+   *  time-dependent ratio, NOT a constant μx (M6g #5). 1 when no shield; null when the
+   *  rates are unavailable. */
+  get attenuationFactorAtCursor(): number | null {
+    if (!this.shieldActive) return 1;
+    const sh = this.gammaRateAtCursor;
+    const bare = this.gammaRateBareAtCursor;
+    if (sh == null || bare == null || !(bare > 0)) return null;
+    return sh / bare;
+  }
+  /** Secondary β-bremsstrahlung γ dose-RATE (Sv/s) at the cursor; null when no brems series. */
+  get bremsRateAtCursor(): number | null {
+    const s = this.bremsSeries;
+    return s ? interpAt(this.curveX, s.rate_si, this.cursorOffsetS) : null;
+  }
+
+  /**
+   * The §9 dose-vs-thickness curve at the cursor: γ dose RATE (Sv/s) vs shield thickness,
+   * `rate(x) = 1/4πd² · Σ_n C_n(x) · A_n(cursor)` — the engine's distance/time-free
+   * per-thickness coefficients (`gammaThicknessCoeffs`) folded with the activity at the
+   * cursor (`activityAtCursor`) and the current distance, all client-side (Design A; zero
+   * bridge calls on scrub/distance, M6g #4). The selected thickness is a grid point, so the
+   * curve's value there equals `gammaRateAtCursor` exactly (one engine assembly path).
+   *
+   * Null when there is no coefficient grid OR the per-nuclide activity is unavailable — the
+   * renderer shows a note, never a fabricated/blank curve (the §11 activity-coupling guard,
+   * shared with the per-line table).
+   */
+  get gammaThicknessCurve(): { thicknesses_cm: number[]; rate_si: number[] } | null {
+    const tc = this.gammaThicknessCoeffs;
+    if (!tc) return null;
+    const act = this.activityAtCursor;
+    if (!act) return null;
+    const geom = geometricFactor(this.doseDistanceM);
+    const rate_si = tc.thicknesses_cm.map((_x, i) => {
+      let sum = 0;
+      for (const n of Object.keys(tc.coeff_by_nuclide)) {
+        sum += tc.coeff_by_nuclide[n][i] * (act[n] ?? 0);
+      }
+      return geom * sum;
+    });
+    return { thicknesses_cm: tc.thicknesses_cm, rate_si };
+  }
+
   /**
    * The §9 per-line γ table at the cursor: each scored line's dose RATE (Sv/s) =
    * `1/4πd² · coeff_si · A_n(cursor)` — the engine's distance-free per-decay coefficient
@@ -318,6 +410,13 @@ export class AppState {
     } else {
       // Don't hard-fail boot: solve still validates loudly. But surface the gap.
       this.errorMsg = `could not load nuclide list: ${res.error.type}: ${res.error.message}`;
+    }
+    // The M6g shield material list (id, has_buildup, density). One fetch, cached here.
+    const mats = client.materials();
+    if (mats.ok) {
+      this.availableMaterials = mats.materials;
+    } else {
+      this.errorMsg = `could not load material list: ${mats.error.type}: ${mats.error.message}`;
     }
     this.ready = true;
   }
@@ -465,6 +564,32 @@ export class AppState {
     this.exposureS = s;
   }
 
+  // -- shield inputs (each RE-EVALUATES the dose path through the shield; #1) -------
+  // A shield is a re-fold of the per-decay coefficients through the transmission factor —
+  // a pure evaluate off the live handle, NEVER a re-solve (gate: registry stays 1).
+
+  /** Select / change the shield material (null clears the shield). Must be a `has_buildup`
+   *  material for γ (the picker enforces this; the engine fails loud as the backstop). */
+  setShieldMaterial(material: string | null): void {
+    if (material === this.shieldMaterial) return;
+    this.shieldMaterial = material;
+    this.recomputeDose();
+  }
+
+  /** Shield thickness (cm), clamped ≥ 0 (0 ⇒ no attenuation). Re-evaluates the dose path. */
+  setShieldThicknessCm(x: number): void {
+    if (!Number.isFinite(x) || x < 0 || x === this.shieldThicknessCm) return;
+    this.shieldThicknessCm = x;
+    if (this.shieldMaterial) this.recomputeDose(); // only bites when a material is selected
+  }
+
+  /** Remove the shield (material → null); re-evaluates the dose path unshielded. */
+  clearShield(): void {
+    if (this.shieldMaterial === null) return;
+    this.shieldMaterial = null;
+    this.recomputeDose();
+  }
+
   // -- the solve primitive --------------------------------------------------
 
   /**
@@ -610,62 +735,113 @@ export class AppState {
     this.doseError = "";
     const meta = this.solveMeta;
     if (!this.client || !this.handle || !meta || this.curveX.length === 0) {
-      this.gammaDoseSeries = null;
-      this.betaDoseSeries = null;
-      this.gammaLines = null;
+      this.clearDoseSeries();
       return;
     }
     const t0 = this.referenceTimeS;
     const times = t0 > 0 ? this.curveX.map((x) => x + t0) : this.curveX.slice();
     const geometry = this.doseQuantity === "effective" ? this.doseGeometry : null;
+    const shield = this.shield; // [material, thickness_cm] | null (M6g)
 
+    const fail = (e: { type: string; message: string }): void => {
+      this.clearDoseSeries();
+      this.doseError = `${e.type}: ${e.message}`;
+    };
+
+    // γ dose-rate series THROUGH the shield (M6g; shield is null in the unshielded case).
     const g = this.client.dose(this.handle, {
       times_s: times,
       quantity: this.doseQuantity,
       distance_m: this.doseDistanceM,
       geometry,
+      shield,
     });
-    if (!g.ok) {
-      this.gammaDoseSeries = null;
-      this.betaDoseSeries = null;
-      this.gammaLines = null;
-      this.doseError = `${g.error.type}: ${g.error.message}`;
-      return;
-    }
-    // The per-line γ decomposition (M6f-2): same quantity/geometry as the γ series so the
-    // table reconciles with the γ card, but distance/time-free (the cursor getter folds in
-    // 1/4πd² + activity). One fetch per recomputeDose; the cursor never re-fetches (§3).
-    const lines = this.client.dose_lines(this.handle, { quantity: this.doseQuantity, geometry });
-    if (!lines.ok) {
-      this.gammaDoseSeries = null;
-      this.betaDoseSeries = null;
-      this.gammaLines = null;
-      this.doseError = `${lines.error.type}: ${lines.error.message}`;
-      return;
-    }
-    // β skin dose Hp(0.07): the same distance; no shield in M6f-1 (→ no bremsstrahlung),
-    // no ICRP geometry (skin dose is depth-defined, not body-orientation-defined).
+    if (!g.ok) return fail(g.error);
+
+    // The per-line γ decomposition (M6f-2): same quantity/geometry AND SHIELD as the γ series
+    // so the table reconciles with the γ card, but distance/time-free (the cursor getter folds
+    // in 1/4πd² + activity). One fetch per recomputeDose; the cursor never re-fetches (§3).
+    const lines = this.client.dose_lines(this.handle, { quantity: this.doseQuantity, geometry, shield });
+    if (!lines.ok) return fail(lines.error);
+
+    // β skin dose Hp(0.07) THROUGH the shield (M6g): a present shield returns the secondary
+    // bremsstrahlung γ-dose series ("more lead → more dose"), scored in the γ quantity so it
+    // is comparable with the γ card. No ICRP geometry on the skin dose itself (depth-defined).
     const b = this.client.beta_dose(this.handle, {
       times_s: times,
       distance_m: this.doseDistanceM,
+      shield,
+      brems_quantity: this.doseQuantity,
+      geometry,
     });
-    if (!b.ok) {
-      this.gammaDoseSeries = null;
-      this.betaDoseSeries = null;
-      this.gammaLines = null;
-      this.doseError = `${b.error.type}: ${b.error.message}`;
-      return;
+    if (!b.ok) return fail(b.error);
+
+    // M6g extras — only when a shield is actually attenuating:
+    //  · an UNSHIELDED γ baseline for the at-cursor attenuation factor (#5), and
+    //  · the dose-vs-thickness coefficient grid (Design-A, #4).
+    // Both are pure evaluates off the same handle; the cursor folds them with zero re-fetch.
+    let bare: DoseOk | null = null;
+    let thickness: DoseThicknessOk | null = null;
+    if (shield) {
+      const gb = this.client.dose(this.handle, {
+        times_s: times,
+        quantity: this.doseQuantity,
+        distance_m: this.doseDistanceM,
+        geometry,
+      });
+      if (!gb.ok) return fail(gb.error);
+      bare = gb;
+
+      const dt = this.client.dose_thickness(this.handle, {
+        material: shield[0],
+        thicknesses_cm: this.thicknessGrid(shield[1]),
+        quantity: this.doseQuantity,
+        geometry,
+      });
+      if (!dt.ok) return fail(dt.error);
+      thickness = dt;
     }
+
     this.gammaDoseSeries = g;
     this.betaDoseSeries = b;
     this.gammaLines = lines;
+    this.gammaDoseSeriesBare = bare;
+    this.bremsSeries = b.bremsstrahlung ?? null;
+    this.gammaThicknessCoeffs = thickness;
+  }
+
+  /**
+   * Linear thickness grid (cm) from 0 (the unshielded baseline) to 4× the selected
+   * thickness for the dose-vs-thickness sweep (M6g #4). With N=33 points the selected
+   * thickness lands exactly on grid index 8 (powers-of-two arithmetic is float-exact), so
+   * the swept curve reconciles with the breakdown bar at that thickness; a defensive dedup
+   * guarantees membership even if `tmax` ever changes.
+   */
+  private thicknessGrid(selected: number): number[] {
+    const tmax = Math.max(selected * 4, 0.001);
+    const N = 33;
+    const xs: number[] = [];
+    for (let i = 0; i < N; i++) xs.push((tmax * i) / (N - 1));
+    if (!xs.some((x) => Math.abs(x - selected) < 1e-12)) {
+      xs.push(selected);
+      xs.sort((a, b) => a - b);
+    }
+    return xs;
+  }
+
+  /** Null every dose-path series (M6f + M6g). Shared by the failure branches and clearDose. */
+  private clearDoseSeries(): void {
+    this.gammaDoseSeries = null;
+    this.betaDoseSeries = null;
+    this.gammaLines = null;
+    this.gammaDoseSeriesBare = null;
+    this.bremsSeries = null;
+    this.gammaThicknessCoeffs = null;
   }
 
   /** Clear the dose breakdown (empty / failed solve). */
   private clearDose(): void {
-    this.gammaDoseSeries = null;
-    this.betaDoseSeries = null;
-    this.gammaLines = null;
+    this.clearDoseSeries();
     this.doseError = "";
   }
 

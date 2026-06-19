@@ -19,6 +19,7 @@ import traceback
 
 import radioactivedecay as rd
 
+from engine import attenuation, buildup
 from engine.attenuation import AttenuationError
 from engine.beta_dose import BetaDoseError, BetaSkinDoseModel
 from engine.buildup import BuildupError
@@ -94,6 +95,31 @@ def nuclides() -> str:
     try:
         names = sorted({str(n) for n in rd.DEFAULTDATA.nuclides}, key=_nuclide_sort_key)
         return _ok({"nuclides": names})
+    except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
+        return _err(exc)
+
+
+def materials() -> str:
+    """``-> {ok, materials: [{id, has_buildup, density_g_cm3}]}`` — the M6g shield-builder
+    material list, the no-drift source for the §9 picker. Every material with a bundled
+    attenuation file, tagged with ``has_buildup`` (an ANS-6.4.3 G-P buildup file exists).
+
+    ``has_buildup`` is the **γ-shield gate**: ``GammaDoseModel`` *raises* for a shield
+    material with no buildup (dose.py — a shield without scatter buildup is a data hole,
+    not a transparent medium), so the UI filters the γ picker to ``has_buildup`` rather
+    than letting a selection error out the whole γ panel (§11). Low-Z hydrogenous materials
+    (PMMA, polyethylene) are listed with ``has_buildup=false`` — surfaced, not hidden — and
+    become selectable for β/neutron once those consumers land (M7)."""
+    try:
+        out = [
+            {
+                "id": m,
+                "has_buildup": buildup.has_material(m),
+                "density_g_cm3": attenuation.density(m),
+            }
+            for m in sorted(attenuation.available_materials())
+        ]
+        return _ok({"materials": out})
     except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
         return _err(exc)
 
@@ -203,6 +229,70 @@ def dose_lines(handle: str, request_json: str) -> str:
                 "si_unit": model.si_unit,
                 "lines": model.per_line_rows(),
                 "warnings": list(model.warnings),
+                "scoring_floor_MeV": SCORING_FLOOR_MEV,
+            }
+        )
+    except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
+        return _err(exc)
+
+
+def dose_thickness(handle: str, request_json: str) -> str:
+    """``{"material":"lead", "thicknesses_cm":[0,0.5,1,...], "quantity":"ambient_H10",
+        "geometry":null, "medium":"air"}`` -> ``{ok, quantity, si_unit, material,
+        thicknesses_cm, coeff_by_nuclide:{nuclide:[C_n(x0), C_n(x1), ...]}, warnings,
+        scoring_floor_MeV}``.
+
+    The §9 **dose-vs-thickness** sweep, Design-A (M6f-2 #10): DISTANCE- and TIME-free
+    per-nuclide γ dose coefficients ``C_n(x)`` for a thickness grid through one ``material``.
+    The shield transmission ``B(E,μx)·exp(−μx)`` is nonlinear and per-line, so — unlike the
+    γ dose-vs-*distance* band (exact inverse-square, reconstructed client-side) — it MUST be
+    evaluated by the engine. The client folds ``1/4πd²`` and the parent activity ``A_n(t)``
+    at the cursor, so the curve is live on scrub/distance with no re-fetch (the §3 discipline
+    the dose series already follows).
+
+    ``x == 0`` is evaluated with ``shield=None`` so the curve's zero point is the EXACT
+    unshielded baseline. Each ``C_n(x)`` is the same per-nuclide coefficient ``dose()`` folds
+    for ``shield=(material, x)`` (one ``GammaDoseModel`` assembly path), so at any grid
+    thickness ``Σ C_n(x)·A_n / 4πd²`` reconciles EXACTLY with the breakdown bar — no second
+    code branch to drift. Below-floor lines are logged in ``warnings`` (thickness-independent,
+    captured once); a material without ANS-6.4.3 buildup raises loudly (§11)."""
+    try:
+        req = json.loads(request_json)
+        solved = _get(handle)
+        material = str(req["material"])
+        quantity = req.get("quantity", "ambient_H10")
+        geometry = req.get("geometry")
+        medium = req.get("medium", "air")
+        thicknesses = [float(x) for x in req["thicknesses_cm"]]
+
+        coeff_by_nuclide: dict[str, list[float]] = {n: [] for n in solved.names}
+        warnings: list[dict] = []
+        si_unit = None
+        for i, x in enumerate(thicknesses):
+            if x < 0.0:
+                raise DoseError(f"shield thickness must be >= 0 cm; got {x}")
+            model = GammaDoseModel(
+                solved.names,
+                quantity,
+                medium=medium,
+                shield=(material, x) if x > 0.0 else None,
+                geometry=geometry,
+            )
+            si_unit = model.si_unit
+            for n in solved.names:
+                coeff_by_nuclide[n].append(model.coeff_si[n])
+            # Below-floor skips are set by the line *energies* / quantity, not the shield, so
+            # they are identical at every thickness — capture them once (the x=0 model).
+            if i == 0:
+                warnings = list(model.warnings)
+        return _ok(
+            {
+                "quantity": quantity,
+                "si_unit": si_unit,
+                "material": material,
+                "thicknesses_cm": thicknesses,
+                "coeff_by_nuclide": coeff_by_nuclide,
+                "warnings": warnings,
                 "scoring_floor_MeV": SCORING_FLOOR_MEV,
             }
         )

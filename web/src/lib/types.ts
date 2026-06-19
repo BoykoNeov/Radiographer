@@ -134,6 +134,37 @@ export const MODALITY_UNCERTAINTY: Record<"gamma" | "beta" | "neutron", { lo: nu
   neutron: { lo: 2.0, hi: 2.0, label: "order-of-magnitude" }, // ×/÷ a few — M7
 };
 
+// --- shield builder (M6g, §9 shield builder) ---------------------------------
+// Radiation-type guidance for the shield material picker. This is UX guidance, NOT
+// silently-dangerous data — the engine fails loud as the backstop (a γ shield without
+// buildup raises; `materials().has_buildup` is the no-drift gate that keeps such
+// materials out of the γ picker in the first place, M6g #2/#3). High-Z materials stop
+// β efficiently but convert the stopped β into penetrating bremsstrahlung photons —
+// "more lead can INCREASE dose" — so the picker warns when a high-Z material shields a
+// β emitter. (PMMA/polyethylene + the neutron-hydrogenous steering land with neutron
+// dose in M7; nothing in v1 consumes them — see M6g-shield.md #2.)
+
+export interface MaterialGuidance {
+  /** High atomic number → strong β→bremsstrahlung conversion (warn for β emitters). */
+  highZ: boolean;
+}
+
+/** Keyed by `materials()` id; absent ⇒ no special guidance. */
+export const MATERIAL_GUIDANCE: Record<string, MaterialGuidance> = {
+  lead: { highZ: true },
+  tungsten: { highZ: true },
+  iron: { highZ: true },
+  copper: { highZ: true },
+  aluminium: { highZ: false },
+  concrete: { highZ: false },
+  water: { highZ: false },
+  air: { highZ: false },
+};
+
+/** Default shield thickness (cm) when a material is first selected — a visible,
+ *  attenuating-but-not-opaque starting point the user can edit (§12 units: cm). */
+export const DEFAULT_SHIELD_THICKNESS_CM = 1.0;
+
 /**
  * Format SI seconds as a short human string, auto-picking the largest unit whose
  * value is ≥ 1 (e.g. 86400 → "1 d", 153 → "2.55 min"). For tick/readout labels;

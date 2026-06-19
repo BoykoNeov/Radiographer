@@ -282,6 +282,11 @@
       <h2>Dose</h2>
       <span class="readout muted">
         external · point source in air · at <strong>{humanTime(appState.currentTimeS)}</strong>
+        {#if appState.shieldActive}
+          · <strong class="shielded" data-testid="dose-shield-tag"
+            >through {appState.shieldMaterial} {appState.shieldThicknessCm} cm</strong
+          >
+        {/if}
       </span>
     </header>
 
@@ -536,6 +541,9 @@
   }
   .readout {
     font-size: 0.9rem;
+  }
+  .readout .shielded {
+    color: #4e79a7;
   }
   .inputs {
     display: flex;

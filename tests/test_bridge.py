@@ -257,6 +257,98 @@ def test_dose_lines_effective_requires_geometry_is_loud():
         bridge.release(handle)
 
 
+def test_materials_lists_buildup_flag_and_density():
+    # The M6g shield-builder material source: every attenuation material, tagged with
+    # has_buildup (the γ-shield gate) + density. The UI filters the γ picker to has_buildup.
+    res = json.loads(bridge.materials())
+    assert res["ok"] is True
+    by_id = {m["id"]: m for m in res["materials"]}
+    # the 8 buildup materials span low-Z → high-Z (the aluminium↔lead brems contrast set)
+    for m in ("aluminium", "concrete", "copper", "iron", "lead", "tungsten", "water", "air"):
+        assert by_id[m]["has_buildup"] is True
+        assert by_id[m]["density_g_cm3"] > 0.0
+    # PMMA / polyethylene / tissue have attenuation but NO buildup → listed, flagged false
+    # (surfaced, not hidden) so the γ picker excludes them rather than erroring out (§11).
+    for m in ("pmma", "polyethylene", "tissue_soft"):
+        assert by_id[m]["has_buildup"] is False
+    # lead is denser than aluminium (a sanity tag the UI may display)
+    assert by_id["lead"]["density_g_cm3"] > by_id["aluminium"]["density_g_cm3"]
+
+
+def test_dose_thickness_sweep_reconciles_and_attenuates():
+    # The §9 dose-vs-thickness sweep (Design-A): per-nuclide, distance/time-free γ
+    # coefficients C_n(x). x=0 == the unshielded baseline EXACTLY; the curve is monotone
+    # decreasing through a lead layer; and at any grid thickness Σ C_n(x)·A_n/4πd²
+    # reconciles EXACTLY with dose(shield=(material,x)) — the one-assembly-path invariant
+    # that stops the swept curve and the breakdown bar from drifting (advisor; M6g #4).
+    res = json.loads(bridge.solve(json.dumps({"nuclides": {"Co-60": 1.0e9}, "unit": "Bq"})))
+    handle = res["handle"]
+    try:
+        xs = [0.0, 0.5, 1.0, 2.0, 4.0]
+        sweep = json.loads(
+            bridge.dose_thickness(
+                handle,
+                json.dumps({"material": "lead", "thicknesses_cm": xs, "quantity": "ambient_H10"}),
+            )
+        )
+        assert sweep["ok"] is True
+        assert sweep["si_unit"] == "Sv" and sweep["material"] == "lead"
+        assert sweep["thicknesses_cm"] == xs
+        co = sweep["coeff_by_nuclide"]["Co-60"]
+        assert len(co) == len(xs)
+
+        # x=0 is the unshielded baseline: equals an unshielded dose_lines coefficient sum.
+        bare = json.loads(bridge.dose_lines(handle, json.dumps({"quantity": "ambient_H10"})))
+        bare_co = sum(ln["coeff_si"] for ln in bare["lines"] if ln["nuclide"] == "Co-60")
+        assert co[0] == pytest.approx(bare_co, rel=1e-12)
+
+        # monotone decreasing: more lead → strictly less penetrating γ.
+        assert all(co[i + 1] < co[i] for i in range(len(co) - 1))
+
+        # reconciliation at x=2 cm: the folded curve == dose(shield=("lead", 2)).
+        t, d = 0.0, 1.0
+        ev = json.loads(
+            bridge.evaluate(handle, json.dumps({"times_s": [t], "axis": "activity", "unit": "Bq"}))
+        )
+        acts = {n: ev["series"][n][0] for n in ev["nuclides"]}
+        geom = 1.0 / (4.0 * math.pi * d * d)
+        idx = xs.index(2.0)
+        recon = geom * sum(sweep["coeff_by_nuclide"][n][idx] * acts.get(n, 0.0) for n in acts)
+        total = json.loads(
+            bridge.dose(
+                handle,
+                json.dumps(
+                    {
+                        "times_s": [t],
+                        "quantity": "ambient_H10",
+                        "distance_m": d,
+                        "shield": ["lead", 2.0],
+                    }
+                ),
+            )
+        )
+        assert total["ok"] is True
+        assert recon == pytest.approx(total["rate_si"][0], rel=1e-9)
+    finally:
+        bridge.release(handle)
+
+
+def test_dose_thickness_no_buildup_material_is_loud():
+    # PMMA has attenuation but no ANS-6.4.3 buildup → a γ shield through it is a data hole,
+    # not a transparent medium. The sweep must raise loudly, never return a silent number.
+    res = json.loads(bridge.solve(json.dumps({"nuclides": {"Co-60": 1.0e9}, "unit": "Bq"})))
+    handle = res["handle"]
+    try:
+        out = json.loads(
+            bridge.dose_thickness(
+                handle, json.dumps({"material": "pmma", "thicknesses_cm": [0.0, 1.0]})
+            )
+        )
+        assert out["ok"] is False  # loud failure (the UI never offers pmma for γ anyway)
+    finally:
+        bridge.release(handle)
+
+
 def test_beta_dose_round_trip_with_bremsstrahlung():
     # Solve once, ask for the beta SKIN dose series, plus the secondary bremsstrahlung
     # photon dose when a lead shield stops the beta (§6.2 "more lead = more dose").

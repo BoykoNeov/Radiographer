@@ -60,6 +60,16 @@ export interface DoseRequest {
   geometry?: string | null;
 }
 
+/** Distance/time-free per-nuclide γ coefficients over a thickness grid (M6g dose-vs-
+ *  thickness, Design-A). The client folds `1/4πd²` and the cursor activity. */
+export interface DoseThicknessRequest {
+  material: string;
+  thicknesses_cm: number[];
+  quantity?: string;
+  geometry?: string | null;
+  medium?: string;
+}
+
 // --- responses (only the fields the app reads are typed; the bridge may add more) ---
 
 export interface SolveOk {
@@ -128,6 +138,35 @@ export interface DoseOk {
   rate_si: number[];
   scoring_floor_MeV: number;
   warnings: DoseWarning[];
+  /** β skin-dose responses only (M6g): the secondary bremsstrahlung γ-dose series scored
+   *  when a shield stops the β ("more lead → more photon dose"). null when no shield. A
+   *  γ (Sv/air-kerma) quantity — shown beside, NEVER summed into, the β skin (Gy) number. */
+  bremsstrahlung?: DoseOk | null;
+}
+
+/** One shield material for the M6g picker. `has_buildup` is the γ-shield gate (a material
+ *  without ANS-6.4.3 buildup raises in the γ engine; the UI filters the γ picker to it). */
+export interface MaterialInfo {
+  id: string;
+  has_buildup: boolean;
+  density_g_cm3: number;
+}
+
+export interface MaterialsOk {
+  materials: MaterialInfo[];
+}
+
+/** The §9 dose-vs-thickness sweep (M6g, Design-A): distance/time-free per-nuclide γ
+ *  coefficients `C_n(x)` over `thicknesses_cm`. `x=0` is the exact unshielded baseline.
+ *  The client folds `1/4πd²` and the parent activity at the cursor (zero re-fetch). */
+export interface DoseThicknessOk {
+  quantity: string;
+  si_unit: string;
+  material: string;
+  thicknesses_cm: number[];
+  coeff_by_nuclide: Record<string, number[]>;
+  warnings: DoseWarning[];
+  scoring_floor_MeV: number;
 }
 
 /** One scored photon line for the §9 per-line γ table (M6f-2). `coeff_si` is the
@@ -166,6 +205,8 @@ export interface RegistrySizeOk {
 
 export type SolveResponse = Result<SolveOk>;
 export type NuclidesResponse = Result<NuclidesOk>;
+export type MaterialsResponse = Result<MaterialsOk>;
+export type DoseThicknessResponse = Result<DoseThicknessOk>;
 export type RegistrySizeResponse = Result<RegistrySizeOk>;
 export type EvaluateResponse = Result<EvaluateOk>;
 export type ChainResponse = Result<ChainOk>;
@@ -202,6 +243,11 @@ export class BridgeClient {
     return this.call<NuclidesResponse>("nuclides");
   }
 
+  /** The M6g shield-builder material list (id, has_buildup, density); one fetch, cached. */
+  materials(): MaterialsResponse {
+    return this.call<MaterialsResponse>("materials");
+  }
+
   solve(spec: SolveSpec): SolveResponse {
     return this.call<SolveResponse>("solve", JSON.stringify(spec));
   }
@@ -222,6 +268,12 @@ export class BridgeClient {
    *  the client folds in `1/4πd²` and the cursor activity (no re-fetch on scrub). */
   dose_lines(handle: Handle, req: { quantity?: string; geometry?: string | null; shield?: [string, number] | null; medium?: string }): DoseLinesResponse {
     return this.call<DoseLinesResponse>("dose_lines", handle, JSON.stringify(req));
+  }
+
+  /** The §9 dose-vs-thickness sweep (M6g): per-nuclide γ coefficients over a thickness grid.
+   *  Distance/time-free — the client folds `1/4πd²` + cursor activity (no re-fetch on scrub). */
+  dose_thickness(handle: Handle, req: DoseThicknessRequest): DoseThicknessResponse {
+    return this.call<DoseThicknessResponse>("dose_thickness", handle, JSON.stringify(req));
   }
 
   beta_dose(handle: Handle, req: Record<string, unknown>): DoseResponse {

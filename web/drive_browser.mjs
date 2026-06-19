@@ -1177,6 +1177,177 @@ async function runM6f(page) {
   return { ok: checks.every((c) => c.pass), checks };
 }
 
+async function runM6g(page) {
+  const checks = [];
+  const record = (name, pass, detail) => checks.push({ name, pass, detail });
+
+  const SHIELD = '[data-testid="shield"]';
+  const SMAT = '[data-testid="shield-material"]';
+  const STHICK = '[data-testid="shield-thickness"]';
+  const STPLOT = '[data-testid="shield-thickness-plot"]';
+  const STIMEPLOT = '[data-testid="shield-time-plot"]';
+
+  // Clean Co-60 reference (runM6f leaves it loaded): no shield, H*(10) @ 1 m, t₀=0, cursor
+  // at the range low so the source is ~full activity. Clear any shield from a prior run.
+  await page.evaluate(async () => {
+    const app = window.__APP__;
+    await app.clear();
+    app.setReferenceTimeS(0);
+    app.setDoseQuantity("ambient_H10");
+    app.setDoseDistanceM(1.0);
+    app.clearShield();
+    await app.addEntry("Co-60", 1.0e9, "Bq");
+    app.setCursorOffsetS(0);
+  });
+  await page.waitForFunction(
+    "window.__APP__.status === 'solved' && window.__APP__.gammaDoseSeries && window.__APP__.curveX.length > 0",
+    null,
+    { timeout: 30_000 },
+  );
+  await page.waitForSelector(SHIELD);
+
+  // 1) Add a lead shield: γ rate drops, the at-cursor attenuation factor < 1, and the path
+  //    is a PURE evaluate — handle stable, registry stays 1, NEVER routes through solve().
+  const before = await page.evaluate(() => {
+    const s = window.__BRIDGE__.registry_size();
+    return { handle: window.__APP__.handle, size: s.ok ? s.size : -1, bare: window.__APP__.gammaRateAtCursor };
+  });
+  await page.evaluate(() => {
+    window.__APP__.setShieldMaterial("lead");
+    window.__APP__.setShieldThicknessCm(1.0);
+  });
+  await page.waitForFunction(
+    "window.__APP__.shieldActive && window.__APP__.gammaThicknessCoeffs && window.__APP__.gammaDoseSeriesBare",
+    null,
+    { timeout: 30_000 },
+  );
+  const shielded = await page.evaluate(() => {
+    const s = window.__BRIDGE__.registry_size();
+    const app = window.__APP__;
+    return {
+      handle: app.handle,
+      size: s.ok ? s.size : -1,
+      rate: app.gammaRateAtCursor,
+      baseline: app.gammaRateBareAtCursor,
+      atten: app.attenuationFactorAtCursor,
+    };
+  });
+  record(
+    "add lead shield: γ drops, attenuation<1, pure evaluate (handle stable, registry==1)",
+    shielded.handle === before.handle &&
+      before.size === 1 &&
+      shielded.size === 1 &&
+      Math.abs(shielded.baseline - before.bare) / before.bare < 1e-9 &&
+      shielded.rate < shielded.baseline &&
+      shielded.atten > 0 &&
+      shielded.atten < 1,
+    `handleStable=${shielded.handle === before.handle}, size=${before.size}→${shielded.size}, ` +
+      `atten=${shielded.atten.toExponential(3)} (<1), rate=${shielded.rate.toExponential(3)} < bare=${shielded.baseline.toExponential(3)}`,
+  );
+
+  // 2) Dose-vs-thickness reconciliation (#4, the dose_lines Σ==card analog): the swept curve's
+  //    value AT THE SELECTED THICKNESS equals the breakdown bar's γ rate EXACTLY (one engine
+  //    assembly path). The plot renders with the shaded ±band (lower, upper-fill, center = 3
+  //    traces); x=0 is the unshielded baseline.
+  await page.waitForFunction(
+    (sel) => { const el = document.querySelector(sel); return el && el.data && el.data.length === 3; },
+    STPLOT,
+    { timeout: 30_000 },
+  );
+  const recon = await page.evaluate(() => {
+    const app = window.__APP__;
+    const c = app.gammaThicknessCurve;
+    const xs = c.thicknesses_cm;
+    const idx = xs.findIndex((x) => Math.abs(x - app.shieldThicknessCm) < 1e-12);
+    return {
+      x0: xs[0],
+      x0Bare: c.rate_si[0],
+      bareCursor: app.gammaRateBareAtCursor,
+      idx,
+      atSel: idx >= 0 ? c.rate_si[idx] : NaN,
+      cardRate: app.gammaRateAtCursor,
+      monotone: c.rate_si.every((r, i) => i === 0 || r <= c.rate_si[i - 1]),
+    };
+  });
+  record(
+    "dose-vs-thickness: curve at the selected thickness == breakdown bar γ rate (one path, #4)",
+    recon.idx >= 0 &&
+      Math.abs(recon.atSel - recon.cardRate) / recon.cardRate < 1e-6 &&
+      recon.x0 === 0 &&
+      Math.abs(recon.x0Bare - recon.bareCursor) / recon.bareCursor < 1e-6 &&
+      recon.monotone,
+    `atSel=${recon.atSel?.toExponential(4)} == card=${recon.cardRate?.toExponential(4)}, ` +
+      `x0 baseline matches unshielded (${recon.x0Bare?.toExponential(3)}), monotone=${recon.monotone}`,
+  );
+
+  // 2b) Dose-vs-time (§9 deliverable): with a shield active, the plot shows the shielded γ
+  //     rate AND the unshielded baseline across the decay (2 traces); the shielded line sits
+  //     below the baseline (the shield attenuates at every time).
+  const timePlot = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    if (!el || !el.data || el.data.length !== 2) return { n: el && el.data ? el.data.length : 0, below: false };
+    const k = Math.floor(el.data[0].y.length / 2);
+    return { n: el.data.length, below: el.data[1].y[k] < el.data[0].y[k] }; // shielded < no-shield
+  }, STIMEPLOT);
+  record(
+    "dose-vs-time: shielded + unshielded γ traces, shielded below baseline (§9)",
+    timePlot.n === 2 && timePlot.below,
+    `traces=${timePlot.n} (want 2), shieldedBelowBaseline=${timePlot.below}`,
+  );
+
+  // 3) Material picker lists ONLY buildup materials — the fail-loud trap is sidestepped (#2):
+  //    a γ shield without ANS-6.4.3 buildup (PMMA/polyethylene/tissue) raises in the engine,
+  //    so those never appear as options; low-Z↔high-Z (aluminium/lead) ARE both offered.
+  const opts = await page.evaluate((sel) => {
+    return [...document.querySelector(sel).options].map((o) => o.value);
+  }, SMAT);
+  record(
+    "shield picker lists only has_buildup materials (no PMMA/polyethylene/tissue) (#2)",
+    opts.includes("lead") &&
+      opts.includes("aluminium") &&
+      !opts.includes("pmma") &&
+      !opts.includes("polyethylene") &&
+      !opts.includes("tissue_soft"),
+    `options=[${opts.filter((o) => o).join(", ")}]`,
+  );
+
+  // 4) β→bremsstrahlung crossover (#6): a high-Z shield converts stopped β into penetrating
+  //    photons, MORE than a low-Z one. Y-90 (pure high-energy β, no primary γ) through lead
+  //    vs aluminium: lead's secondary brems γ rate > aluminium's, and the high-Z warning shows.
+  await page.evaluate(async () => {
+    const app = window.__APP__;
+    await app.clear();
+    app.setDoseDistanceM(1.0);
+    await app.addEntry("Y-90", 1.0e9, "Bq");
+    app.setCursorOffsetS(0);
+    app.setShieldMaterial("lead");
+    app.setShieldThicknessCm(1.0);
+  });
+  await page.waitForFunction(
+    "window.__APP__.shieldActive && window.__APP__.bremsSeries",
+    null,
+    { timeout: 30_000 },
+  );
+  const bremsLead = await page.evaluate(() => window.__APP__.bremsRateAtCursor);
+  const warnVisible = await page.evaluate(
+    () => !!document.querySelector('[data-testid="shield-highz-warn"]'),
+  );
+  await page.evaluate(() => window.__APP__.setShieldMaterial("aluminium"));
+  await page.waitForFunction(
+    "window.__APP__.shieldMaterial === 'aluminium' && window.__APP__.bremsSeries",
+    null,
+    { timeout: 30_000 },
+  );
+  const bremsAl = await page.evaluate(() => window.__APP__.bremsRateAtCursor);
+  record(
+    "β→bremsstrahlung: high-Z (lead) brems γ > low-Z (aluminium), high-Z warning shown (#6)",
+    bremsLead > 0 && bremsAl > 0 && bremsLead > bremsAl && warnVisible,
+    `bremsLead=${bremsLead?.toExponential(3)} > bremsAl=${bremsAl?.toExponential(3)} Sv/s, warn=${warnVisible}`,
+  );
+
+  return { ok: checks.every((c) => c.pass), checks };
+}
+
 let exitCode = 1;
 let browser;
 let server;
@@ -1205,6 +1376,7 @@ try {
   let m6d = { ok: false, checks: [] };
   let m6e = { ok: false, checks: [] };
   let m6f = { ok: false, checks: [] };
+  let m6g = { ok: false, checks: [] };
   if (m6aOk) {
     m6b = await runM6b(page);
     if (m6b.ok) {
@@ -1215,20 +1387,25 @@ try {
           m6e = await runM6e(page);
           if (m6e.ok) {
             m6f = await runM6f(page);
+            if (m6f.ok) {
+              m6g = await runM6g(page);
+            } else {
+              console.log("[gate] skipping M6g — M6f checks failed");
+            }
           } else {
-            console.log("[gate] skipping M6f — M6e checks failed");
+            console.log("[gate] skipping M6f/M6g — M6e checks failed");
           }
         } else {
-          console.log("[gate] skipping M6e/M6f — M6d checks failed");
+          console.log("[gate] skipping M6e/M6f/M6g — M6d checks failed");
         }
       } else {
-        console.log("[gate] skipping M6d/M6e/M6f — M6c checks failed");
+        console.log("[gate] skipping M6d/M6e/M6f/M6g — M6c checks failed");
       }
     } else {
-      console.log("[gate] skipping M6c/M6d/M6e/M6f — M6b checks failed");
+      console.log("[gate] skipping M6c/M6d/M6e/M6f/M6g — M6b checks failed");
     }
   } else {
-    console.log("[gate] skipping M6b/M6c/M6d/M6e/M6f — boot self-check failed");
+    console.log("[gate] skipping M6b/M6c/M6d/M6e/M6f/M6g — boot self-check failed");
   }
 
   console.log("\n===== M6b inventory panel =====");
@@ -1256,11 +1433,16 @@ try {
     console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
   }
 
-  exitCode = m6aOk && m6b.ok && m6c.ok && m6d.ok && m6e.ok && m6f.ok ? 0 : 1;
+  console.log("\n===== M6g shield builder =====");
+  for (const c of m6g.checks) {
+    console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
+  }
+
+  exitCode = m6aOk && m6b.ok && m6c.ok && m6d.ok && m6e.ok && m6f.ok && m6g.ok ? 0 : 1;
   console.log(
     exitCode === 0
-      ? "\n✅ M6f PASS (real browser): boot + inventory + curves + time control + decay-chain DAG + dose (incl. M6f-2 per-line table + uncertainty viz)"
-      : "\n❌ M6f FAIL (real browser)",
+      ? "\n✅ M6g PASS (real browser): boot + inventory + curves + time control + decay-chain DAG + dose + shield builder"
+      : "\n❌ M6g FAIL (real browser)",
   );
 } catch (err) {
   console.error("Driver error:", err);
