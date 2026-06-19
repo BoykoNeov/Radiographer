@@ -150,6 +150,41 @@
       ],
     },
     {
+      heading: "Prebuilt source catalog (M7)",
+      items: [
+        {
+          title: "Weapons-grade Pu pit — α/γ only; SF neutrons NOT modelled",
+          body:
+            "The pit is an illustrative weapons-grade Pu inventory (~93.5% Pu-239 / 6% Pu-240 / " +
+            "0.5% Pu-241; quantities representative, editable). Its real external field also " +
+            "includes ~1000 n/s/g of Pu-240 SPONTANEOUS-FISSION neutrons, which v1 does NOT model " +
+            "— so the shown external dose is an UNDERESTIMATE for this source. The in-growing " +
+            "Am-241 (59.5 keV γ) from Pu-241 decay IS modelled (the real external-γ story). The " +
+            "teaching point stands: α reads ~nothing externally yet is deadly if inhaled.",
+        },
+        {
+          title: "Am-241/Be — ISO 8529 spectrum (cited); yield is construction-dependent",
+          body:
+            "The AmBe neutron spectrum is the ISO 8529 reference, taken from IAEA TRS-403 (2001) " +
+            "Table 4.V — a cited open-access table, not a reconstruction. Folded against ICRP-74 " +
+            "it gives H*(10) = 393.6 pSv·cm², matching the standard's published 391 to <1%. The " +
+            "4.438 MeV reaction γ (⁹Be(α,n)¹²C*) is modelled at the recommended γ/n ratio R=0.575 " +
+            "and stacks into the Sv total. The absolute neutron YIELD (2.2×10⁶ n/s per Ci) is " +
+            "source-construction-dependent (Am:Be ratio, encapsulation) and varies ≈±15% — a " +
+            "representative value; the spectrum shape and dose coefficient are construction-independent.",
+        },
+        {
+          title: "Bomb fallout (7:10 rule) — DEFERRED, not silently omitted",
+          body:
+            "A fresh fission-product fallout vector (the Way–Wigner t⁻¹·² / 7:10 gross-decay law) " +
+            "is NOT shipped in v1. Doing it honestly needs a cited cumulative fission-yield table " +
+            "(ENDF/B or JEFF) decayed forward and validated against the t⁻¹·² law — a dataset " +
+            "build, not a reconstruction from memory (the same §11 discipline that gated spent " +
+            "fuel and AmBe). It is a documented future addition, deferred rather than faked.",
+        },
+      ],
+    },
+    {
       heading: "Quantities are not interchangeable",
       items: [
         {
