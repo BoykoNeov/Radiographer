@@ -391,6 +391,74 @@ def test_dose_thickness_no_buildup_material_is_loud():
         bridge.release(handle)
 
 
+def test_dose_multilayer_order_matters_through_bridge():
+    # The layer order is THE silent-error vector: lead→water (detector-side water) and
+    # water→lead (detector-side lead) share Σμx but differ in buildup material, so the
+    # rendered dose must differ — a reversed-stack bug would make them equal. (advisor)
+    res = json.loads(bridge.solve(json.dumps({"nuclides": {"Co-60": 1.0e9}, "unit": "Bq"})))
+    handle = res["handle"]
+    try:
+        def total(layers):
+            out = json.loads(bridge.dose(handle, json.dumps({
+                "times_s": [0.0], "quantity": "ambient_H10", "distance_m": 1.0,
+                "shield": layers,
+            })))
+            assert out["ok"] is True
+            return out["rate_si"][0]
+
+        lead_water = total([["lead", 1.0], ["water", 5.0]])
+        water_lead = total([["water", 5.0], ["lead", 1.0]])
+        assert lead_water != water_lead
+        # The bare ["lead", 2.0] single-tuple form must still route as one layer.
+        single = total([["lead", 2.0]])
+        assert single > 0.0
+    finally:
+        bridge.release(handle)
+
+
+def test_dose_thickness_multilayer_zero_point_is_rest_of_stack():
+    # Under layering, x=0 of the swept layer is the REST OF THE STACK, not unshielded
+    # (advisor). Sweeping the detector-side water layer of [lead 1cm, water x] at x=0 must
+    # equal the lead-only shield — and at the held thickness it reconciles with the full
+    # stack's dose(). The single-layer x=0→None baseline is checked separately (M6g).
+    res = json.loads(bridge.solve(json.dumps({"nuclides": {"Co-60": 1.0e9}, "unit": "Bq"})))
+    handle = res["handle"]
+    try:
+        xs = [0.0, 2.0, 5.0]
+        sweep = json.loads(bridge.dose_thickness(handle, json.dumps({
+            "layers": [["lead", 1.0], ["water", 5.0]], "sweep_index": 1,
+            "thicknesses_cm": xs, "quantity": "ambient_H10",
+        })))
+        assert sweep["ok"] is True and sweep["material"] == "water"
+        co = sweep["coeff_by_nuclide"]["Co-60"]
+
+        # x=0 zero point == lead-only stack (rest-of-stack), NOT unshielded.
+        lead_only = json.loads(bridge.dose_lines(handle, json.dumps({
+            "quantity": "ambient_H10", "shield": [["lead", 1.0]],
+        })))
+        lead_co = sum(ln["coeff_si"] for ln in lead_only["lines"] if ln["nuclide"] == "Co-60")
+        assert co[0] == pytest.approx(lead_co, rel=1e-12)
+        bare = json.loads(bridge.dose_lines(handle, json.dumps({"quantity": "ambient_H10"})))
+        bare_co = sum(ln["coeff_si"] for ln in bare["lines"] if ln["nuclide"] == "Co-60")
+        assert co[0] < bare_co  # the held lead layer means x=0 is NOT the unshielded value
+
+        # reconciliation at the held thickness x=5: folded curve == dose(full stack).
+        t, d = 0.0, 1.0
+        ev = json.loads(bridge.evaluate(handle, json.dumps(
+            {"times_s": [t], "axis": "activity", "unit": "Bq"})))
+        acts = {n: ev["series"][n][0] for n in ev["nuclides"]}
+        geom = 1.0 / (4.0 * math.pi * d * d)
+        idx = xs.index(5.0)
+        recon = geom * sum(sweep["coeff_by_nuclide"][n][idx] * acts.get(n, 0.0) for n in acts)
+        full = json.loads(bridge.dose(handle, json.dumps({
+            "times_s": [t], "quantity": "ambient_H10", "distance_m": d,
+            "shield": [["lead", 1.0], ["water", 5.0]],
+        })))
+        assert recon == pytest.approx(full["rate_si"][0], rel=1e-9)
+    finally:
+        bridge.release(handle)
+
+
 def test_beta_dose_round_trip_with_bremsstrahlung():
     # Solve once, ask for the beta SKIN dose series, plus the secondary bremsstrahlung
     # photon dose when a lead shield stops the beta (§6.2 "more lead = more dose").

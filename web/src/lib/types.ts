@@ -165,6 +165,15 @@ export const MATERIAL_GUIDANCE: Record<string, MaterialGuidance> = {
  *  attenuating-but-not-opaque starting point the user can edit (§12 units: cm). */
 export const DEFAULT_SHIELD_THICKNESS_CM = 1.0;
 
+/** One layer of a multi-layer shield stack (M8, §13 #2). The stack is ordered
+ *  SOURCE-SIDE → DETECTOR-SIDE; the LAST layer is adjacent to the detector and is the
+ *  buildup material in the last-layer / total-mfp approximation (§6.4). `thicknessCm`
+ *  in CENTIMETRES (the engine's shield unit, §12). */
+export interface ShieldLayer {
+  material: string;
+  thicknessCm: number;
+}
+
 /**
  * Format SI seconds as a short human string, auto-picking the largest unit whose
  * value is ≥ 1 (e.g. 86400 → "1 d", 153 → "2.55 min"). For tick/readout labels;

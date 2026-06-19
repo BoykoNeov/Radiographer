@@ -29,6 +29,7 @@ import {
   type EvaluateOk,
   type Handle,
   type MaterialInfo,
+  type ShieldSpec,
   type SolveEntry,
   type SolveOk,
 } from "./bridge";
@@ -52,6 +53,7 @@ import {
   type DoseQuantity,
   type InventoryEntry,
   type Precision,
+  type ShieldLayer,
 } from "./types";
 
 export type SolveStatus = "idle" | "solving" | "solved" | "error";
@@ -188,24 +190,28 @@ export class AppState {
   /** Loud neutron-path error (#3) — its own field so a neutron failure can't blank γ/β. */
   neutronDoseError = $state<string>("");
 
-  // -- shield builder (M6g, §9) ---------------------------------------------
-  // A single-layer shield (§13 #2; multi-layer is post-v1). A shield change is a pure
-  // EVALUATE off the live handle (re-fold the per-decay coefficients through the shield
-  // transmission) — NEVER a re-solve (#1). When a shield is active the whole dose path
-  // (γ series, dose_lines, β) is recomputed THROUGH it, plus an UNSHIELDED γ baseline
-  // (for the at-cursor attenuation factor, M6g #5) and the dose-vs-thickness coefficient
-  // grid (M6g #4). Thickness is in CENTIMETRES — the engine's shield unit (§12). State is
-  // TRANSIENT in M6g: persistence + round-trip land in M6h with the dose inputs (#7).
-  // See docs/plans/M6g-shield.md.
-  /** Shield material id (a `materials()` id with buildup), or null for no shield. */
-  shieldMaterial = $state<string | null>(null);
-  /** Shield thickness in CM (the engine's shield unit). Inactive while material is null. */
-  shieldThicknessCm = $state<number>(DEFAULT_SHIELD_THICKNESS_CM);
+  // -- shield builder (M6g + M8 multi-layer, §9, §13 #2) --------------------
+  // A shield is an ORDERED STACK of layers (source-side → detector-side; the LAST layer is
+  // detector-adjacent). A shield change is a pure EVALUATE off the live handle (re-fold the
+  // per-decay coefficients through the stack transmission) — NEVER a re-solve (#1). When a
+  // shield is active the whole γ dose path (series, dose_lines) is recomputed THROUGH the
+  // full stack, plus an UNSHIELDED γ baseline (the at-cursor attenuation factor, M6g #5),
+  // the dose-vs-thickness grid (M6g #4, sweeping the detector-side layer), and — for ≥2
+  // distinct-material layers — a REVERSED-order γ series whose spread quantifies the
+  // last-layer-buildup approximation's order sensitivity (M8 honesty, §11). β is a contact
+  // hazard stopped in the SOURCE-SIDE layer, so β/bremsstrahlung use the first layer only.
+  // Thickness is CENTIMETRES (§12). See docs/plans/M8-multilayer-shields.md, M6g-shield.md.
+  /** The shield stack, ordered source-side → detector-side. Empty ⇒ no shield. */
+  shieldLayers = $state<ShieldLayer[]>([]);
   /** The shield material list for the picker (id, has_buildup, density); fetched once. */
   availableMaterials = $state<MaterialInfo[]>([]);
   /** UNSHIELDED γ dose-rate series (Sv/s) — the baseline for the at-cursor attenuation
    *  factor; null when no shield is active (factor is then 1). */
   gammaDoseSeriesBare = $state<DoseOk | null>(null);
+  /** γ dose-rate series (Sv/s) through the shield with the layer order REVERSED — only
+   *  computed for ≥2 distinct-material layers; the normal-vs-reversed spread is the M8
+   *  order-sensitivity band of the last-layer buildup approximation (§11). Null otherwise. */
+  gammaDoseSeriesReversed = $state<DoseOk | null>(null);
   /** Secondary β-bremsstrahlung γ-dose series (the "more lead → more dose" effect); null
    *  when no shield, no finite distance, or no β converting to photons. A γ (Sv) quantity. */
   bremsSeries = $state<DoseOk | null>(null);
@@ -361,18 +367,50 @@ export class AppState {
     return trapzWindow(this.curveX, sg.rate_si, this.cursorOffsetS, this.cursorOffsetS + this.exposureS);
   }
 
-  // -- shield (M6g) ---------------------------------------------------------
+  // -- shield (M6g single-layer + M8 multi-layer) ---------------------------
 
-  /** The active shield as the engine's `[material, thickness_cm]`, or null when no material
-   *  is selected or the thickness is non-positive (then the dose path runs unshielded). */
-  get shield(): [string, number] | null {
-    return this.shieldMaterial && this.shieldThicknessCm > 0
-      ? [this.shieldMaterial, this.shieldThicknessCm]
-      : null;
+  /** The ACTIVE layers (material set AND thickness > 0), source-side → detector-side. */
+  get activeShieldLayers(): ShieldLayer[] {
+    return this.shieldLayers.filter((l) => l.material && l.thicknessCm > 0);
   }
-  /** True while a shield is actually attenuating (material set AND thickness > 0). */
+  /** The active shield as the engine's ordered layer list `[[material, cm], …]`, or null
+   *  when no layer is active (then the γ dose path runs unshielded). */
+  get shield(): ShieldSpec | null {
+    const layers = this.activeShieldLayers.map((l) => [l.material, l.thicknessCm] as [string, number]);
+    return layers.length ? layers : null;
+  }
+  /** The shield as the β engine sees it: the SOURCE-SIDE (first) active layer only. Betas
+   *  stop in the first absorber they hit; bremsstrahlung is generated there (additional γ
+   *  layers behind it don't change the skin β dose). Single `[material, cm]` tuple | null. */
+  get betaShield(): [string, number] | null {
+    const first = this.activeShieldLayers[0];
+    return first ? [first.material, first.thicknessCm] : null;
+  }
+  /** True while a shield is actually attenuating (≥1 active layer). */
   get shieldActive(): boolean {
     return this.shield !== null;
+  }
+  /** Human label for the active stack, source-side → detector-side (e.g. "Lead 2 cm →
+   *  Water 5 cm"). Empty string when no shield is active. */
+  get shieldStackLabel(): string {
+    const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+    return this.activeShieldLayers.map((l) => `${cap(l.material)} ${l.thicknessCm} cm`).join(" → ");
+  }
+
+  // -- single-layer COMPATIBILITY shims (M6g API kept for the driver + simple flows) ------
+  // The store now models a stack; these expose the first layer as the old scalar pair so
+  // existing single-layer callers (the M6g/M6h driver checks, a one-click shield) keep
+  // working unchanged. The DETECTOR-side thickness drives the dose-vs-thickness sweep.
+
+  /** First layer's material id, or null when the stack is empty (legacy `shieldMaterial`). */
+  get shieldMaterial(): string | null {
+    return this.shieldLayers[0]?.material ?? null;
+  }
+  /** The DETECTOR-side (last) active layer's thickness in cm — the layer the dose-vs-
+   *  thickness band sweeps. 0 when no shield is active. (Legacy `shieldThicknessCm`.) */
+  get shieldThicknessCm(): number {
+    const active = this.activeShieldLayers;
+    return active.length ? active[active.length - 1].thicknessCm : (this.shieldLayers[0]?.thicknessCm ?? 0);
   }
 
   /** UNSHIELDED γ dose-RATE (Sv/s) at the cursor — the attenuation-factor baseline. Falls
@@ -395,6 +433,24 @@ export class AppState {
   get bremsRateAtCursor(): number | null {
     const s = this.bremsSeries;
     return s ? interpAt(this.curveX, s.rate_si, this.cursorOffsetS) : null;
+  }
+
+  /** γ dose-RATE (Sv/s) at the cursor with the layer order REVERSED; null unless a reversed
+   *  series exists (≥2 distinct-material layers). The honest twin of `gammaRateAtCursor`. */
+  get gammaRateReversedAtCursor(): number | null {
+    const s = this.gammaDoseSeriesReversed;
+    return s ? interpAt(this.curveX, s.rate_si, this.cursorOffsetS) : null;
+  }
+  /** **Layer-order sensitivity** of the last-layer buildup approximation (M8, §11): the
+   *  fractional spread between the chosen order and its reverse at the cursor,
+   *  `|γ − γ_reversed| / γ`. Same Σμx, different buildup material → this IS the built-in
+   *  uncertainty of layered buildup (the approximation errs both ways; §6.4). Null unless a
+   *  reversed series exists (needs ≥2 distinct-material layers). */
+  get orderSensitivityAtCursor(): number | null {
+    const g = this.gammaRateAtCursor;
+    const gr = this.gammaRateReversedAtCursor;
+    if (g == null || gr == null || !(g > 0)) return null;
+    return Math.abs(g - gr) / g;
   }
 
   /**
@@ -711,25 +767,77 @@ export class AppState {
   // A shield is a re-fold of the per-decay coefficients through the transmission factor —
   // a pure evaluate off the live handle, NEVER a re-solve (gate: registry stays 1).
 
-  /** Select / change the shield material (null clears the shield). Must be a `has_buildup`
-   *  material for γ (the picker enforces this; the engine fails loud as the backstop). */
-  setShieldMaterial(material: string | null): void {
-    if (material === this.shieldMaterial) return;
-    this.shieldMaterial = material;
+  // -- multi-layer stack API (M8) -------------------------------------------
+  // Every mutation is a pure re-evaluate of the dose path through the new stack (#1).
+  // Each layer's material must be a `has_buildup` id (the picker enforces it; the engine
+  // fails loud as the backstop). Order is load-bearing — the LAST layer is detector-side.
+
+  /** Append a layer (defaults: the first buildup material, the default thickness). */
+  addShieldLayer(material?: string): void {
+    const id = material ?? this.availableMaterials.find((m) => m.has_buildup && m.id !== "air")?.id ?? null;
+    if (!id) return; // no buildup materials loaded yet — nothing to add
+    this.shieldLayers = [...this.shieldLayers, { material: id, thicknessCm: DEFAULT_SHIELD_THICKNESS_CM }];
     this.recomputeDose();
   }
 
-  /** Shield thickness (cm), clamped ≥ 0 (0 ⇒ no attenuation). Re-evaluates the dose path. */
-  setShieldThicknessCm(x: number): void {
-    if (!Number.isFinite(x) || x < 0 || x === this.shieldThicknessCm) return;
-    this.shieldThicknessCm = x;
-    if (this.shieldMaterial) this.recomputeDose(); // only bites when a material is selected
+  /** Set layer `i`'s material (a `has_buildup` id). No-op on an out-of-range index. */
+  setShieldLayerMaterial(i: number, material: string): void {
+    if (i < 0 || i >= this.shieldLayers.length || this.shieldLayers[i].material === material) return;
+    this.shieldLayers = this.shieldLayers.map((l, j) => (j === i ? { ...l, thicknessCm: l.thicknessCm, material } : l));
+    this.recomputeDose();
   }
 
-  /** Remove the shield (material → null); re-evaluates the dose path unshielded. */
+  /** Set layer `i`'s thickness (cm, clamped ≥ 0; 0 ⇒ that layer does not attenuate). */
+  setShieldLayerThicknessCm(i: number, x: number): void {
+    if (i < 0 || i >= this.shieldLayers.length || !Number.isFinite(x) || x < 0 || x === this.shieldLayers[i].thicknessCm) return;
+    this.shieldLayers = this.shieldLayers.map((l, j) => (j === i ? { ...l, thicknessCm: x } : l));
+    this.recomputeDose();
+  }
+
+  /** Remove layer `i`. No-op on an out-of-range index. */
+  removeShieldLayer(i: number): void {
+    if (i < 0 || i >= this.shieldLayers.length) return;
+    this.shieldLayers = this.shieldLayers.filter((_l, j) => j !== i);
+    this.recomputeDose();
+  }
+
+  /** Move layer `i` toward the source (dir −1) or the detector (dir +1) — order matters for
+   *  buildup, so this is a real physics control, not cosmetics (M8, §6.4). */
+  moveShieldLayer(i: number, dir: -1 | 1): void {
+    const j = i + dir;
+    if (i < 0 || i >= this.shieldLayers.length || j < 0 || j >= this.shieldLayers.length) return;
+    const next = [...this.shieldLayers];
+    [next[i], next[j]] = [next[j], next[i]];
+    this.shieldLayers = next;
+    this.recomputeDose();
+  }
+
+  // -- single-layer COMPATIBILITY setters (M6g API over the stack) ----------
+
+  /** Replace the whole stack with a single layer of `material` (null clears the shield) —
+   *  the legacy one-material flow. Keeps the existing thickness when one is present. */
+  setShieldMaterial(material: string | null): void {
+    if (material === null) {
+      this.clearShield();
+      return;
+    }
+    if (this.shieldLayers.length === 1 && this.shieldLayers[0].material === material) return;
+    const thicknessCm = this.shieldLayers[0]?.thicknessCm ?? DEFAULT_SHIELD_THICKNESS_CM;
+    this.shieldLayers = [{ material, thicknessCm }];
+    this.recomputeDose();
+  }
+
+  /** Set the (single/first) layer's thickness (cm). Legacy single-layer convenience. */
+  setShieldThicknessCm(x: number): void {
+    if (!Number.isFinite(x) || x < 0 || this.shieldLayers.length === 0 || x === this.shieldLayers[0].thicknessCm) return;
+    this.shieldLayers = this.shieldLayers.map((l, j) => (j === 0 ? { ...l, thicknessCm: x } : l));
+    this.recomputeDose();
+  }
+
+  /** Remove the whole shield (stack → empty); re-evaluates the dose path unshielded. */
   clearShield(): void {
-    if (this.shieldMaterial === null) return;
-    this.shieldMaterial = null;
+    if (this.shieldLayers.length === 0) return;
+    this.shieldLayers = [];
     this.recomputeDose();
   }
 
@@ -886,14 +994,15 @@ export class AppState {
     const t0 = this.referenceTimeS;
     const times = t0 > 0 ? this.curveX.map((x) => x + t0) : this.curveX.slice();
     const geometry = this.doseQuantity === "effective" ? this.doseGeometry : null;
-    const shield = this.shield; // [material, thickness_cm] | null (M6g)
+    const shield = this.shield; // ordered layer list [[material, cm], …] | null (M8)
+    const betaShield = this.betaShield; // β stops in the source-side layer only (M8)
 
     const fail = (e: { type: string; message: string }): void => {
       this.clearDoseSeries();
       this.doseError = `${e.type}: ${e.message}`;
     };
 
-    // γ dose-rate series THROUGH the shield (M6g; shield is null in the unshielded case).
+    // γ dose-rate series THROUGH the whole shield stack (M8; null when unshielded).
     const g = this.client.dose(this.handle, {
       times_s: times,
       quantity: this.doseQuantity,
@@ -903,30 +1012,35 @@ export class AppState {
     });
     if (!g.ok) return fail(g.error);
 
-    // The per-line γ decomposition (M6f-2): same quantity/geometry AND SHIELD as the γ series
-    // so the table reconciles with the γ card, but distance/time-free (the cursor getter folds
-    // in 1/4πd² + activity). One fetch per recomputeDose; the cursor never re-fetches (§3).
+    // The per-line γ decomposition (M6f-2): same quantity/geometry AND SHIELD STACK as the γ
+    // series so the table reconciles with the γ card, but distance/time-free (the cursor getter
+    // folds in 1/4πd² + activity). One fetch per recomputeDose; the cursor never re-fetches (§3).
     const lines = this.client.dose_lines(this.handle, { quantity: this.doseQuantity, geometry, shield });
     if (!lines.ok) return fail(lines.error);
 
-    // β skin dose Hp(0.07) THROUGH the shield (M6g): a present shield returns the secondary
-    // bremsstrahlung γ-dose series ("more lead → more dose"), scored in the γ quantity so it
-    // is comparable with the γ card. No ICRP geometry on the skin dose itself (depth-defined).
+    // β skin dose Hp(0.07) through the SOURCE-SIDE layer only (M8): betas stop in the first
+    // absorber, where the secondary bremsstrahlung is generated ("more lead → more dose"),
+    // scored in the γ quantity so it is comparable with the γ card. No ICRP geometry on the
+    // skin dose itself (depth-defined).
     const b = this.client.beta_dose(this.handle, {
       times_s: times,
       distance_m: this.doseDistanceM,
-      shield,
+      shield: betaShield,
       brems_quantity: this.doseQuantity,
       geometry,
     });
     if (!b.ok) return fail(b.error);
 
-    // M6g extras — only when a shield is actually attenuating:
-    //  · an UNSHIELDED γ baseline for the at-cursor attenuation factor (#5), and
-    //  · the dose-vs-thickness coefficient grid (Design-A, #4).
-    // Both are pure evaluates off the same handle; the cursor folds them with zero re-fetch.
+    // Shield extras — only when a shield is actually attenuating:
+    //  · an UNSHIELDED γ baseline for the at-cursor attenuation factor (M6g #5),
+    //  · the dose-vs-thickness coefficient grid (Design-A, M6g #4) sweeping the DETECTOR-side
+    //    layer with the rest of the stack held, and
+    //  · for ≥2 distinct-material layers, a REVERSED-order γ series — the spread is the M8
+    //    order-sensitivity band of the last-layer buildup approximation (§11).
+    // All are pure evaluates off the same handle; the cursor folds them with zero re-fetch.
     let bare: DoseOk | null = null;
     let thickness: DoseThicknessOk | null = null;
+    let reversed: DoseOk | null = null;
     if (shield) {
       const gb = this.client.dose(this.handle, {
         times_s: times,
@@ -937,20 +1051,36 @@ export class AppState {
       if (!gb.ok) return fail(gb.error);
       bare = gb;
 
+      const sweepIndex = shield.length - 1; // the detector-side (last) active layer
       const dt = this.client.dose_thickness(this.handle, {
-        material: shield[0],
-        thicknesses_cm: this.thicknessGrid(shield[1]),
+        layers: shield,
+        sweep_index: sweepIndex,
+        thicknesses_cm: this.thicknessGrid(shield[sweepIndex][1]),
         quantity: this.doseQuantity,
         geometry,
       });
       if (!dt.ok) return fail(dt.error);
       thickness = dt;
+
+      const distinctMaterials = new Set(shield.map((l) => l[0])).size;
+      if (shield.length >= 2 && distinctMaterials >= 2) {
+        const rev = this.client.dose(this.handle, {
+          times_s: times,
+          quantity: this.doseQuantity,
+          distance_m: this.doseDistanceM,
+          geometry,
+          shield: [...shield].reverse(),
+        });
+        if (!rev.ok) return fail(rev.error);
+        reversed = rev;
+      }
     }
 
     this.gammaDoseSeries = g;
     this.betaDoseSeries = b;
     this.gammaLines = lines;
     this.gammaDoseSeriesBare = bare;
+    this.gammaDoseSeriesReversed = reversed;
     this.bremsSeries = b.bremsstrahlung ?? null;
     this.gammaThicknessCoeffs = thickness;
 
@@ -1005,6 +1135,7 @@ export class AppState {
     this.betaDoseSeries = null;
     this.gammaLines = null;
     this.gammaDoseSeriesBare = null;
+    this.gammaDoseSeriesReversed = null;
     this.bremsSeries = null;
     this.gammaThicknessCoeffs = null;
     this.neutronDoseSeries = null;
@@ -1133,9 +1264,8 @@ export class AppState {
       doseQuantity: this.doseQuantity,
       doseGeometry: this.doseGeometry,
       exposureS: this.exposureS,
-      // shield (M6h)
-      shieldMaterial: this.shieldMaterial,
-      shieldThicknessCm: this.shieldThicknessCm,
+      // shield stack (M8; serializer v4)
+      shieldLayers: this.shieldLayers.map((l) => ({ ...l })),
       // time cursor (M6h) — restored AFTER solve (the ordering trap, see loadFromText)
       cursorOffsetS: this.cursorOffsetS,
     };
@@ -1178,8 +1308,7 @@ export class AppState {
     this.doseQuantity = parsed.doseQuantity;
     this.doseGeometry = parsed.doseGeometry;
     this.exposureS = parsed.exposureS;
-    this.shieldMaterial = parsed.shieldMaterial;
-    this.shieldThicknessCm = parsed.shieldThicknessCm;
+    this.shieldLayers = parsed.shieldLayers.map((l) => ({ ...l }));
 
     await this.solve();
 

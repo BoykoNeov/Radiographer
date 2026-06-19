@@ -51,19 +51,29 @@ export interface EvaluateRequest {
   unit?: string | null;
 }
 
+/** A shield as the engine's ordered layer list (source-side → detector-side; the last
+ *  layer is detector-adjacent). A single layer is `[["lead", 2.0]]`. Always the list
+ *  form on the wire — the Python `_normalize_shield` reduces n=1 to the legacy path. */
+export type ShieldSpec = [string, number][];
+
 export interface DoseRequest {
   times_s: number[];
   quantity?: string; // "air_kerma" | "ambient_H10" | "effective"
   distance_m: number;
-  shield?: [string, number] | null;
+  shield?: ShieldSpec | null;
   medium?: string;
   geometry?: string | null;
 }
 
 /** Distance/time-free per-nuclide γ coefficients over a thickness grid (M6g dose-vs-
- *  thickness, Design-A). The client folds `1/4πd²` and the cursor activity. */
+ *  thickness, Design-A). Two forms (M8): single-layer `{material}` (legacy; `x=0` is the
+ *  exact unshielded baseline) or multi-layer `{layers, sweep_index}` — sweep that layer's
+ *  thickness with the OTHERS held (then `x=0` is the rest-of-stack, not unshielded). The
+ *  client folds `1/4πd²` and the cursor activity at every grid point (zero re-fetch). */
 export interface DoseThicknessRequest {
-  material: string;
+  material?: string;
+  layers?: ShieldSpec;
+  sweep_index?: number;
   thicknesses_cm: number[];
   quantity?: string;
   geometry?: string | null;
@@ -318,7 +328,7 @@ export class BridgeClient {
 
   /** Per-line γ decomposition for the §9 per-line table (M6f-2). Distance/time-free:
    *  the client folds in `1/4πd²` and the cursor activity (no re-fetch on scrub). */
-  dose_lines(handle: Handle, req: { quantity?: string; geometry?: string | null; shield?: [string, number] | null; medium?: string }): DoseLinesResponse {
+  dose_lines(handle: Handle, req: { quantity?: string; geometry?: string | null; shield?: ShieldSpec | null; medium?: string }): DoseLinesResponse {
     return this.call<DoseLinesResponse>("dose_lines", handle, JSON.stringify(req));
   }
 

@@ -204,11 +204,16 @@
             "mirror this split (H*(10) = ICRP-74, effective = ICRP-116), also non-comparable.",
         },
         {
-          title: "Single-layer shields only (v1)",
+          title: "Multi-layer shields — last-layer buildup, the least-reliable element",
           body:
-            "Buildup is unambiguous for one layer. Layered (multi-material) shields have no clean " +
-            "buildup theory — whose B for a Pb-then-water stack? — so the layered approximation " +
-            "is deferred until the multi-layer UI lands (post-v1).",
+            "A layer stack's attenuation exp(−Σμᵢxᵢ) is EXACT and order-independent, but its " +
+            "buildup has no clean theory. We use the LAST-LAYER approximation: the buildup of the " +
+            "detector-side material over the whole penetration depth (§6.4). It is order-dependent " +
+            "and errs BOTH ways — a high-buildup low-Z layer on the detector side over-estimates; " +
+            "a high-Z layer there under-counts (the dangerous direction). This is the least-reliable " +
+            "part of the γ dose calc; the “layer-order sensitivity” readout quantifies it for a " +
+            "mixed stack. Broder / Harima–Kitazume (order-aware) are a future upgrade — not " +
+            "reconstructed from memory (no-fabrication, §11). Single-layer is exact for buildup.",
         },
       ],
     },

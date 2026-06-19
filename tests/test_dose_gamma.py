@@ -22,7 +22,7 @@ import math
 import pytest
 
 from engine.buildup import BuildupError
-from engine.dose import DoseError, GammaDoseModel, transmission
+from engine.dose import DoseError, GammaDoseModel, stack_transmission, transmission
 from engine.inventory import SolvedInventory
 from engine.photon_interp import ABOVE_GRID, BELOW_FLOOR
 
@@ -253,3 +253,100 @@ def test_broad_beam_tvl_exceeds_narrow_beam_lead():
     assert tvl_broad > tvl_narrow
     # Co-60 lead TVL ≈ 4.0 cm (broad-beam tables); loose tol for the geometry mismatch.
     assert tvl_broad == pytest.approx(4.0, rel=0.30)
+
+
+# --- multi-layer shields (§13 #2 / §6.4: last-layer / total-mfp approximation) --------
+#
+# A stack is ordered SOURCE-SIDE → DETECTOR-SIDE; the last element is adjacent to the
+# detector. transmission = B_last(E, Σ μx) · exp(−Σ μx): attenuation exact and
+# order-invariant, buildup taken as the detector-side material over the whole depth.
+
+def _stack_mfp(layers, E_MeV):
+    """Total mean-free-paths Σ μᵢxᵢ of a layer stack at energy E (cm⁻¹ · cm)."""
+    from engine import attenuation as att
+    from engine import photon_interp as pi
+
+    return sum(
+        pi.interp_mu_rho(mat, E_MeV) * att.density(mat) * x for mat, x in layers
+    )
+
+
+def test_stack_single_layer_reduces_to_tuple():
+    # A one-element layer list must be bit-for-bit identical to the bare-tuple shield —
+    # the n=1 reduction that guarantees no regression of the M6g single-layer path.
+    E = 1.0
+    assert stack_transmission([("lead", 2.0)], E) == transmission("lead", E, 2.0)
+
+    one = GammaDoseModel(["Co-60"], "air_kerma", shield=[("lead", 2.0)])
+    tup = GammaDoseModel(["Co-60"], "air_kerma", shield=("lead", 2.0))
+    assert one.coeff_si["Co-60"] == tup.coeff_si["Co-60"]
+
+
+def test_stack_same_material_equals_single_summed():
+    # Two layers of the SAME material (x1 then x2) == one layer of (x1+x2), exactly:
+    # same μ, same total mfp, same buildup material → identical transmission. (Necessary
+    # but NOT sufficient — order-invariant, so it cannot catch a reversed-stack bug.)
+    E = 1.0
+    two = stack_transmission([("lead", 1.0), ("lead", 2.0)], E)
+    one = transmission("lead", E, 3.0)
+    assert two == pytest.approx(one, rel=1e-12)
+
+
+def test_stack_order_locks_detector_side():
+    # THE anti-bug test (advisor): a dissimilar stack in both orders. Attenuation is
+    # order-invariant; buildup is NOT — it must take the DETECTOR-SIDE (last) material.
+    from engine import photon_interp as pi
+
+    E = 1.0
+    lead_water = [("lead", 1.0), ("water", 5.0)]   # detector-side = water
+    water_lead = [("water", 5.0), ("lead", 1.0)]   # detector-side = lead
+
+    mfp = _stack_mfp(lead_water, E)
+    assert _stack_mfp(water_lead, E) == pytest.approx(mfp, rel=1e-12)  # (a) same Σμx
+    atten = math.exp(-mfp)
+
+    t_lw = stack_transmission(lead_water, E)
+    t_wl = stack_transmission(water_lead, E)
+
+    # (c) each order == B_(detector-side material)(Σ mfp) · exp(−Σ mfp), exactly.
+    assert t_lw == pytest.approx(pi.interp_buildup("water", E, mfp) * atten, rel=1e-12)
+    assert t_wl == pytest.approx(pi.interp_buildup("lead", E, mfp) * atten, rel=1e-12)
+    # (b) the two orders DIFFER (water builds up more than lead at 1 MeV) — a reversed
+    # layer list would silently swap these, so they must not be equal.
+    assert t_lw != t_wl
+    assert t_lw / atten == pytest.approx(pi.interp_buildup("water", E, mfp), rel=1e-12)
+
+
+def test_stack_monotonic_thickening_fixed_stack():
+    # The TRUE monotonicity invariant. Last-layer is NOT monotonic across material/order
+    # changes (see the artifact test below) — but holding the stack's COMPOSITION and ORDER
+    # fixed, thickening ANY single layer keeps the detector-side material L unchanged, raises
+    # the total mfp, and B_L grows sub-exponentially → B_L·exp(−τ) strictly falls.
+    E = 1.0
+    base = stack_transmission([("lead", 1.0), ("water", 5.0)], E)
+    thicker_inner = stack_transmission([("lead", 2.0), ("water", 5.0)], E)  # +source-side
+    thicker_outer = stack_transmission([("lead", 1.0), ("water", 6.0)], E)  # +detector-side
+    assert 0.0 < thicker_inner < base
+    assert 0.0 < thicker_outer < base
+
+
+def test_stack_lastlayer_artifact_low_z_behind_high_z():
+    # KNOWN last-layer limitation — NOT a bug, do NOT "fix" it into a fabrication. A
+    # high-buildup low-Z layer (water) on the DETECTOR side of a high-Z layer (lead) makes
+    # the computed transmission HIGHER than the lead alone, because water's large buildup is
+    # applied over the WHOLE penetration depth (including the lead portion). The error is
+    # order-dependent and runs both ways — the reverse order (high-Z detector-side) instead
+    # UNDER-counts. Surfaced in the honesty register (§11), never silently. (advisor)
+    E = 1.0
+    lead_alone = stack_transmission([("lead", 1.0)], E)
+    lead_then_water = stack_transmission([("lead", 1.0), ("water", 5.0)], E)
+    assert lead_then_water > lead_alone  # the documented non-physical increase
+
+
+def test_stack_non_buildup_layer_anywhere_raises():
+    # A material without ANS-6.4.3 buildup ANYWHERE in the stack must fail loudly — the
+    # per-layer gate, not just the first slot (§6.5, no silent B=1 surrogate).
+    with pytest.raises((DoseError, BuildupError)):
+        GammaDoseModel(["Co-60"], "air_kerma", shield=[("lead", 1.0), ("pmma", 1.0)])
+    with pytest.raises((DoseError, BuildupError)):
+        GammaDoseModel(["Co-60"], "air_kerma", shield=[("pmma", 1.0), ("lead", 1.0)])

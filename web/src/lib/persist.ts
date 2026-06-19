@@ -22,7 +22,6 @@ import {
   ACTIVITY_UNITS,
   AXIS_OPTIONS,
   DEFAULT_GEOMETRY,
-  DEFAULT_SHIELD_THICKNESS_CM,
   DOSE_QUANTITY_OPTIONS,
   GEOMETRY_OPTIONS,
   MASS_UNITS,
@@ -30,6 +29,7 @@ import {
   type DoseQuantity,
   type InventoryEntry,
   type Precision,
+  type ShieldLayer,
 } from "./types";
 
 /** The full app-state slice that M6h persists. Defaults below fill any absent section. */
@@ -50,9 +50,9 @@ export interface PersistableState {
   doseQuantity: DoseQuantity;
   doseGeometry: string;
   exposureS: number;
-  // shield (v2)
-  shieldMaterial: string | null;
-  shieldThicknessCm: number;
+  // shield stack (v4 — ordered source-side → detector-side; v2/v3 single-layer files load
+  // by promoting their `material`/`thickness_cm` to a one-element stack)
+  shieldLayers: ShieldLayer[];
   // time cursor (v2). null ⇒ the file did not specify one → keep the solve's default home
   // (the geometric midpoint), rather than forcing the cursor to the range start (M6h #3).
   cursorOffsetS: number | null;
@@ -72,13 +72,12 @@ export const PERSIST_DEFAULTS: Omit<
   doseQuantity: "ambient_H10",
   doseGeometry: DEFAULT_GEOMETRY,
   exposureS: 3600,
-  shieldMaterial: null,
-  shieldThicknessCm: DEFAULT_SHIELD_THICKNESS_CM,
+  shieldLayers: [],
   cursorOffsetS: null,
 };
 
 export const STATE_SCHEMA = "radiographer.app-state";
-export const STATE_VERSION = 3;
+export const STATE_VERSION = 4;
 
 export class PersistError extends Error {
   constructor(message: string) {
@@ -117,8 +116,8 @@ interface Envelope {
     exposure_s: number;
   };
   shield: {
-    material: string | null;
-    thickness_cm: number;
+    // v4: the ordered stack. v2/v3 single-layer fields are still READ on load (below).
+    layers: { material: string; thickness_cm: number }[];
   };
   cursor_offset_s: number | null;
 }
@@ -151,8 +150,7 @@ export function serializeState(state: PersistableState): string {
       exposure_s: state.exposureS,
     },
     shield: {
-      material: state.shieldMaterial,
-      thickness_cm: state.shieldThicknessCm,
+      layers: state.shieldLayers.map((l) => ({ material: l.material, thickness_cm: l.thicknessCm })),
     },
     cursor_offset_s: state.cursorOffsetS,
   };
@@ -285,18 +283,13 @@ export function deserializeState(text: string): PersistableState {
   const doseGeometry = reqEnum(dose, "geometry", "dose.geometry", GEOMETRY_VALUES, PERSIST_DEFAULTS.doseGeometry);
   const exposureS = reqNumber(dose, "exposure_s", "dose.exposure_s", 0, PERSIST_DEFAULTS.exposureS);
 
-  // -- shield (v2; optional → defaults). material null-or-string (the picker + engine
-  //    fail-loud are the backstop for an unknown id, M6g #3); thickness ≥ 0. --
+  // -- shield (v4 stack; optional → []). A v4 file carries `layers`; a v2/v3 file carries the
+  //    single `material`/`thickness_cm`, promoted here to a one-element stack (backward compat).
+  //    Each layer's material is a non-empty string (the picker + engine fail-loud are the
+  //    backstop for an unknown/no-buildup id, M6g #3); thickness ≥ 0. --
   const shield = obj.shield === undefined ? {} : obj.shield;
   if (!isObject(shield)) throw new PersistError("shield section must be an object");
-  let shieldMaterial: string | null = PERSIST_DEFAULTS.shieldMaterial;
-  if (shield.material !== undefined && shield.material !== null) {
-    if (typeof shield.material !== "string" || shield.material.length === 0) {
-      throw new PersistError(`shield.material must be null or a non-empty string (got ${JSON.stringify(shield.material)})`);
-    }
-    shieldMaterial = shield.material;
-  }
-  const shieldThicknessCm = reqNumber(shield, "thickness_cm", "shield.thickness_cm", 0, PERSIST_DEFAULTS.shieldThicknessCm);
+  const shieldLayers = parseShieldLayers(shield);
 
   // -- time cursor (v2; optional → null = keep the solve's default home, M6h #3) --
   let cursorOffsetS: number | null = PERSIST_DEFAULTS.cursorOffsetS;
@@ -320,11 +313,40 @@ export function deserializeState(text: string): PersistableState {
     doseQuantity,
     doseGeometry,
     exposureS,
-    shieldMaterial,
-    shieldThicknessCm,
+    shieldLayers,
     cursorOffsetS,
   };
 }
+
+/** Parse the shield section into an ordered layer stack. Reads v4 `layers` if present, else
+ *  promotes a v2/v3 single `material`/`thickness_cm` to a one-element stack; absent → []. A
+ *  present layer must have a non-empty material id and a finite thickness ≥ 0 (loud, M6h #2). */
+function parseShieldLayers(shield: Record<string, unknown>): ShieldLayer[] {
+  if (shield.layers !== undefined) {
+    if (!Array.isArray(shield.layers)) throw new PersistError("shield.layers must be an array");
+    return shield.layers.map((raw, i) => {
+      if (!isObject(raw)) throw new PersistError(`shield.layers[${i}] is not an object`);
+      const { material, thickness_cm } = raw;
+      if (typeof material !== "string" || material.length === 0) {
+        throw new PersistError(`shield.layers[${i}].material must be a non-empty string`);
+      }
+      if (typeof thickness_cm !== "number" || !Number.isFinite(thickness_cm) || thickness_cm < 0) {
+        throw new PersistError(`shield.layers[${i}].thickness_cm must be a finite number ≥ 0 (got ${JSON.stringify(thickness_cm)})`);
+      }
+      return { material, thicknessCm: thickness_cm };
+    });
+  }
+  // Legacy v2/v3 single-layer form.
+  if (shield.material === undefined || shield.material === null) return [];
+  if (typeof shield.material !== "string" || shield.material.length === 0) {
+    throw new PersistError(`shield.material must be null or a non-empty string (got ${JSON.stringify(shield.material)})`);
+  }
+  const thicknessCm = reqNumber(shield, "thickness_cm", "shield.thickness_cm", 0, DEFAULT_SHIELD_THICKNESS_CM_FALLBACK);
+  return [{ material: shield.material, thicknessCm }];
+}
+
+// The thickness a legacy file gets if it somehow carried a material but no thickness_cm.
+const DEFAULT_SHIELD_THICKNESS_CM_FALLBACK = 1.0;
 
 /** A finite number strictly > 0 at `path`, or `fallback` when absent (distance's contract). */
 function reqNumberPositive(obj: Record<string, unknown>, key: string, path: string, fallback: number): number {

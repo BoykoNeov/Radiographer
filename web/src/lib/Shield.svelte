@@ -6,11 +6,15 @@
   // BridgeClient, and never `solve()` — a shield is a pure evaluate (the gate asserts the
   // registry stays at 1 across a shield change).
   //
-  // v1 is SINGLE-LAYER (§13 #2). The γ picker is restricted to the buildup materials
-  // (`has_buildup`) because the γ engine raises for a shield without ANS-6.4.3 buildup
-  // (M6g #2) — that flag is the no-drift gate that keeps a fail-loud material out of the
-  // picker. High-Z materials stop β but convert it to penetrating bremsstrahlung photons:
-  // "more lead can INCREASE dose" — surfaced as a warning + the brems readout (#6).
+  // MULTI-LAYER (M8, §13 #2): the shield is an ordered STACK, source-side → detector-side.
+  // The γ picker is restricted to the buildup materials (`has_buildup`) because the γ engine
+  // raises for a shield without ANS-6.4.3 buildup (M6g #2) — that flag keeps a fail-loud
+  // material out of every layer slot. Buildup for a mixed stack uses the LAST-LAYER /
+  // total-mfp approximation (§6.4): exact attenuation, detector-side buildup material; the
+  // approximation is order-dependent and errs both ways, surfaced as a "layer-order
+  // sensitivity" readout (§11). High-Z stops β but converts it to penetrating bremsstrahlung
+  // ("more lead can INCREASE dose"); betas stop in the SOURCE-SIDE layer (M8), so the brems
+  // readout + warning key off the first layer.
   import Plotly from "plotly.js-basic-dist-min";
   import { onDestroy } from "svelte";
   import { appState } from "./state.svelte";
@@ -20,20 +24,12 @@
   let thickEl = $state<HTMLDivElement | null>(null);
   let timeEl = $state<HTMLDivElement | null>(null);
 
-  // -- local thickness binding (commit to the store on change) -------------------
-  let thickStr = $state<string>(String(appState.shieldThicknessCm));
-  $effect(() => {
-    // keep the field in sync if the store thickness changes elsewhere (e.g. M6h load)
-    thickStr = String(appState.shieldThicknessCm);
-  });
-  function onThickness() {
-    const x = parseFloat(thickStr);
-    if (Number.isFinite(x) && x >= 0) appState.setShieldThicknessCm(x);
-    else thickStr = String(appState.shieldThicknessCm); // snap back to truth (§11)
-  }
-  function onMaterial(e: Event) {
-    const v = (e.target as HTMLSelectElement).value;
-    appState.setShieldMaterial(v === "" ? null : v);
+  // -- per-layer input handlers (each commits to the store, a pure re-evaluate) ---------
+  function onLayerThickness(i: number, e: Event) {
+    const el = e.target as HTMLInputElement;
+    const x = parseFloat(el.value);
+    if (Number.isFinite(x) && x >= 0) appState.setShieldLayerThicknessCm(i, x);
+    else el.value = String(appState.shieldLayers[i]?.thicknessCm ?? 0); // snap back to truth (§11)
   }
 
   // -- derived shield/dose readouts (cursor-indexed; reactive) -------------------
@@ -42,6 +38,7 @@
   const buildupMaterials = $derived(
     appState.availableMaterials.filter((m) => m.has_buildup && m.id !== "air"),
   );
+  const layers = $derived(appState.shieldLayers);
   const hasDose = $derived(appState.gammaDoseSeries !== null && appState.curveX.length > 0);
   const active = $derived(appState.shieldActive);
   const gShielded = $derived(appState.gammaRateAtCursor); // Sv/s through the shield
@@ -50,14 +47,22 @@
   const bRate = $derived(appState.betaRateAtCursor); // Gy/s skin (is there a β emitter?)
   const brems = $derived(appState.bremsRateAtCursor); // Sv/s secondary γ from stopped β
   const tCurve = $derived(appState.gammaThicknessCurve); // {thicknesses_cm, rate_si} | null
+  const orderSens = $derived(appState.orderSensitivityAtCursor); // |γ − γ_reversed|/γ | null
   const qShort = $derived(appState.doseQuantity === "effective" ? "E" : "H*(10)");
   const qLabel = $derived(doseQuantityLabel(appState.doseQuantity, appState.doseGeometry));
 
-  // High-Z + a β emitter present ⇒ the bremsstrahlung crossover is physically relevant.
-  const highZ = $derived(appState.shieldMaterial !== null && (MATERIAL_GUIDANCE[appState.shieldMaterial]?.highZ ?? false));
+  // The active layers and the two physically-distinguished ends.
+  const activeLayers = $derived(appState.activeShieldLayers);
+  const betaLayer = $derived(activeLayers[0] ?? null); // β stops here; brems generated here
+  const detectorLayer = $derived(activeLayers.length ? activeLayers[activeLayers.length - 1] : null);
+
+  // High-Z SOURCE-SIDE layer + a β emitter present ⇒ the bremsstrahlung crossover is relevant.
+  const highZ = $derived(betaLayer !== null && (MATERIAL_GUIDANCE[betaLayer.material]?.highZ ?? false));
   const bremsRelevant = $derived(active && highZ && bRate != null && bRate > 0);
 
   const matLabel = (id: string) => id.charAt(0).toUpperCase() + id.slice(1);
+  const layerText = (l: { material: string; thicknessCm: number }) => `${matLabel(l.material)} ${l.thicknessCm} cm`;
+  const stackLabel = $derived(activeLayers.map(layerText).join(" → "));
 
   // -- dose-vs-thickness curve with the γ uncertainty band (M6g #4, §9) ----------------
   // Unlike dose-vs-distance (exact inverse-square, reconstructed client-side), thickness
@@ -101,7 +106,7 @@
     return {
       margin: { l: 72, r: 20, t: 10, b: 42 },
       showlegend: false,
-      xaxis: { title: { text: `${matLabel(appState.shieldMaterial ?? "")} thickness (cm)` }, automargin: true },
+      xaxis: { title: { text: `${matLabel(detectorLayer?.material ?? "")} thickness (cm, detector-side layer)` }, automargin: true },
       yaxis: { type: "log", title: { text: `γ ${qShort} dose rate (Sv·h⁻¹)` }, automargin: true },
       shapes: [
         {
@@ -144,7 +149,7 @@
         y: sh.rate_si.map((r) => r * 3600),
         mode: "lines",
         line: { color: MODALITY_COLORS.gamma, width: 2 },
-        name: `${matLabel(appState.shieldMaterial ?? "")} ${appState.shieldThicknessCm} cm`,
+        name: stackLabel,
         hovertemplate: "%{x:.3g} s → %{y:.3e} Sv/h<extra>shielded</extra>",
       } as Partial<Plotly.PlotData>,
     ];
@@ -215,52 +220,57 @@
     <header>
       <h2>Shield</h2>
       <span class="readout muted">
-        single layer · point source in air · at <strong>{humanTime(appState.currentTimeS)}</strong>
+        {layers.length === 0 ? "no layers" : `${layers.length} layer${layers.length > 1 ? "s" : ""}`} ·
+        point source in air · at <strong>{humanTime(appState.currentTimeS)}</strong>
       </span>
     </header>
 
     {#if appState.doseError}
       <p class="note error" role="alert">⚠ shielded dose failed — {appState.doseError}</p>
     {:else}
-      <div class="inputs">
-        <label>
-          Material
-          <select data-testid="shield-material" value={appState.shieldMaterial ?? ""} onchange={onMaterial}>
-            <option value="">None (no shield)</option>
-            {#each buildupMaterials as m (m.id)}
-              <option value={m.id}>{matLabel(m.id)} ({m.density_g_cm3} g/cm³)</option>
-            {/each}
-          </select>
-        </label>
-
-        <label class:disabled={!appState.shieldMaterial}>
-          Thickness
-          <input
-            type="number"
-            min="0"
-            step="any"
-            data-testid="shield-thickness"
-            disabled={!appState.shieldMaterial}
-            bind:value={thickStr}
-            onchange={onThickness}
-            onkeydown={(e) => e.key === "Enter" && onThickness()}
-          />
-          cm
-        </label>
-
-        {#if active}
-          <button class="clear" data-testid="shield-clear" onclick={() => appState.clearShield()}>
-            Remove shield
-          </button>
+      <!-- Layer stack editor (source-side → detector-side). Order is load-bearing for buildup. -->
+      <div class="stack" data-testid="shield-stack">
+        <span class="end muted">source ▸</span>
+        {#each layers as layer, i (i)}
+          <div class="layer" data-testid="shield-layer">
+            <select
+              data-testid={i === 0 ? "shield-material" : null}
+              value={layer.material}
+              onchange={(e) => appState.setShieldLayerMaterial(i, (e.target as HTMLSelectElement).value)}
+            >
+              {#each buildupMaterials as m (m.id)}
+                <option value={m.id}>{matLabel(m.id)} ({m.density_g_cm3} g/cm³)</option>
+              {/each}
+            </select>
+            <input
+              type="number"
+              min="0"
+              step="any"
+              data-testid={i === 0 ? "shield-thickness" : null}
+              value={layer.thicknessCm}
+              onchange={(e) => onLayerThickness(i, e)}
+              onkeydown={(e) => e.key === "Enter" && onLayerThickness(i, e)}
+            />
+            <span class="cm muted">cm</span>
+            <button class="mv" title="move toward source" disabled={i === 0} onclick={() => appState.moveShieldLayer(i, -1)}>↑</button>
+            <button class="mv" title="move toward detector" disabled={i === layers.length - 1} onclick={() => appState.moveShieldLayer(i, 1)}>↓</button>
+            <button class="rm" title="remove layer" data-testid="shield-layer-remove" onclick={() => appState.removeShieldLayer(i)}>✕</button>
+          </div>
+        {/each}
+        <span class="end muted">▸ detector</span>
+        <button class="add" data-testid="shield-add-layer" onclick={() => appState.addShieldLayer()}>+ Add layer</button>
+        {#if layers.length > 0}
+          <button class="clear" data-testid="shield-clear" onclick={() => appState.clearShield()}>Clear all</button>
         {/if}
       </div>
 
       {#if !active}
         <p class="note muted">
-          Pick a material to attenuate the γ dose. Only materials with ANS-6.4.3 buildup data
-          are offered (a shield without scatter buildup is a data hole, not a transparent
-          medium — §11); PMMA / polyethylene and neutron-hydrogenous steering arrive with the
-          neutron sources (M7).
+          Add a layer to attenuate the γ dose. Only materials with ANS-6.4.3 buildup data are
+          offered (a shield without scatter buildup is a data hole, not a transparent medium —
+          §11); PMMA / polyethylene and neutron-hydrogenous steering arrive with the neutron
+          sources (M7). Stack multiple layers source-side → detector-side — <strong>order
+          matters</strong> for buildup (§6.4).
         </p>
       {:else}
         <!-- With / without + attenuation factor (γ, at the cursor) -->
@@ -275,7 +285,7 @@
               <strong>{gBare == null ? "—" : formatDoseRate(gBare, "Sv")}</strong>
             </div>
             <div class="row">
-              <span class="muted">with {matLabel(appState.shieldMaterial ?? "")} {appState.shieldThicknessCm} cm</span>
+              <span class="muted">with {stackLabel}</span>
               <strong>{gShielded == null ? "—" : formatDoseRate(gShielded, "Sv")}</strong>
             </div>
             <div class="row big">
@@ -301,10 +311,20 @@
 
         {#if bremsRelevant}
           <p class="note warn" data-testid="shield-highz-warn">
-            ⚠ {matLabel(appState.shieldMaterial ?? "")} is high-Z: it stops the β but converts it
-            into penetrating bremsstrahlung photons — <strong>more shield can increase the total
-            (photon) dose</strong>. For a β emitter, a low-Z shield (aluminium, water) first, then
-            high-Z for the γ, is the standard order.
+            ⚠ {matLabel(betaLayer?.material ?? "")} (the source-side layer) is high-Z: it stops the
+            β but converts it into penetrating bremsstrahlung photons — <strong>more shield can
+            increase the total (photon) dose</strong>. For a β emitter, a low-Z layer (aluminium,
+            water) source-side first, then high-Z for the γ, is the standard order.
+          </p>
+        {/if}
+
+        {#if orderSens != null}
+          <p class="note approx" data-testid="shield-order-sensitivity" data-order-sens={orderSens}>
+            Layer-order sensitivity ≈ <strong>{(orderSens * 100).toFixed(0)}%</strong> — reversing
+            the stack order changes the γ dose by this much at the cursor (same total attenuation,
+            different detector-side buildup material). For a mixed stack this <em>is</em> the
+            uncertainty of the last-layer buildup approximation (it errs both ways; §6.4/§11) — a
+            documented limit, not a bug.
           </p>
         {/if}
 
@@ -330,12 +350,13 @@
         <div class="plot" data-testid="shield-time-plot" bind:this={timeEl}></div>
 
         <p class="hint muted">
-          Single-layer point-kernel shield: narrow-beam attenuation corrected by the ANS-6.4.3
-          exposure buildup factor (applied to all quantities — a documented approximation, §11).
-          The attenuation factor is the γ transmission <em>at the cursor</em> (spectrum- and
-          time-dependent, not a constant μx). One solve, evaluated many (§3) — the shield
-          re-folds the coefficients; the cursor just indexes. <strong>Not for safety
-          decisions</strong> (§11).
+          Multi-layer point-kernel shield: narrow-beam attenuation
+          <em>exp(−Σμᵢxᵢ)</em> (exact, order-independent) corrected by the ANS-6.4.3 exposure
+          buildup factor of the <em>detector-side</em> layer over the whole depth — the last-layer
+          approximation (§6.4), applied to all quantities (a documented approximation, §11). The
+          attenuation factor is the γ transmission <em>at the cursor</em> (spectrum- and
+          time-dependent, not a constant μx). One solve, evaluated many (§3) — the shield re-folds
+          the coefficients; the cursor just indexes. <strong>Not for safety decisions</strong> (§11).
         </p>
       {/if}
     {/if}
@@ -363,20 +384,27 @@
   .readout {
     font-size: 0.9rem;
   }
-  .inputs {
+  .stack {
     display: flex;
-    gap: 1rem;
+    gap: 0.5rem;
     align-items: center;
     flex-wrap: wrap;
     margin-top: 0.75rem;
   }
-  .inputs label {
-    display: inline-flex;
-    gap: 0.35rem;
-    align-items: center;
+  .stack .end {
+    font-size: 0.82rem;
+    white-space: nowrap;
   }
-  .inputs label.disabled {
-    opacity: 0.5;
+  .layer {
+    display: inline-flex;
+    gap: 0.3rem;
+    align-items: center;
+    border: 1px solid #8884;
+    border-radius: 0.4rem;
+    padding: 0.25rem 0.4rem;
+  }
+  .layer .cm {
+    font-size: 0.85rem;
   }
   input,
   select,
@@ -384,9 +412,21 @@
     font: inherit;
     padding: 0.3rem 0.5rem;
   }
-  .inputs input[type="number"] {
-    width: 6rem;
+  .layer input[type="number"] {
+    width: 4.5rem;
   }
+  .layer button {
+    padding: 0.15rem 0.4rem;
+    cursor: pointer;
+    border: 1px solid #8886;
+    border-radius: 0.3rem;
+    background: transparent;
+  }
+  .layer button:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  button.add,
   button.clear {
     cursor: pointer;
     border: 1px solid #8886;
@@ -471,6 +511,13 @@
   .note.warn {
     color: #8a6d00;
     font-weight: 500;
+  }
+  .note.approx {
+    font-weight: 400;
+    font-size: 0.85rem;
+    opacity: 0.85;
+    border-left: 3px solid #8884;
+    padding-left: 0.6rem;
   }
   .muted {
     opacity: 0.7;

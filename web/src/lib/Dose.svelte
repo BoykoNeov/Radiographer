@@ -378,7 +378,7 @@
         external · point source in air · at <strong>{humanTime(appState.currentTimeS)}</strong>
         {#if appState.shieldActive}
           · <strong class="shielded" data-testid="dose-shield-tag"
-            >through {appState.shieldMaterial} {appState.shieldThicknessCm} cm</strong
+            >through {appState.shieldStackLabel}</strong
           >
         {/if}
       </span>

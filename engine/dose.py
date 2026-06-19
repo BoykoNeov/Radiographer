@@ -41,6 +41,7 @@ import math
 from typing import Optional, Sequence
 
 from engine import attenuation as attenuation
+from engine import buildup as buildup
 from engine import emissions as emissions
 from engine import photon_interp as pi
 
@@ -80,17 +81,41 @@ class DoseError(Exception):
         self.reason = reason
 
 
-def _normalize_shield(shield) -> Optional[tuple[str, float]]:
+def _normalize_shield(shield) -> Optional[list[tuple[str, float]]]:
+    """Normalize any accepted shield spec to an ordered layer list (source→detector).
+
+    Accepts ``None``, a single ``(material, thickness_cm)`` 2-tuple (a Python convenience,
+    promoted to a one-layer stack), or a sequence of such layers. The **last** layer is
+    adjacent to the detector — the buildup material in the last-layer approximation
+    (§6.4, §13 #2). One normalize path so the order convention has a single owner.
+
+    Discriminator: a string first element ⇒ a bare ``(material, cm)`` tuple; a sequence
+    first element ⇒ a layer list. An empty stack normalizes to ``None`` (no shield).
+    """
     if shield is None:
         return None
     try:
-        material, thickness_cm = shield
-    except (TypeError, ValueError) as exc:
-        raise DoseError(f"shield must be None or (material, thickness_cm); got {shield!r}") from exc
-    thickness_cm = float(thickness_cm)
-    if thickness_cm < 0.0:
-        raise DoseError(f"shield thickness must be >= 0 cm; got {thickness_cm}")
-    return str(material), thickness_cm
+        n = len(shield)
+    except TypeError as exc:
+        raise DoseError(
+            f"shield must be None, (material, cm), or [(material, cm), …]; got {shield!r}"
+        ) from exc
+    if n == 0:
+        return None
+    raw_layers = [shield] if isinstance(shield[0], str) else list(shield)
+    out: list[tuple[str, float]] = []
+    for layer in raw_layers:
+        try:
+            material, thickness_cm = layer
+        except (TypeError, ValueError) as exc:
+            raise DoseError(
+                f"shield layer must be (material, thickness_cm); got {layer!r}"
+            ) from exc
+        thickness_cm = float(thickness_cm)
+        if thickness_cm < 0.0:
+            raise DoseError(f"shield thickness must be >= 0 cm; got {thickness_cm}")
+        out.append((str(material), thickness_cm))
+    return out or None
 
 
 def transmission(material: str, E_MeV: float, thickness_cm: float) -> float:
@@ -98,12 +123,48 @@ def transmission(material: str, E_MeV: float, thickness_cm: float) -> float:
 
     The point-kernel shield factor (§6.5): narrow-beam attenuation ``exp(−μx)`` corrected by
     the exposure buildup ``B`` for scattered photons. ``μ = (μ/ρ)·ρ`` (cm⁻¹), ``x`` in cm,
-    ``μx`` in mean free paths. Off-grid energies raise :class:`OffGridError`.
+    ``μx`` in mean free paths. Off-grid energies raise :class:`OffGridError`. The
+    :func:`stack_transmission` n=1 case is bit-for-bit identical to this.
     """
     mu_lin = pi.interp_mu_rho(material, E_MeV) * attenuation.density(material)  # cm⁻¹
     mfp = mu_lin * thickness_cm
     b = pi.interp_buildup(material, E_MeV, mfp)
     return b * math.exp(-mfp)
+
+
+def stack_transmission(layers: Sequence[tuple[str, float]], E_MeV: float) -> float:
+    """Broad-beam transmission of an ordered layer stack (source-side → detector-side).
+
+    The **last-layer / total-mfp** approximation (§6.4, §13 #2 — LOCKED):
+
+        T(E) = B_L(E, Σᵢ μᵢxᵢ) · exp(−Σᵢ μᵢxᵢ)        L = the last (detector-side) layer
+
+    Narrow-beam attenuation ``exp(−Σ μx)`` is **exact** and order-invariant — the stack just
+    sums mean-free-paths. The buildup ``B`` is the *only* approximation: it is taken for the
+    detector-side material over the whole penetration depth. Reduces bit-for-bit to
+    :func:`transmission` for n=1 (then L is the only layer).
+
+    **Per-layer gate (no silent surrogate, §6.5):** *every* layer's material must have
+    ANS-6.4.3 buildup data, not just the detector-side one — a non-buildup layer mid-stack
+    would otherwise contribute attenuation only, an invisible underestimate. A layer with no
+    buildup raises :class:`engine.buildup.BuildupError`; off-grid energies raise OffGridError.
+    """
+    layers = list(layers)
+    if not layers:
+        return 1.0
+    total_mfp = 0.0
+    for material, thickness_cm in layers:
+        if not buildup.has_material(material):
+            # Force the same loud failure the last-layer interp_buildup would give, but for
+            # an interior layer too — never let it slip through as attenuation-only.
+            raise buildup.BuildupError(
+                f"shield layer {material!r} has no ANS-6.4.3 buildup data; every layer in a "
+                "stack must have buildup (no silent attenuation-only surrogate, §6.5)."
+            )
+        mu_lin = pi.interp_mu_rho(material, E_MeV) * attenuation.density(material)  # cm⁻¹
+        total_mfp += mu_lin * thickness_cm
+    b = pi.interp_buildup(layers[-1][0], E_MeV, total_mfp)  # detector-side material
+    return b * math.exp(-total_mfp)
 
 
 class GammaDoseModel:
@@ -188,8 +249,7 @@ class GammaDoseModel:
     def _shield_factor(self, E_MeV: float) -> float:
         if self.shield is None:
             return 1.0
-        material, thickness_cm = self.shield
-        return transmission(material, E_MeV, thickness_cm)
+        return stack_transmission(self.shield, E_MeV)
 
     def _lines_for(self, nuclide: str) -> list[dict]:
         """Scored photon lines for ``nuclide``: ``[{E_MeV, yield, origin, coeff_si}]`` where

@@ -197,7 +197,7 @@ def dose(handle: str, request_json: str) -> str:
             solved.names,
             req.get("quantity", "ambient_H10"),
             medium=req.get("medium", "air"),
-            shield=tuple(shield) if shield else None,
+            shield=shield if shield else None,
             geometry=req.get("geometry"),
         )
         return _ok(model.dose_rate_series(activities, float(req["distance_m"])))
@@ -226,7 +226,7 @@ def dose_lines(handle: str, request_json: str) -> str:
             solved.names,
             req.get("quantity", "ambient_H10"),
             medium=req.get("medium", "air"),
-            shield=tuple(shield) if shield else None,
+            shield=shield if shield else None,
             geometry=req.get("geometry"),
         )
         return _ok(
@@ -243,33 +243,55 @@ def dose_lines(handle: str, request_json: str) -> str:
 
 
 def dose_thickness(handle: str, request_json: str) -> str:
-    """``{"material":"lead", "thicknesses_cm":[0,0.5,1,...], "quantity":"ambient_H10",
-        "geometry":null, "medium":"air"}`` -> ``{ok, quantity, si_unit, material,
-        thicknesses_cm, coeff_by_nuclide:{nuclide:[C_n(x0), C_n(x1), ...]}, warnings,
-        scoring_floor_MeV}``.
+    """Two request forms; same response shape.
+
+    *Single-layer (legacy)* ``{"material":"lead", "thicknesses_cm":[0,0.5,1,...],
+        "quantity":"ambient_H10", "geometry":null, "medium":"air"}``.
+
+    *Multi-layer* ``{"layers":[["lead",1.0],["water",5.0]], "sweep_index":1,
+        "thicknesses_cm":[...], ...}`` — sweep ``layers[sweep_index]``'s thickness with the
+    OTHER layers held fixed. (Legacy ``material`` ≡ ``layers=[[material,0]], sweep_index=0``.)
+
+    Response: ``{ok, quantity, si_unit, material, thicknesses_cm,
+        coeff_by_nuclide:{nuclide:[C_n(x0), ...]}, warnings, scoring_floor_MeV}`` where
+    ``material`` is the SWEPT layer's material.
 
     The §9 **dose-vs-thickness** sweep, Design-A (M6f-2 #10): DISTANCE- and TIME-free
-    per-nuclide γ dose coefficients ``C_n(x)`` for a thickness grid through one ``material``.
-    The shield transmission ``B(E,μx)·exp(−μx)`` is nonlinear and per-line, so — unlike the
-    γ dose-vs-*distance* band (exact inverse-square, reconstructed client-side) — it MUST be
-    evaluated by the engine. The client folds ``1/4πd²`` and the parent activity ``A_n(t)``
-    at the cursor, so the curve is live on scrub/distance with no re-fetch (the §3 discipline
-    the dose series already follows).
+    per-nuclide γ dose coefficients ``C_n(x)``. The shield transmission ``B(E,μx)·exp(−μx)``
+    is nonlinear and per-line, so it MUST be evaluated by the engine; the client folds
+    ``1/4πd²`` and the parent activity ``A_n(t)`` at the cursor → live on scrub/distance with
+    no re-fetch (§3).
 
-    ``x == 0`` is evaluated with ``shield=None`` so the curve's zero point is the EXACT
-    unshielded baseline. Each ``C_n(x)`` is the same per-nuclide coefficient ``dose()`` folds
-    for ``shield=(material, x)`` (one ``GammaDoseModel`` assembly path), so at any grid
-    thickness ``Σ C_n(x)·A_n / 4πd²`` reconciles EXACTLY with the breakdown bar — no second
-    code branch to drift. Below-floor lines are logged in ``warnings`` (thickness-independent,
-    captured once); a material without ANS-6.4.3 buildup raises loudly (§11)."""
+    **Zero-point under layering (advisor):** ``x=0`` of the swept layer is NOT "unshielded" —
+    it is the **rest of the stack**. Each grid point rebuilds the stack with the swept layer
+    set to ``x`` and **drops zero-thickness layers**, so a single-layer sweep's ``x=0`` falls
+    back to ``shield=None`` (the exact unshielded baseline, preserving M6g), while a
+    multi-layer sweep's ``x=0`` is the held remainder. Each ``C_n(x)`` is the same per-nuclide
+    coefficient ``dose()`` folds for that exact stack (one ``GammaDoseModel`` assembly path),
+    so at the swept layer's current thickness ``Σ C_n(x)·A_n / 4πd²`` reconciles EXACTLY with
+    the breakdown bar — no second code branch to drift. Below-floor lines are logged in
+    ``warnings`` (thickness-independent, captured once); a layer material without ANS-6.4.3
+    buildup raises loudly (§11)."""
     try:
         req = json.loads(request_json)
         solved = _get(handle)
-        material = str(req["material"])
         quantity = req.get("quantity", "ambient_H10")
         geometry = req.get("geometry")
         medium = req.get("medium", "air")
         thicknesses = [float(x) for x in req["thicknesses_cm"]]
+
+        # Normalize both request forms to a held stack + the swept layer index.
+        if "layers" in req:
+            base_layers = [[str(m), float(t)] for m, t in req["layers"]]
+            sweep_index = int(req["sweep_index"])
+            if not (0 <= sweep_index < len(base_layers)):
+                raise DoseError(
+                    f"sweep_index {sweep_index} out of range for {len(base_layers)} layers"
+                )
+        else:
+            base_layers = [[str(req["material"]), 0.0]]
+            sweep_index = 0
+        material = base_layers[sweep_index][0]
 
         coeff_by_nuclide: dict[str, list[float]] = {n: [] for n in solved.names}
         warnings: list[dict] = []
@@ -277,18 +299,23 @@ def dose_thickness(handle: str, request_json: str) -> str:
         for i, x in enumerate(thicknesses):
             if x < 0.0:
                 raise DoseError(f"shield thickness must be >= 0 cm; got {x}")
+            # Rebuild the stack with the swept layer at x; drop zero-thickness layers so the
+            # detector-side material is the next REAL layer (a 0-cm layer is not there).
+            layers = [list(layer) for layer in base_layers]
+            layers[sweep_index][1] = x
+            stack = [(m, t) for m, t in layers if t > 0.0]
             model = GammaDoseModel(
                 solved.names,
                 quantity,
                 medium=medium,
-                shield=(material, x) if x > 0.0 else None,
+                shield=stack if stack else None,
                 geometry=geometry,
             )
             si_unit = model.si_unit
             for n in solved.names:
                 coeff_by_nuclide[n].append(model.coeff_si[n])
             # Below-floor skips are set by the line *energies* / quantity, not the shield, so
-            # they are identical at every thickness — capture them once (the x=0 model).
+            # they are identical at every thickness — capture them once (first model).
             if i == 0:
                 warnings = list(model.warnings)
         return _ok(

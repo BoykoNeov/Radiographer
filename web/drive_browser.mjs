@@ -1345,6 +1345,61 @@ async function runM6g(page) {
     `bremsLead=${bremsLead?.toExponential(3)} > bremsAl=${bremsAl?.toExponential(3)} Sv/s, warn=${warnVisible}`,
   );
 
+  // 5) MULTI-LAYER (M8, §13 #2): build a [lead 1cm, water 5cm] stack on Co-60, then REVERSE
+  //    the order. Attenuation Σμx is order-invariant, but the last-layer buildup picks the
+  //    detector-side material → the rendered γ dose must DIFFER between the two orders (a
+  //    reversed-stack bug would make them equal). The order-sensitivity readout must render.
+  const multi = await page.evaluate(async () => {
+    const app = window.__APP__;
+    await app.clear();
+    app.setDoseQuantity("ambient_H10");
+    app.setDoseDistanceM(1.0);
+    await app.addEntry("Co-60", 1.0e9, "Bq");
+    app.setCursorOffsetS(0);
+    app.clearShield();
+    // source-side → detector-side: lead then water.
+    app.addShieldLayer("lead");
+    app.setShieldLayerThicknessCm(0, 1.0);
+    app.addShieldLayer("water");
+    app.setShieldLayerThicknessCm(1, 5.0);
+    return { nLayers: app.shieldLayers.length };
+  });
+  await page.waitForFunction(
+    "window.__APP__.shieldActive && window.__APP__.gammaDoseSeriesReversed && window.__APP__.curveX.length > 0",
+    null,
+    { timeout: 30_000 },
+  );
+  const leadWater = await page.evaluate(() => {
+    const s = window.__BRIDGE__.registry_size();
+    const app = window.__APP__;
+    return { rate: app.gammaRateAtCursor, rev: app.gammaRateReversedAtCursor, sens: app.orderSensitivityAtCursor, size: s.ok ? s.size : -1, handle: app.handle };
+  });
+  // reverse the stack order in place (water then lead) — a pure re-evaluate, registry stays 1.
+  await page.evaluate(() => window.__APP__.moveShieldLayer(0, 1));
+  await page.waitForFunction(
+    "window.__APP__.shieldLayers[0].material === 'water' && window.__APP__.gammaDoseSeries",
+    null,
+    { timeout: 30_000 },
+  );
+  const waterLead = await page.evaluate(() => window.__APP__.gammaRateAtCursor);
+  const sensVisible = await page.evaluate(
+    () => !!document.querySelector('[data-testid="shield-order-sensitivity"]'),
+  );
+  record(
+    "multi-layer: lead→water ≠ water→lead γ dose (order-dependent buildup), sensitivity shown (M8)",
+    multi.nLayers === 2 &&
+      leadWater.handle != null &&
+      leadWater.size === 1 &&
+      Number.isFinite(leadWater.rate) &&
+      Number.isFinite(waterLead) &&
+      Math.abs(leadWater.rate - waterLead) / leadWater.rate > 1e-6 && // the two orders differ
+      Math.abs(leadWater.rev - waterLead) / waterLead < 1e-9 && // the eager reversed series predicts the reversed stack
+      leadWater.sens > 0 &&
+      sensVisible,
+    `leadWater=${leadWater.rate?.toExponential(4)} vs waterLead=${waterLead?.toExponential(4)}, ` +
+      `sens=${(leadWater.sens * 100).toFixed(1)}%, registry==${leadWater.size}, readout=${sensVisible}`,
+  );
+
   return { ok: checks.every((c) => c.pass), checks };
 }
 
@@ -1837,8 +1892,8 @@ async function runM7(page) {
     return { grayed: card ? card.getAttribute("data-rate-si") === null : null };
   });
   record(
-    "persist v3: neutron source survives save/load → key + live card restored (#4)",
-    parsed.version === 3 &&
+    "persist (v4): neutron source survives save/load → key + live card restored (#4)",
+    parsed.version === 4 &&
       parsed.inventory.neutron_source === "Cf-252" &&
       loadErr === null &&
       restored.grayed === false,
