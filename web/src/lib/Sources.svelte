@@ -6,7 +6,21 @@
   import { appState } from "./state.svelte";
   import { sourcesByCategory, type PrebuiltSource } from "./sources";
 
-  const groups = sourcesByCategory();
+  // Static manifest sources + the runtime spent-fuel catalog (inventory from validated
+  // data/spent_fuel, fetched after boot). Each spent-fuel vector is its own category group,
+  // appended after the static ones so the picker shows them once the engine is ready.
+  const groups = $derived.by(() => {
+    const g = sourcesByCategory();
+    for (const s of appState.spentFuelSources) {
+      let grp = g.find((x) => x.category === s.category);
+      if (!grp) {
+        grp = { category: s.category, sources: [] };
+        g.push(grp);
+      }
+      grp.sources.push(s);
+    }
+    return g;
+  });
 
   let loadingId = $state<string | null>(null);
   let loadError = $state("");

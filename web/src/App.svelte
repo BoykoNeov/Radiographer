@@ -11,6 +11,7 @@
   import Chain from "./lib/Chain.svelte";
   import Dose from "./lib/Dose.svelte";
   import Shield from "./lib/Shield.svelte";
+  import DecayHeat from "./lib/DecayHeat.svelte";
   import Honesty from "./lib/Honesty.svelte";
 
   type Phase = "booting" | "ready" | "error";
@@ -97,6 +98,7 @@
     <Chain />
     <Dose />
     <Shield />
+    <DecayHeat />
     <Honesty />
   {/if}
 

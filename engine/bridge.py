@@ -31,6 +31,7 @@ from engine.emissions import EmissionsError
 from engine.inventory import EngineError, SolvedInventory
 from engine.neutron_dose import NeutronDoseError, NeutronDoseModel
 from engine.neutron_source import NeutronSourceError
+from engine.spent_fuel import SpentFuelError, catalog as _spent_fuel_catalog
 from engine.photon_interp import OffGridError
 
 #: Expected, structured domain errors — surfaced loudly but without a traceback (the
@@ -42,6 +43,7 @@ _EXPECTED_ERRORS = (
     BetaDoseError,
     NeutronDoseError,
     NeutronSourceError,
+    SpentFuelError,
     OffGridError,
     AttenuationError,
     BuildupError,
@@ -385,6 +387,20 @@ def neutron_dose(handle: str, request_json: str) -> str:
                 )
                 out["source_gamma"] = gm.dose_rate_series(activities, distance_m)
         return _ok(out)
+    except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
+        return _err(exc)
+
+
+def spent_fuel_catalog() -> str:
+    """``-> {ok, sources: [{id, label, category, blurb, caveat, referenceTimeS,
+        burnup_GWd_tHM, enrichment_pct, entries:[{name, quantity, unit}]}]}``.
+
+    The §8 prebuilt spent-fuel sources, whose inventory comes from the VALIDATED
+    ``data/spent_fuel`` discharge vectors (not a hand-written manifest). The JS catalog
+    merges these into the source picker; loading one populates the inventory (per-tonne-HM
+    masses, ``unit="g"``) at discharge (t=0), and the existing time control evolves cooling."""
+    try:
+        return _ok({"sources": _spent_fuel_catalog()})
     except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
         return _err(exc)
 

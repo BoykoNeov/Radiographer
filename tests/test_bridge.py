@@ -205,6 +205,27 @@ def test_decay_heat_round_trip_co60():
         bridge.release(handle)
 
 
+def test_spent_fuel_catalog_lists_validated_vectors():
+    # The §8 spent-fuel picker source: inventory comes from the validated data/spent_fuel
+    # vectors, returned as ready-to-load entries (per-tonne-HM masses, unit="g").
+    cat = json.loads(bridge.spent_fuel_catalog())
+    assert cat["ok"] is True
+    ids = {s["id"] for s in cat["sources"]}
+    assert "pwr-uox-45gwd-4pct" in ids
+    ref = next(s for s in cat["sources"] if s["id"] == "pwr-uox-45gwd-4pct")
+    assert ref["category"].startswith("Reactor fuel")
+    assert ref["referenceTimeS"] == 0.0  # a DISCHARGE vector; cooling = the time control
+    assert len(ref["entries"]) > 30 and all(e["unit"] == "g" for e in ref["entries"])
+    # The catalog entries actually solve + carry decay heat (the full round trip).
+    res = json.loads(bridge.solve(json.dumps({"entries": ref["entries"], "precision": "double"})))
+    assert res["ok"] is True and "Cs-137" in res["nuclides"]
+    try:
+        dh = json.loads(bridge.decay_heat(res["handle"], json.dumps({"times_s": [0.0]})))
+        assert dh["ok"] is True and dh["total_W"][0] > 0.0
+    finally:
+        bridge.release(res["handle"])
+
+
 def test_dose_no_buildup_shield_is_structured_error_not_traceback():
     res = json.loads(bridge.solve(json.dumps({"nuclides": {"Co-60": 1.0e9}, "unit": "Bq"})))
     handle = res["handle"]

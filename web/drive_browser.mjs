@@ -1805,6 +1805,57 @@ async function runM7(page) {
     `version=${parsed.version}, neutron_source=${parsed.inventory.neutron_source}, loadErr=${loadErr}, cardLive=${restored.grayed === false}`,
   );
 
+  // 5) SPENT FUEL (M7c): a parameterized PWR discharge vector loads from the validated
+  //    data/spent_fuel catalog (not the static manifest) via its picker card. The 67-nuclide
+  //    inventory + the live decay-heat readout light up; cooling to 10 yr drops decay heat into
+  //    the published PWR band (~1.7 kW/tHM). Neutron stays GRAYED — spent fuel carries no v1
+  //    neutron source key (SF/(α,n) output is a documented defer, §11).
+  const SF45 = '[data-testid="source-pwr-uox-45gwd-4pct"]';
+  const sfCat = await page.evaluate(() => ({
+    n: window.__APP__.spentFuelSources.length,
+    ids: window.__APP__.spentFuelSources.map((s) => s.id),
+  }));
+  record(
+    "M7c spent-fuel catalog present (inventory from validated data/spent_fuel vectors)",
+    sfCat.n === 2 && sfCat.ids.includes("pwr-uox-45gwd-4pct"),
+    `n=${sfCat.n}, ids=${JSON.stringify(sfCat.ids)}`,
+  );
+
+  await page.click(SF45);
+  await page.waitForFunction(
+    "window.__APP__.status === 'solved' && window.__APP__.decayHeatSeries",
+    null,
+    { timeout: 60_000 },
+  );
+  const sf = await page.evaluate(() => {
+    const app = window.__APP__;
+    const YR = 365.25 * 86400;
+    app.setReferenceTimeS(10 * YR); // cool to 10 yr (forward-decay evaluation, not a re-solve)
+    if (app.cursorRange) app.setCursorOffsetS(app.cursorRange[0]); // cursor ≈ 0 → currentTime ≈ 10 yr
+    const valEl = document.querySelector(".decayheat .value");
+    return {
+      nEntries: app.entries.length,
+      hasCs137: app.closure.includes("Cs-137"),
+      neutronSource: app.neutronSource,
+      heatW: app.decayHeatAtCursor,
+      heatText: valEl ? valEl.textContent : null,
+      err: app.decayHeatError,
+      registry: app.handle ? 1 : 0,
+    };
+  });
+  const heatKw = sf.heatW / 1e3;
+  record(
+    "M7c: spent fuel loads 67-nuclide vector; live decay-heat readout ≈ 1.7 kW/tHM at 10 yr; n grayed",
+    sf.nEntries === 67 &&
+      sf.hasCs137 &&
+      sf.neutronSource === null &&
+      sf.err === "" &&
+      heatKw > 1.0 &&
+      heatKw < 2.5 &&
+      /W/.test(sf.heatText || ""),
+    `n=${sf.nEntries}, Cs137=${sf.hasCs137}, neutronSource=${sf.neutronSource}, heat=${heatKw.toFixed(3)} kW/tHM, text=${JSON.stringify(sf.heatText)}, err=${JSON.stringify(sf.err)}`,
+  );
+
   return { ok: checks.every((c) => c.pass), checks };
 }
 
@@ -1924,7 +1975,7 @@ try {
     m6aOk && m6b.ok && m6c.ok && m6d.ok && m6e.ok && m6f.ok && m6g.ok && m6h.ok && m7.ok ? 0 : 1;
   console.log(
     exitCode === 0
-      ? "\n✅ M7 PASS (real browser): boot + inventory + curves + time + chain + dose + shield + honesty/round-trip + sources/neutron"
+      ? "\n✅ M7 PASS (real browser): boot + inventory + curves + time + chain + dose + shield + honesty/round-trip + sources/neutron + spent-fuel/decay-heat"
       : "\n❌ M7 FAIL (real browser)",
   );
 } catch (err) {

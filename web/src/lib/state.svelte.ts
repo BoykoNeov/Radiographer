@@ -22,6 +22,7 @@
 import {
   BridgeClient,
   type ChainOk,
+  type DecayHeatOk,
   type DoseLinesOk,
   type DoseOk,
   type DoseThicknessOk,
@@ -232,6 +233,23 @@ export class AppState {
   private readonly CURVE_POINTS = 300;
   private readonly CURVE_POINTS_HP = 60;
 
+  // -- decay heat (M7c, §5) -------------------------------------------------
+  // Thermal power W(t) = Σ A_n(t)·Ē_rec,n, folded from the SAME bundled ICRP-107 emission
+  // spectra as γ/β (no new dataset). DISTANCE- and quantity-free (heat is total locally-
+  // deposited power, not a point-field quantity), so it recomputes on solve + source-age
+  // ONLY — not on distance/quantity/shield. Same solve-once/cursor-index pattern as dose:
+  // one evaluate over `curveX`, the cursor getter indexes it. Most meaningful for spent
+  // fuel (cooling drops it orders of magnitude), but defined for any inventory.
+  /** Decay-heat (W) series over `curveX`; null when empty/stale/failed. */
+  decayHeatSeries = $state<DecayHeatOk | null>(null);
+  /** Loud decay-heat-path error (#3) — surfaced, never a silent blank readout. */
+  decayHeatError = $state<string>("");
+
+  // -- spent-fuel catalog (fetched once after boot, M7c §8) -----------------
+  // Prebuilt spent-fuel sources whose inventory comes from validated `data/spent_fuel`
+  // discharge vectors (not the static `sources.ts` manifest). Merged into the picker.
+  spentFuelSources = $state<PrebuiltSource[]>([]);
+
   // -- add-by-name source (fetched once after boot) -------------------------
   availableNuclides = $state<string[]>([]);
   /** True once the engine client is attached and the nuclide list is loaded. */
@@ -420,6 +438,28 @@ export class AppState {
     return { rows, total };
   }
 
+  // -- decay heat at the cursor (M7c; pure client-side index, #1/§3) ---------
+  /** Total decay heat (W) at the cursor; null when no series. */
+  get decayHeatAtCursor(): number | null {
+    const s = this.decayHeatSeries;
+    return s ? interpAt(this.curveX, s.total_W, this.cursorOffsetS) : null;
+  }
+  /** Top per-nuclide decay-heat contributors at the cursor (W, descending) — the §5/§9
+   *  "dominant contributor" view. Reads the per-nuclide series at the cursor, no bridge call. */
+  get decayHeatTopAtCursor(): { nuclide: string; W: number; frac: number }[] | null {
+    const s = this.decayHeatSeries;
+    if (!s) return null;
+    const total = this.decayHeatAtCursor ?? 0;
+    const rows = Object.keys(s.by_nuclide_W).map((n) => ({
+      nuclide: n,
+      W: interpAt(this.curveX, s.by_nuclide_W[n], this.cursorOffsetS) ?? 0,
+      frac: 0,
+    }));
+    if (total > 0) for (const r of rows) r.frac = r.W / total;
+    rows.sort((a, b) => b.W - a.W);
+    return rows.filter((r) => r.W > 0);
+  }
+
   // -- per-node activity at the cursor (drives the live DAG encoding, M6e) -----
   /**
    * `{nuclide: activity_Bq}` at the cursor — the `chainActivity` series indexed at
@@ -458,6 +498,22 @@ export class AppState {
       this.availableMaterials = mats.materials;
     } else {
       this.errorMsg = `could not load material list: ${mats.error.type}: ${mats.error.message}`;
+    }
+    // The §8 spent-fuel catalog (inventory from validated data/spent_fuel). Don't hard-fail
+    // boot if it's absent — the rest of the app still works; surface the gap (#3).
+    const sf = client.spent_fuel_catalog();
+    if (sf.ok) {
+      this.spentFuelSources = sf.sources.map((s) => ({
+        id: s.id,
+        label: s.label,
+        category: s.category,
+        blurb: s.blurb,
+        entries: s.entries.map((e) => ({ name: e.name, quantity: e.quantity, unit: e.unit })),
+        referenceTimeS: s.referenceTimeS,
+        caveat: s.caveat ?? undefined,
+      }));
+    } else {
+      this.errorMsg = `could not load spent-fuel catalog: ${sf.error.type}: ${sf.error.message}`;
     }
     this.ready = true;
   }
@@ -541,6 +597,7 @@ export class AppState {
     this.recomputeCurves(); // evaluate at the shifted times — never a re-solve (#1)
     this.recomputeDose(); // and the dose series at the shifted times (same offset, #1)
     this.recomputeChainActivity(); // and the DAG activity series (topology unchanged, #1)
+    this.recomputeDecayHeat(); // and the decay-heat series at the shifted times (#1)
   }
 
   /**
@@ -707,6 +764,7 @@ export class AppState {
     this.recomputeDose(); // and the dose-rate series over the same grid (M6f; pure evaluate)
     this.fetchChain(); // the DAG topology (time-independent → only here, M6e)
     this.recomputeChainActivity(); // and its activity series over `curveX` (after recomputeCurves)
+    this.recomputeDecayHeat(); // and the decay-heat series over `curveX` (M7c; after recomputeCurves)
   }
 
   /**
@@ -985,6 +1043,38 @@ export class AppState {
     this.chainDag = null;
     this.chainActivity = null;
     this.chainError = "";
+    // Decay heat is a derived per-time series like chainActivity; cleared on the same
+    // empty/failed-solve paths (clearChain is called in both) so a stale readout can't linger.
+    this.decayHeatSeries = null;
+    this.decayHeatError = "";
+  }
+
+  // -- decay heat (M7c §5) --------------------------------------------------
+
+  /**
+   * Evaluate the decay-heat (W) series over the curve grid. Its OWN bridge call (one
+   * `decay_heat` per solve / source-age over `curveX`, evaluated at the absolute times
+   * `referenceTimeS + curveX`), so the cursor getter indexes it 1:1 with the curves/dose.
+   * DISTANCE- and quantity-free — heat is total locally-deposited power, so it does NOT
+   * recompute on the dose inputs (distance/quantity/shield), only on inventory + source-age.
+   * Pure evaluate, NEVER a re-solve (#1). Loud on failure (#3): nulls the series + sets
+   * `decayHeatError`, never a silently blank readout.
+   */
+  private recomputeDecayHeat(): void {
+    this.decayHeatError = "";
+    if (!this.client || !this.handle || this.curveX.length === 0) {
+      this.decayHeatSeries = null;
+      return;
+    }
+    const t0 = this.referenceTimeS;
+    const times = t0 > 0 ? this.curveX.map((x) => x + t0) : this.curveX.slice();
+    const res = this.client.decay_heat(this.handle, { times_s: times });
+    if (!res.ok) {
+      this.decayHeatSeries = null;
+      this.decayHeatError = `${res.error.type}: ${res.error.message}`;
+      return;
+    }
+    this.decayHeatSeries = res;
   }
 
   // -- persistence (M6b: inventory slice; later chunks extend the envelope) --

@@ -203,6 +203,34 @@ export interface RegistrySizeOk {
   size: number;
 }
 
+/** One §8 spent-fuel catalog source — inventory sourced from validated `data/spent_fuel`. */
+export interface SpentFuelSource {
+  id: string;
+  label: string;
+  category: string;
+  blurb: string;
+  caveat: string | null;
+  referenceTimeS: number;
+  burnup_GWd_tHM: number;
+  enrichment_pct: number;
+  entries: SolveEntry[];
+}
+export interface SpentFuelCatalogOk {
+  sources: SpentFuelSource[];
+}
+
+/** Decay-heat (thermal power, W) series over a time grid (M7c §5). */
+export interface DecayHeatOk {
+  quantity: "decay_heat";
+  si_unit: "W";
+  times_s: number[];
+  total_W: number[];
+  by_nuclide_W: Record<string, number[]>;
+  coeff_W_per_Bq: Record<string, number>;
+  E_rec_MeV: Record<string, number>;
+  definition: string;
+}
+
 export type SolveResponse = Result<SolveOk>;
 export type NuclidesResponse = Result<NuclidesOk>;
 export type MaterialsResponse = Result<MaterialsOk>;
@@ -213,6 +241,8 @@ export type ChainResponse = Result<ChainOk>;
 export type DoseResponse = Result<DoseOk>;
 export type DoseLinesResponse = Result<DoseLinesOk>;
 export type ReleaseResponse = Result<ReleaseOk>;
+export type SpentFuelCatalogResponse = Result<SpentFuelCatalogOk>;
+export type DecayHeatResponse = Result<DecayHeatOk>;
 
 // --- the client --------------------------------------------------------------
 
@@ -282,6 +312,18 @@ export class BridgeClient {
 
   neutron_dose(handle: Handle, req: Record<string, unknown>): DoseResponse {
     return this.call<DoseResponse>("neutron_dose", handle, JSON.stringify(req));
+  }
+
+  /** The §8 spent-fuel catalog (inventory from validated `data/spent_fuel`); one fetch,
+   *  merged into the source picker by the store. */
+  spent_fuel_catalog(): SpentFuelCatalogResponse {
+    return this.call<SpentFuelCatalogResponse>("spent_fuel_catalog");
+  }
+
+  /** Decay-heat (W) series over a time grid (M7c §5). One evaluate per (inventory ×
+   *  source-age); distance/quantity-free (heat is total locally-deposited power). */
+  decay_heat(handle: Handle, req: { times_s: number[] }): DecayHeatResponse {
+    return this.call<DecayHeatResponse>("decay_heat", handle, JSON.stringify(req));
   }
 
   release(handle: Handle): ReleaseResponse {
