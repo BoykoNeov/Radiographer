@@ -349,18 +349,22 @@ def build_neutron_block(idx: dict[str, int], nuclides: list[str], row: list[str]
             f"{_MAX_DROPPED_SF_FRAC_DISCHARGE:.0%} — a significant SF emitter lacks an evaluated ν̄"
         )
 
-    # Cross-check (apples-to-apples, SF only): our (_SF/_A)·ν̄ for the dominant emitter Cm-244
-    # must equal the IAEA's OWN independently-calculated specific yield / specific activity.
+    # Cross-check the SF BRANCHING RATIO for the dominant emitter Cm-244 (NOT ν̄, NOT the absolute
+    # yield): (_SF/_A)·ν̄ vs the IAEA's n_yield/SA. The SAME ν̄ is on both sides and cancels, so
+    # this validates Serpent2's SF branch (≈ T_tot/T_SF) against IAEA's to ~2% and catches a _SF
+    # units/mapping slip — but the neutron magnitude rests on the cited ν̄, unvalidated here.
     cross = None
     if "Cm-244" in yields:
         iaea_y = float(nubar["Cm-244"]["n_yield_n_s_g"]) / _specific_activity_bq_per_g("Cm-244")
         rel = abs(yields["Cm-244"] - iaea_y) / iaea_y
         if rel > 0.05:
             raise BuildError(
-                f"Cm-244 SF yield {yields['Cm-244']:.4e} n/decay vs IAEA n_yield/SA {iaea_y:.4e} "
-                f"off by {rel:.1%} — ν̄ transcription or _SF basis error"
+                f"Cm-244 (_SF/_A)·ν̄ {yields['Cm-244']:.4e} vs IAEA n_yield/SA {iaea_y:.4e} off by "
+                f"{rel:.1%} — SF branching-ratio mismatch (Serpent2 _SF half-life vs IAEA), or a "
+                "_SF units/mapping error"
             )
-        cross = {"Cm244_n_per_decay": yields["Cm-244"], "Cm244_iaea_n_per_decay": iaea_y, "rel": rel}
+        cross = {"Cm244_n_per_decay": yields["Cm-244"], "Cm244_iaea_n_per_decay": iaea_y,
+                 "rel": rel, "note": "branching-ratio check; ν̄ cancels (not a yield validation)"}
 
     return {
         "model": "spontaneous-fission (SF) only — (α,n) on oxygen is NOT in the SCK-CEN dataset, "

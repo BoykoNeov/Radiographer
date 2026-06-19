@@ -131,8 +131,9 @@ def test_cooling_lowers_heat_in_the_cooling_regime(points, point_id):
 
 # --- M9: SF neutron-yield block ------------------------------------------------------------
 # yield_per_decay(n) = (_SF/_A from Serpent2)·ν̄(IAEA); the neutron source is S(t)=Σ yield·A_n(t).
-# Cm-244's published specific neutron yield (the dominant SF emitter); used as the independent
-# apples-to-apples (SF-only) anchor, recomputed here from rd's specific activity.
+# Cm-244 is the dominant SF emitter. NOTE the cross-check below validates the SF BRANCHING RATIO
+# (Serpent2 _SF/_A vs IAEA's implied T_tot/T_SF) — ν̄ cancels in n_yield/SA, so it does NOT
+# independently validate ν̄ or the absolute yield; those rest on the cited IAEA/Holden ν̄.
 _CM244_IAEA_N_YIELD_N_S_G = 1.100e7   # IAEA NDS SF_n-Yield Table 1
 
 
@@ -151,9 +152,12 @@ def test_neutron_block_structural(points, point_id):
 
 
 @pytest.mark.parametrize("point_id", POINTS)
-def test_cm244_sf_yield_matches_published_specific_yield(points, point_id):
-    # Independent of the build: the stored (_SF/_A)·ν̄ for Cm-244 must equal the IAEA's OWN
-    # specific neutron yield / specific activity (recomputed from rd). Two routes, one number.
+def test_cm244_sf_branching_ratio_matches_iaea(points, point_id):
+    # Cross-checks the SF BRANCHING RATIO (NOT ν̄, NOT the absolute yield): the stored
+    # (_SF/_A)·ν̄ equals n_yield_IAEA/SA only if Serpent2's SF branch matches IAEA's implied
+    # T_tot/T_SF, because the SAME ν̄ appears on both sides and cancels. So a pass means
+    # Serpent2's SF half-life agrees with IAEA's to ~2% — it catches a _SF units/mapping slip,
+    # but the neutron magnitude still rests on the cited IAEA/Holden ν̄ (not validated here).
     import radioactivedecay as rd
     nd = rd.DEFAULTDATA.nuclide_dict
     sd = rd.DEFAULTDATA.scipy_data

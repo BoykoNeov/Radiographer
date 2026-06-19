@@ -38,14 +38,18 @@ those minor SF emitters are a surfaced, bounded drop (Cm-246 matters only at mul
 cooling, where the engine warns). Cloudflare blocked the PANDA Table 11-1 mirror; a future
 upgrade is to vendor Cm-246/248 ν̄ from there / ENDF.
 
-## Validation (apples-to-apples, SF only)
+## Validation — what the cross-check actually proves (and what it doesn't)
 
-Published spent-fuel neutron source usually INCLUDES (α,n), so the anchor is the **Cm-244
-specific SF yield**: `(_SF/_A)·ν̄ = 1.38e-6·2.72 = 3.75e-6 n/decay` vs the IAEA's own
-`n-yield/specific-activity = 1.100e7 / 2.99e12 = 3.68e-6` — two independent routes agree to
-~2 % (build cross-check + a `tests/test_spent_fuel_data.py` regression). SF-only source:
-45 GWd/tHM = 1.36e9 (t0) → 6.07e8 (10 yr) → 2.39e7 (100 yr) n/s/tHM; the 10 yr figure equals
-Cm-244 alone (78.6 g/tHM × 1.1e7 × 0.68 decay), confirming the Cm-242→Cm-244 transition.
+The Cm-244 cross-check compares `(_SF/_A)·ν̄ = 1.38e-6·2.72 = 3.75e-6 n/decay` vs the IAEA's
+`n-yield/SA = 1.100e7 / 2.99e12 = 3.68e-6`. **ν̄ is common to both and cancels**
+(`n_yield/SA = ν̄·T_tot/T_SF`), so the ~2% agreement validates the **SF branching ratio**
+(Serpent2 1.38e-6 vs IAEA 1.351e-6 vs textbook 1.37e-6) — it catches a `_SF` units/mapping slip
+but does NOT independently validate ν̄ or the absolute yield (those rest on the cited IAEA/Holden
+ν̄, a properly evaluated quantity). Magnitude sense: SF-only source 45 GWd/tHM = 1.36e9 (t0) →
+6.07e8 (10 yr) → 2.39e7 (100 yr) n/s/tHM; the 10 yr figure equals Cm-244 alone (78.6 g/tHM ×
+1.1e7 n/s/g × 0.68 decay), confirming the Cm-242→Cm-244 transition. (An independent ν̄-inclusive
+magnitude anchor would need a specific-yield value from a lineage other than the IAEA ν̄, cleanly
+cited — a future add, not fabricated from memory.)
 
 ## Key files & decisions
 

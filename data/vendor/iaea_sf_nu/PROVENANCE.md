@@ -32,12 +32,15 @@ exactly as `_H/_A` does), so the yields are clean regardless of the activity-col
 `sf_nubar.json` is a **verbatim transcription of Table 1** (ν_p, the IAEA-calculated specific
 neutron yield n/s/g, total + SF half-lives), used by `../../build/build_spent_fuel.py`.
 
-## Cross-validation (apples-to-apples, SF only)
+## Cross-check (what it actually validates — the SF branching ratio, NOT ν̄)
 
-The build cross-checks each isotope two independent ways that must agree:
-`yield_per_decay = (_SF/_A)·ν_p` (Serpent2 fission rate × IAEA ν̄) vs the IAEA's own
-`n_yield_n_s_g / specific_activity`. For Cm-244 both give ≈3.7e-6 n/decay (≈1.1e7 n/s/g),
-the dominant SF emitter — agreement to ~2%.
+The build compares `yield_per_decay = (_SF/_A)·ν_p` against the IAEA's own
+`n_yield_n_s_g / specific_activity` for Cm-244 (both ≈3.7e-6 n/decay, ≈1.1e7 n/s/g). **The same
+ν_p appears on both sides and cancels** (`n_yield/SA = ν_p·λ_SF / λ_tot = ν_p·T_tot/T_SF`), so
+the ~2% agreement validates the **SF branching ratio** (Serpent2 `_SF/_A` = 1.38e-6 vs IAEA's
+implied `T_tot/T_SF` = 1.351e-6; textbook 1.37e-6) and catches a `_SF` units/mapping slip — it is
+**not** an independent check on ν_p or on the absolute neutron yield, which rest on the cited
+IAEA/Holden ν_p.
 
 ## Scope / deferral (no fabrication, no silent drop)
 
