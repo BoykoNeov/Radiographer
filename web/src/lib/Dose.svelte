@@ -43,6 +43,7 @@
 
   let plotEl = $state<HTMLDivElement | null>(null);
   let distEl = $state<HTMLDivElement | null>(null);
+  let nThickEl = $state<HTMLDivElement | null>(null);
 
   // -- local input bindings (commit to the store on change) ----------------------
   // `mode` (above) and `expUnit` are EPHEMERAL by design (M6h #4) — cosmetic / display-unit
@@ -102,6 +103,81 @@
   const nTransmission = $derived(appState.neutronTransmission); // 0..1, null when no n series
   const nShieldTransparent = $derived(appState.neutronShieldTransparent); // stack has no hydrogenous layer
   const nShieldCompositeOrder = $derived(appState.neutronShieldCompositeOrder); // mixed stack order caveat
+
+  // -- neutron dose-vs-thickness explorer (M11, §9) -------------------------
+  // A STANDALONE "what if X cm of a hydrogenous shield" widget for the neutron dose: pick a
+  // material (water/paraffin/polyethylene/concrete — the has_removal set, NOT the γ picker),
+  // sweep thickness, read the dose. T_n = exp(−Σ_R·x) is closed-form, so the curve is folded
+  // CLIENT-SIDE off the cursor's BARE neutron rate and the material's Σ_R (zero bridge calls,
+  // live on scrub) — the same pattern as the inverse-square distance curve. Independent of the
+  // applied γ shield stack above (which is high-Z and neutron-transparent anyway).
+  const nSweepMaterials = $derived(appState.neutronSweepMaterials);
+  const nSweepId = $derived(appState.neutronSweepMaterialId);
+  const nSweepSigma = $derived(appState.neutronSweepSigmaR); // Σ_R cm⁻¹ of the selected material
+  const nThickCurve = $derived(appState.neutronThicknessCurve); // {thicknesses_cm, rate_si} | null
+  const nRateAtThick = $derived(appState.neutronRateAtSweepThickness); // Sv/s at selected x
+  const matLabel = (id: string) => id.charAt(0).toUpperCase() + id.slice(1);
+
+  function onNeutronSweepThickness(e: Event) {
+    const el = e.target as HTMLInputElement;
+    const x = parseFloat(el.value);
+    if (Number.isFinite(x) && x >= 0) appState.setNeutronSweepThicknessCm(x);
+    else el.value = String(appState.neutronSweepThicknessCm); // snap back to truth (§11)
+  }
+
+  const N_THICK_RGBA = "rgba(89,161,79,0.16)"; // MODALITY_COLORS.neutron at low alpha (band fill)
+
+  function neutronThicknessTraces(): Partial<Plotly.PlotData>[] {
+    if (!nThickCurve) return [];
+    const f = 1 + MODALITY_UNCERTAINTY.neutron.hi; // ×/÷ f order-of-mag n register (§11), as elsewhere
+    const xs = nThickCurve.thicknesses_cm;
+    const yc = nThickCurve.rate_si.map((r) => r * 3600); // Sv/h
+    return [
+      { x: xs, y: yc.map((r) => r / f), mode: "lines", line: { width: 0 }, hoverinfo: "skip", showlegend: false } as Partial<Plotly.PlotData>,
+      {
+        x: xs,
+        y: yc.map((r) => r * f),
+        mode: "lines",
+        line: { width: 0 },
+        fill: "tonexty",
+        fillcolor: N_THICK_RGBA,
+        hoverinfo: "skip",
+        showlegend: false,
+      } as Partial<Plotly.PlotData>,
+      {
+        x: xs,
+        y: yc,
+        mode: "lines",
+        line: { color: MODALITY_COLORS.neutron, width: 2 },
+        name: `n ${qShort}`,
+        hovertemplate: "%{x:.3g} cm → %{y:.3e} Sv/h<extra></extra>",
+      } as Partial<Plotly.PlotData>,
+    ];
+  }
+
+  function neutronThicknessLayout(): Partial<Plotly.Layout> {
+    return {
+      margin: { l: 72, r: 20, t: 10, b: 42 },
+      showlegend: false,
+      xaxis: { title: { text: `${matLabel(nSweepId ?? "")} thickness (cm)` }, automargin: true },
+      yaxis: { type: "log", title: { text: `n ${qShort} dose rate (Sv·h⁻¹)` }, automargin: true },
+      shapes: [
+        {
+          type: "line",
+          x0: appState.neutronSweepThicknessCm,
+          x1: appState.neutronSweepThicknessCm,
+          yref: "paper",
+          y0: 0,
+          y1: 1,
+          line: { color: "#888", width: 1, dash: "dash" },
+        },
+      ],
+      autosize: true,
+      paper_bgcolor: "rgba(0,0,0,0)",
+      plot_bgcolor: "rgba(0,0,0,0)",
+      font: { color: "currentColor" },
+    };
+  }
 
   // Source-correlated reaction γ (M7d; e.g. AmBe 4.438 MeV): a γ contribution NOT in the
   // decay lines, scored in the same Sv quantity. It stacks into the breakdown total as its
@@ -375,9 +451,25 @@
     Plotly.react(el, distanceTraces(), distanceLayout(), { responsive: true, displaylogo: false });
   });
 
+  // Neutron dose-vs-thickness explorer: re-react on the folded curve (cursor/material), the
+  // selected thickness (marker), and the quantity label. Client-side fold — no bridge call (§3).
+  $effect(() => {
+    void nThickCurve;
+    void appState.neutronSweepThicknessCm;
+    void qShort;
+    const el = nThickEl;
+    if (!el) return;
+    if (!hasNeutron || !nThickCurve) {
+      Plotly.purge(el);
+      return;
+    }
+    Plotly.react(el, neutronThicknessTraces(), neutronThicknessLayout(), { responsive: true, displaylogo: false });
+  });
+
   onDestroy(() => {
     if (plotEl) Plotly.purge(plotEl);
     if (distEl) Plotly.purge(distEl);
+    if (nThickEl) Plotly.purge(nThickEl);
   });
 </script>
 
@@ -553,6 +645,70 @@
               <br />⚠ mixed hydrogenous + high-Z stack: removal theory does not model layer order, so
               a heavy layer placed last may over-state the true neutron attenuation (§11).
             {/if}
+          </p>
+        {/if}
+      {/if}
+
+      <!-- Neutron dose-vs-thickness explorer (§9): a STANDALONE hydrogenous-shield what-if for
+           the neutron dose, independent of the applied γ stack above. Closed-form T_n=exp(−Σ_R·x)
+           folded client-side; the picker is the has_removal set (hydrogenous), not the γ picker. -->
+      {#if hasNeutron && !nError}
+        <div class="bar-head">
+          <span class="muted">
+            Neutron dose vs shield thickness — standalone (independent of the γ shield stack);
+            shaded ±band = {MODALITY_UNCERTAINTY.neutron.label} register
+          </span>
+        </div>
+        {#if nThickCurve && nSweepId}
+          <div class="nsweep" data-testid="dose-neutron-sweep">
+            <label>
+              Shield
+              <select
+                data-testid="dose-neutron-sweep-material"
+                value={nSweepId}
+                onchange={(e) => appState.setNeutronSweepMaterial((e.target as HTMLSelectElement).value)}
+              >
+                {#each nSweepMaterials as m (m.id)}
+                  <option value={m.id}>{matLabel(m.id)} (Σ_R {m.sigma_r_cm1?.toFixed(3)} cm⁻¹)</option>
+                {/each}
+              </select>
+            </label>
+            <label>
+              Thickness
+              <input
+                type="number"
+                min="0"
+                step="any"
+                data-testid="dose-neutron-sweep-thickness"
+                value={appState.neutronSweepThicknessCm}
+                onchange={onNeutronSweepThickness}
+                onkeydown={(e) => e.key === "Enter" && onNeutronSweepThickness(e)}
+              />
+              <span class="cm muted">cm</span>
+            </label>
+            <span class="nsweep-readout" data-testid="dose-neutron-sweep-readout" data-rate-si={nRateAtThick ?? ""}>
+              n dose: <strong>{nRateAtThick == null ? "—" : formatDoseRate(nRateAtThick, "Sv")}</strong>
+              {#if nSweepSigma != null}
+                <span class="muted">· T = {Math.exp(-nSweepSigma * appState.neutronSweepThicknessCm) < 0.001
+                  ? Math.exp(-nSweepSigma * appState.neutronSweepThicknessCm).toExponential(1)
+                  : Math.exp(-nSweepSigma * appState.neutronSweepThicknessCm).toPrecision(2)}×</span>
+              {/if}
+            </span>
+          </div>
+          <div class="plot" data-testid="dose-neutron-sweep-plot" bind:this={nThickEl}></div>
+          <p class="hint muted">
+            Fast-neutron removal T = exp(−Σ_R·x), NCRP-20 Σ_R (§6.3) — one energy-independent
+            scalar (no buildup, no spectrum hardening). Hydrogenous shields only (water, paraffin,
+            polyethylene); high-Z γ shields are neutron-transparent, so they are not offered here.
+            {#if nSweepId === "concrete"}
+              <br />⚠ concrete Σ_R varies ≈±50% with water content / aggregate / density — this is
+              one published ordinary-concrete mix (the conservative low end); treat as ×/÷ 1.5 (§11).
+            {/if}
+          </p>
+        {:else}
+          <p class="note muted" data-testid="dose-neutron-sweep-unavailable">
+            neutron rate is unavailable at the cursor — thickness curve hidden rather than shown
+            as a (misleading) zero (§11).
           </p>
         {/if}
       {/if}
@@ -812,6 +968,33 @@
   }
   .plot.dist {
     height: 240px;
+  }
+  .nsweep {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+  }
+  .nsweep label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.9rem;
+  }
+  .nsweep select,
+  .nsweep input {
+    font: inherit;
+    padding: 0.3rem 0.5rem;
+  }
+  .nsweep input[type="number"] {
+    width: 5rem;
+  }
+  .nsweep .cm {
+    font-size: 0.85rem;
+  }
+  .nsweep-readout {
+    font-variant-numeric: tabular-nums;
   }
   .lines {
     margin-top: 1rem;

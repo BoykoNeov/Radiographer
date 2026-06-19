@@ -120,17 +120,33 @@ def materials() -> str:
     (``T_n = exp(−Σ_R·x)``); a material WITHOUT removal data is neutron-transparent and the
     neutron path warns rather than silently under-counting. Low-Z hydrogenous materials
     (PMMA, polyethylene) are listed with ``has_buildup=false, has_removal=true`` — surfaced,
-    not hidden; water has BOTH so it works in a shared γ+neutron stack."""
+    not hidden; water has BOTH so it works in a shared γ+neutron stack.
+
+    The list is the **union** of the attenuation (γ) and removal (neutron) material sets, so a
+    NEUTRON-ONLY shield with no γ attenuation file (e.g. paraffin) is still surfaced
+    (``has_buildup=false, has_removal=true``), its density then taken from the removal file.
+    ``sigma_r_cm1`` carries the fast-neutron removal cross-section Σ_R (cm⁻¹) for the §9 neutron
+    dose-vs-thickness widget, which folds the closed-form ``T_n = exp(−Σ_R·x)`` client-side (like
+    inverse-square distance); it is ``null`` for a material WITHOUT removal data (never a
+    fabricated zero — that would read as a transparent shield, §11)."""
     try:
-        out = [
-            {
-                "id": m,
-                "has_buildup": buildup.has_material(m),
-                "has_removal": neutron_removal.has_material(m),
-                "density_g_cm3": attenuation.density(m),
-            }
-            for m in sorted(attenuation.available_materials())
-        ]
+        ids = sorted(attenuation.available_materials() | neutron_removal.available_materials())
+        out = []
+        for m in ids:
+            has_rem = neutron_removal.has_material(m)
+            # Density from the γ file when present (one source for γ↔n); else the removal file.
+            density = (
+                attenuation.density(m) if attenuation.has_material(m) else neutron_removal.density(m)
+            )
+            out.append(
+                {
+                    "id": m,
+                    "has_buildup": buildup.has_material(m),
+                    "has_removal": has_rem,
+                    "density_g_cm3": density,
+                    "sigma_r_cm1": neutron_removal.sigma_r_cm1(m) if has_rem else None,
+                }
+            )
         return _ok({"materials": out})
     except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
         return _err(exc)

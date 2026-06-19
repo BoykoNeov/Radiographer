@@ -1898,6 +1898,57 @@ async function runM7(page) {
       `lead rate=${nShield.lead.rate?.toExponential(3)} T=${nShield.lead.T} transparent=${nShield.lead.transparent} nErr=${JSON.stringify(nShield.lead.nErr)} γFailed=${nShield.lead.gammaFailed}, registry=${nShield.registry}`,
   );
 
+  // 2a-sweep) NEUTRON DOSE-vs-THICKNESS EXPLORER (M11, §9): a standalone hydrogenous-shield
+  //   what-if for the neutron dose, folded CLIENT-SIDE from the closed-form T_n=exp(−Σ_R·x) (Σ_R
+  //   from materials(), the engine's single source) — no bridge call, live on scrub. Asserts:
+  //   the picker is the has_removal set (water/paraffin/polyethylene/pmma/concrete, NOT lead);
+  //   paraffin (a NEW removal-only material with no γ file) is surfaced; concrete gained removal
+  //   (now a shared γ+n shield); the curve reconciles with the closed form and is independent of
+  //   the applied γ stack (its x=0 baseline is the UNSHIELDED neutron rate, not the lead-shielded one).
+  const nSweep = await page.evaluate(() => {
+    const app = window.__APP__;
+    app.clearShield();
+    const picker = app.neutronSweepMaterials.map((m) => m.id).sort();
+    app.setNeutronSweepMaterial("water");
+    app.setNeutronSweepThicknessCm(20);
+    const sigmaW = app.neutronSweepSigmaR;
+    const bare = app.neutronBareRateAtCursor;
+    const curve = app.neutronThicknessCurve;
+    const atSel = app.neutronRateAtSweepThickness;
+    const x0 = curve ? curve.rate_si[0] : null;
+    const monotone = curve ? curve.rate_si.every((v, i, a) => i === 0 || v <= a[i - 1] + 1e-30) : false;
+    // Apply a LEAD γ shield (neutron-transparent) and confirm the explorer's bare baseline is
+    // still the unshielded neutron rate — the widget is standalone, not stacked on the γ shield.
+    app.setShieldMaterial("lead");
+    app.setShieldLayerThicknessCm(0, 20);
+    const bareWithLead = app.neutronBareRateAtCursor;
+    app.clearShield();
+    // Concrete is now a removal material; lead is not (sigma_r null → excluded from the picker).
+    app.setNeutronSweepMaterial("concrete");
+    const sigmaC = app.neutronSweepSigmaR;
+    const leadInfo = app.availableMaterials.find((m) => m.id === "lead");
+    app.setNeutronSweepMaterial("water");
+    return { picker, sigmaW, bare, atSel, x0, monotone, bareWithLead, sigmaC, leadSigma: leadInfo ? leadInfo.sigma_r_cm1 : "missing" };
+  });
+  const closedForm = nSweep.bare * Math.exp(-nSweep.sigmaW * 20);
+  const sweepOk =
+    nSweep.picker.includes("water") &&
+    nSweep.picker.includes("paraffin") &&
+    nSweep.picker.includes("concrete") &&
+    !nSweep.picker.includes("lead") &&
+    nSweep.leadSigma === null &&
+    nSweep.sigmaC > 0 &&
+    Math.abs(nSweep.x0 - nSweep.bare) / nSweep.bare < 1e-9 &&
+    Math.abs(nSweep.atSel - closedForm) / closedForm < 1e-9 &&
+    nSweep.monotone &&
+    Math.abs(nSweep.bareWithLead - nSweep.bare) / nSweep.bare < 1e-9;
+  record(
+    "M11 neutron dose-vs-thickness explorer: picker=has_removal set (incl. new paraffin/concrete, excl. lead), curve folds exp(−Σ_R·x) client-side, standalone vs the γ stack",
+    sweepOk,
+    `picker=[${nSweep.picker.join(", ")}], Σ_R(water)=${nSweep.sigmaW?.toFixed(4)} Σ_R(concrete)=${nSweep.sigmaC?.toFixed(4)} leadΣ_R=${nSweep.leadSigma}, ` +
+      `x0=${nSweep.x0?.toExponential(3)}==bare=${nSweep.bare?.toExponential(3)}, atSel=${nSweep.atSel?.toExponential(3)}==closedForm=${closedForm?.toExponential(3)}, monotone=${nSweep.monotone}, bareWithLead==bare=${Math.abs(nSweep.bareWithLead - nSweep.bare) / nSweep.bare < 1e-9}`,
+  );
+
   // 2b) A QUANTITY (strength) edit RESCALES the neutron path, never kills it — neutron rides
   //     the parent's activity (S(t)=n_per_decay·A_parent(t), M5/§6.3), so doubling the Cf-252
   //     mass ~doubles the neutron rate with the source key intact. Guards the orphan-guard from

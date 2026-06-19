@@ -201,6 +201,18 @@ export class AppState {
   /** Loud neutron-path error (#3) — its own field so a neutron failure can't blank γ/β. */
   neutronDoseError = $state<string>("");
 
+  // -- neutron dose-vs-thickness explorer (M11, §9) -------------------------
+  // A STANDALONE "what if I put X cm of a hydrogenous shield between source and detector"
+  // widget for the neutron dose. Independent of the applied γ shield stack (which is γ-oriented
+  // / high-Z and neutron-transparent anyway). T_n(x) = exp(−Σ_R·x) is a closed-form scalar, so
+  // — like inverse-square distance — the curve is reconstructed CLIENT-SIDE from the cursor's
+  // BARE neutron rate and the material's Σ_R (carried on `availableMaterials`, the engine's
+  // single source); no bridge sweep, live on scrub. EPHEMERAL (not serialized): a what-if tool.
+  /** Selected explorer material id; null ⇒ default (water, then first removal material). */
+  neutronSweepMaterial = $state<string | null>(null);
+  /** Selected explorer thickness (cm) — drives the readout + the marker line. */
+  neutronSweepThicknessCm = $state<number>(10);
+
   // -- shield builder (M6g + M8 multi-layer, §9, §13 #2) --------------------
   // A shield is an ORDERED STACK of layers (source-side → detector-side; the LAST layer is
   // detector-adjacent). A shield change is a pure EVALUATE off the live handle (re-fold the
@@ -385,6 +397,71 @@ export class AppState {
    *  (a heavy layer placed last may over-state the true neutron attenuation). §11 caveat. */
   get neutronShieldCompositeOrder(): boolean {
     return (this.neutronDoseSeries?.warnings ?? []).some((w) => w.reason === "composite_order_unmodeled");
+  }
+
+  // -- neutron dose-vs-thickness explorer (M11, §9) -------------------------
+  /** Hydrogenous neutron-shield materials for the explorer picker: every material with a removal
+   *  cross-section Σ_R. DISTINCT from the γ shield picker (`has_buildup`) — fast neutrons are
+   *  removed by hydrogen (water, paraffin, polyethylene, concrete), not by high-Z γ shields. */
+  get neutronSweepMaterials(): MaterialInfo[] {
+    return this.availableMaterials.filter((m) => m.has_removal && m.sigma_r_cm1 != null);
+  }
+  /** The effective explorer material id — the explicit choice, else water, else first removal. */
+  get neutronSweepMaterialId(): string | null {
+    const mats = this.neutronSweepMaterials;
+    if (this.neutronSweepMaterial && mats.some((m) => m.id === this.neutronSweepMaterial)) {
+      return this.neutronSweepMaterial;
+    }
+    return mats.find((m) => m.id === "water")?.id ?? mats[0]?.id ?? null;
+  }
+  /** Σ_R (cm⁻¹) of the selected explorer material (the engine's value, not recomputed). */
+  get neutronSweepSigmaR(): number | null {
+    const id = this.neutronSweepMaterialId;
+    return this.neutronSweepMaterials.find((m) => m.id === id)?.sigma_r_cm1 ?? null;
+  }
+  /** Neutron dose RATE (Sv/s) at the cursor with NO neutron shield — the explorer's x=0 baseline.
+   *  Divides out any shared-stack T_n so the curve shows the STANDALONE effect of the explorer's
+   *  own material, not stacked on the applied γ shield. null when no neutron series. */
+  get neutronBareRateAtCursor(): number | null {
+    const r = this.neutronRateAtCursor;
+    if (r == null) return null;
+    const t = this.neutronTransmission;
+    return t != null && t > 0 ? r / t : r;
+  }
+  /** Neutron dose-vs-thickness curve (Sv/s) for the selected material, computed CLIENT-SIDE from
+   *  the closed-form T_n(x) = exp(−Σ_R·x): bareRate·exp(−Σ_R·x) over 0…5 relaxation lengths.
+   *  null when no neutron series or the chosen material has no Σ_R. */
+  get neutronThicknessCurve():
+    | { material: string; sigma_r_cm1: number; thicknesses_cm: number[]; rate_si: number[] }
+    | null {
+    const sigma = this.neutronSweepSigmaR;
+    const id = this.neutronSweepMaterialId;
+    const bare = this.neutronBareRateAtCursor;
+    if (sigma == null || id == null || bare == null) return null;
+    const xMax = 5.0 / sigma; // 5 relaxation lengths → T_n ≈ 0.0067 (covers the useful range)
+    const N = 60;
+    const thicknesses_cm: number[] = [];
+    const rate_si: number[] = [];
+    for (let i = 0; i <= N; i++) {
+      const x = (xMax * i) / N;
+      thicknesses_cm.push(x);
+      rate_si.push(bare * Math.exp(-sigma * x));
+    }
+    return { material: id, sigma_r_cm1: sigma, thicknesses_cm, rate_si };
+  }
+  /** Neutron dose RATE (Sv/s) at the explorer's selected thickness — the readout value. */
+  get neutronRateAtSweepThickness(): number | null {
+    const sigma = this.neutronSweepSigmaR;
+    const bare = this.neutronBareRateAtCursor;
+    if (sigma == null || bare == null) return null;
+    return bare * Math.exp(-sigma * this.neutronSweepThicknessCm);
+  }
+  /** Setters for the explorer controls (pure UI state; no solve, no fetch). */
+  setNeutronSweepMaterial(id: string): void {
+    this.neutronSweepMaterial = id;
+  }
+  setNeutronSweepThicknessCm(x: number): void {
+    if (Number.isFinite(x) && x >= 0) this.neutronSweepThicknessCm = x;
   }
 
   // -- source-correlated reaction γ (M7d; e.g. AmBe 4.438 MeV) ---------------

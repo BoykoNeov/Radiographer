@@ -324,6 +324,22 @@ def test_materials_lists_buildup_flag_and_density():
         assert by_id[m]["has_removal"] is False
     # lead is denser than aluminium (a sanity tag the UI may display)
     assert by_id["lead"]["density_g_cm3"] > by_id["aluminium"]["density_g_cm3"]
+    # The neutron-shield gate carries Σ_R (cm⁻¹) so the neutron dose-vs-thickness widget can
+    # fold exp(−Σ_R·x) client-side (a closed-form scalar, like inverse-square distance). A
+    # material WITHOUT removal data reports null — never a fabricated zero (§11).
+    assert by_id["water"]["sigma_r_cm1"] > 0.0
+    assert by_id["lead"]["sigma_r_cm1"] is None
+    # Concrete gained published removal data: it is now a SHARED γ+neutron shield (both flags),
+    # like water — surfaced via has_removal + a positive Σ_R.
+    assert by_id["concrete"]["has_buildup"] is True
+    assert by_id["concrete"]["has_removal"] is True and by_id["concrete"]["sigma_r_cm1"] > 0.0
+    # Paraffin is a NEUTRON-ONLY shield (no γ attenuation/buildup file): it has no attenuation
+    # entry, so materials() must UNION in the removal set to surface it (has_buildup False,
+    # has_removal True). Its density comes from the removal file (no attenuation source).
+    assert "paraffin" in by_id
+    assert by_id["paraffin"]["has_buildup"] is False
+    assert by_id["paraffin"]["has_removal"] is True and by_id["paraffin"]["sigma_r_cm1"] > 0.0
+    assert by_id["paraffin"]["density_g_cm3"] > 0.0
 
 
 def test_dose_thickness_sweep_reconciles_and_attenuates():

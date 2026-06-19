@@ -177,6 +177,9 @@ export interface MaterialInfo {
   has_buildup: boolean;
   has_removal: boolean;
   density_g_cm3: number;
+  /** Fast-neutron removal cross-section Σ_R (cm⁻¹) for the neutron dose-vs-thickness widget
+   *  (T_n = exp(−Σ_R·x), folded client-side). `null` when the material has no removal data. */
+  sigma_r_cm1: number | null;
 }
 
 export interface MaterialsOk {
