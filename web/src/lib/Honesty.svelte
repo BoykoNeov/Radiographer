@@ -181,7 +181,9 @@
             "forward it reproduces the Way–Wigner t⁻¹·² (7:10) gross-γ decay law (regression-" +
             "tested). Caveats: (1) cumulative-yield seeding ≈ the H+1 h chain-fed inventory and " +
             "double-counts within decay chains — a shape-preserving approximation, so the DECAY " +
-            "is meaningful but the absolute level is approximate and t < H+1 h is unreliable; " +
+            "is meaningful but the absolute level AND the relative composition (per-line/DAG — " +
+            "equilibrium daughters such as La-140/Y-90 are over-weighted) are approximate, and " +
+            "t < H+1 h is unreliable; " +
             "(2) it uses thermal U-235 yields, whereas a real weapon is FAST U/Pu fission — the " +
             "dominant γ emitters and the 7:10 law are broadly common, so this is a representative " +
             "illustrative mix, not a weapon-specific vector; (3) scaled to a default 1 kt " +

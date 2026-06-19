@@ -74,7 +74,9 @@ def _caveat(rec: dict) -> str:
     return (
         "Illustrative representative mix: cumulative-yield seeding (≈ H+1 h chain-fed inventory) "
         "double-counts within chains — a documented shape-preserving approximation, so the 7:10 "
-        "DECAY is meaningful but the absolute level is approximate; t < H+1 h is unreliable. A "
+        "DECAY is meaningful but the absolute level AND the relative composition (the per-line / "
+        "DAG breakdown — equilibrium daughters like La-140 are over-weighted) are approximate; "
+        "t < H+1 h is unreliable. A "
         f"real weapon is FAST U/Pu fission, not thermal U-235. Scaled to {DEFAULT_DEVICE_KT:g} kt "
         f"(~{FISSIONS_PER_KT:.2g} fissions/kt); edit quantities to rescale. §11."
     )

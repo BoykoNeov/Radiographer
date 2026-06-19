@@ -20,6 +20,7 @@ import pytest
 
 from engine import emissions as em
 from engine import fallout as fo
+from engine.dose import GammaDoseModel
 from engine.inventory import SolvedInventory
 
 VECTOR_ID = "u235_fission_fallout"
@@ -78,12 +79,34 @@ def test_dominant_yields_match_published():
 # 3. The physics golden — Way–Wigner t⁻¹·² (7:10) decay law.
 # --------------------------------------------------------------------------- #
 
-def _gross_gamma_slope(t_lo_s: float, t_hi_s: float, n: int = 30) -> float:
-    """log-log slope of the gross-γ source strength Σ Aₙ(t)·Ēγ,ₙ over [t_lo, t_hi]."""
+def _slope(grid: list[float], y: list[float]) -> float:
+    return (math.log(y[-1]) - math.log(y[0])) / (math.log(grid[-1]) - math.log(grid[0]))
+
+
+def _fallout_grid(t_lo_s: float, t_hi_s: float, n: int = 30) -> tuple[list[float], dict]:
     inv = {e["name"]: e["yield_per_fission"] for e in _vector()["entries"]}
     sol = SolvedInventory.from_spec(inv, "atoms")
     grid = [t_lo_s * (t_hi_s / t_lo_s) ** (i / n) for i in range(n + 1)]
-    res = sol.evaluate(grid, axis="activity", unit="Bq")
+    return grid, sol.evaluate(grid, axis="activity", unit="Bq")
+
+
+def test_rendered_gamma_dose_follows_way_wigner_t_minus_1_2():
+    # The 7:10 rule on the QUANTITY THE BLURB PROMISES — the rendered H*(10) γ dose rate
+    # (Σ Aₙ·kₙ with μ_en/buildup/conversion weights), not just an energy-emission proxy. Over
+    # H+1 h … 30 d the decayed vector must reproduce ∝ t⁻¹·²; a broken inventory misses by far.
+    HOUR = 3600.0
+    grid, res = _fallout_grid(1 * HOUR, 30 * 24 * HOUR)
+    dose = GammaDoseModel(res["nuclides"], "ambient_H10").dose_rate_series(res, 1.0)
+    slope = _slope(grid, dose["rate_si"])
+    assert slope == pytest.approx(-1.2, abs=0.1), f"rendered γ-dose slope {slope:.3f} ≠ Way–Wigner −1.2"
+
+
+def test_gross_gamma_emission_proxy_also_follows_t_minus_1_2():
+    # Cross-check on the energy-emission proxy Σ Aₙ·Ēγ,ₙ — independent of the dose machinery
+    # (μ_en/buildup), so agreement with the dose slope above confirms it's the inventory's
+    # decay, not a dose-engine artefact, that carries the law.
+    HOUR = 3600.0
+    grid, res = _fallout_grid(1 * HOUR, 30 * 24 * HOUR)
 
     def ebar(name: str) -> float:  # mean γ energy per decay (MeV)
         try:
@@ -93,15 +116,7 @@ def _gross_gamma_slope(t_lo_s: float, t_hi_s: float, n: int = 30) -> float:
 
     eb = {nm: ebar(nm) for nm in res["nuclides"]}
     s = [sum(res["series"][nm][j] * eb[nm] for nm in res["nuclides"]) for j in range(len(grid))]
-    return (math.log(s[-1]) - math.log(s[0])) / (math.log(grid[-1]) - math.log(grid[0]))
-
-
-def test_gross_gamma_follows_way_wigner_t_minus_1_2():
-    # The 7:10 rule: gross γ ∝ t⁻¹·². Over H+1 h … 30 d the decayed vector must reproduce it.
-    # A broken inventory (wrong nuclides / unit slip) would land far from −1.2.
-    HOUR = 3600.0
-    slope = _gross_gamma_slope(1 * HOUR, 30 * 24 * HOUR)
-    assert slope == pytest.approx(-1.2, abs=0.1), f"gross-γ slope {slope:.3f} ≠ Way–Wigner −1.2"
+    assert _slope(grid, s) == pytest.approx(-1.2, abs=0.1)
 
 
 def test_catalog_source_loadable_shape():
