@@ -1372,7 +1372,11 @@ async function runM6g(page) {
   const leadWater = await page.evaluate(() => {
     const s = window.__BRIDGE__.registry_size();
     const app = window.__APP__;
-    return { rate: app.gammaRateAtCursor, rev: app.gammaRateReversedAtCursor, sens: app.orderSensitivityAtCursor, size: s.ok ? s.size : -1, handle: app.handle };
+    return {
+      rate: app.gammaRateAtCursor, rev: app.gammaRateReversedAtCursor,
+      sens: app.orderSensitivityAtCursor, size: s.ok ? s.size : -1, handle: app.handle,
+      saved: app.serialize(), // serializer v4 with a length-2, NON-DEFAULT-order layers array
+    };
   });
   // reverse the stack order in place (water then lead) — a pure re-evaluate, registry stays 1.
   await page.evaluate(() => window.__APP__.moveShieldLayer(0, 1));
@@ -1398,6 +1402,32 @@ async function runM6g(page) {
       sensVisible,
     `leadWater=${leadWater.rate?.toExponential(4)} vs waterLead=${waterLead?.toExponential(4)}, ` +
       `sens=${(leadWater.sens * 100).toFixed(1)}%, registry==${leadWater.size}, readout=${sensVisible}`,
+  );
+
+  // 5b) MULTI-LAYER ROUND-TRIP (serializer v4, advisor): the discriminating case M6h can't
+  //     reach — a length-2, non-default-order `layers` array. Load the saved lead→water stack
+  //     and assert BOTH the order AND the rendered γ dose come back as lead→water (==leadWater,
+  //     NOT waterLead). A reversed/flattened `layers` on load would give waterLead's dose while
+  //     a naive equality passed — the same order trap as the engine lock, now at persistence.
+  const rt = await page.evaluate(async (savedText) => {
+    const app = window.__APP__;
+    await app.clear();
+    const err = await app.loadFromText(savedText);
+    app.setCursorOffsetS(0); // home the cursor exactly as the pre-save capture did
+    const L = app.shieldLayers;
+    return {
+      err,
+      order: L.map((l) => `${l.material}:${l.thicknessCm}`).join(","),
+      rate: app.gammaRateAtCursor,
+    };
+  }, leadWater.saved);
+  record(
+    "multi-layer round-trip (v4): lead→water stack reloads with order + γ dose intact (#4, §11)",
+    rt.err === null &&
+      rt.order === "lead:1,water:5" &&
+      Math.abs(rt.rate - leadWater.rate) / leadWater.rate < 1e-9 &&
+      Math.abs(rt.rate - waterLead) / waterLead > 1e-6, // discriminates a reversed/flattened load
+    `order="${rt.order}" (want lead:1,water:5), rate=${rt.rate?.toExponential(4)} == leadWater=${leadWater.rate?.toExponential(4)} (≠ waterLead=${waterLead?.toExponential(4)}), err=${rt.err}`,
   );
 
   return { ok: checks.every((c) => c.pass), checks };
