@@ -1,0 +1,307 @@
+{
+  "schema_version": 1,
+  "id": "pwr-uox-45gwd-4pct",
+  "label": "PWR spent fuel — 45 GWd/tHM, 4.0% (reference)",
+  "reactor": "PWR UOX (Serpent2 pin-cell)",
+  "burnup_GWd_tHM": 45.0,
+  "burnup_achieved_GWd_tHM": 45.0155,
+  "enrichment_pct": 4.0,
+  "cooling_time_s": 0.0,
+  "basis": "grams per tonne initial heavy metal (1 tU); load with unit='g'",
+  "basis_note": "Vector derived from the dataset's mass-density (atom-inventory) columns, NOT the _A activity column — _A carries a fixed ~0.535 geometry factor on a different volume basis than the mass density, so activity is recomputed as λN by the engine. Validated: Cs-137 matches the fission-yield estimate to <1%.",
+  "a_factor_A_over_lambdaN": 0.5349564221044432,
+  "basis_HM_density_g_cm3": 8.87653088,
+  "n_nuclides": 67,
+  "n_stable_skipped": 78,
+  "entries": [
+    {
+      "name": "H-3",
+      "mass_g_per_tHM": 1.8700999550851559e-06
+    },
+    {
+      "name": "Se-79",
+      "mass_g_per_tHM": 6.286239608057332
+    },
+    {
+      "name": "Kr-81",
+      "mass_g_per_tHM": 2.6924933088274234e-05
+    },
+    {
+      "name": "Kr-85",
+      "mass_g_per_tHM": 35.44188650420152
+    },
+    {
+      "name": "Rb-87",
+      "mass_g_per_tHM": 326.93515509969137
+    },
+    {
+      "name": "Sr-90",
+      "mass_g_per_tHM": 695.7233725074361
+    },
+    {
+      "name": "Y-90",
+      "mass_g_per_tHM": 0.18250373055650315
+    },
+    {
+      "name": "Zr-93",
+      "mass_g_per_tHM": 942.328722006316
+    },
+    {
+      "name": "Nb-93m",
+      "mass_g_per_tHM": 0.0007626853431281028
+    },
+    {
+      "name": "Tc-99",
+      "mass_g_per_tHM": 1036.600911368654
+    },
+    {
+      "name": "Ru-106",
+      "mass_g_per_tHM": 202.9475280775455
+    },
+    {
+      "name": "Rh-106",
+      "mass_g_per_tHM": 0.00021292101898258702
+    },
+    {
+      "name": "Pd-107",
+      "mass_g_per_tHM": 308.309635486786
+    },
+    {
+      "name": "Cd-113m",
+      "mass_g_per_tHM": 0.16222553827244726
+    },
+    {
+      "name": "Sn-126",
+      "mass_g_per_tHM": 30.79637796517191
+    },
+    {
+      "name": "Sb-125",
+      "mass_g_per_tHM": 13.070421493312036
+    },
+    {
+      "name": "Te-125m",
+      "mass_g_per_tHM": 0.16222553827244726
+    },
+    {
+      "name": "I-129",
+      "mass_g_per_tHM": 209.70016610813616
+    },
+    {
+      "name": "Cs-134",
+      "mass_g_per_tHM": 196.03491764115847
+    },
+    {
+      "name": "Cs-135",
+      "mass_g_per_tHM": 597.369633664813
+    },
+    {
+      "name": "Cs-137",
+      "mass_g_per_tHM": 1624.4409212261987
+    },
+    {
+      "name": "Ba-137m",
+      "mass_g_per_tHM": 0.0002489711385986864
+    },
+    {
+      "name": "Ce-144",
+      "mass_g_per_tHM": 383.51243813844536
+    },
+    {
+      "name": "Nd-144",
+      "mass_g_per_tHM": 1392.7400430561
+    },
+    {
+      "name": "Pm-147",
+      "mass_g_per_tHM": 204.84353905610476
+    },
+    {
+      "name": "Sm-146",
+      "mass_g_per_tHM": 0.0037064029230302184
+    },
+    {
+      "name": "Sm-147",
+      "mass_g_per_tHM": 98.57364457228137
+    },
+    {
+      "name": "Sm-148",
+      "mass_g_per_tHM": 210.63634265191675
+    },
+    {
+      "name": "Sm-151",
+      "mass_g_per_tHM": 15.976061134369647
+    },
+    {
+      "name": "Eu-154",
+      "mass_g_per_tHM": 38.596159313986405
+    },
+    {
+      "name": "Eu-155",
+      "mass_g_per_tHM": 11.804499011667946
+    },
+    {
+      "name": "Ho-166m",
+      "mass_g_per_tHM": 0.00022193354888661187
+    },
+    {
+      "name": "Pb-210",
+      "mass_g_per_tHM": 1.2617541865634787e-09
+    },
+    {
+      "name": "Ac-227",
+      "mass_g_per_tHM": 2.3094607879063673e-08
+    },
+    {
+      "name": "Th-228",
+      "mass_g_per_tHM": 2.8840095692879515e-06
+    },
+    {
+      "name": "Th-229",
+      "mass_g_per_tHM": 9.046326891164941e-07
+    },
+    {
+      "name": "Th-230",
+      "mass_g_per_tHM": 0.0015208644213041932
+    },
+    {
+      "name": "Th-232",
+      "mass_g_per_tHM": 0.011941602122832923
+    },
+    {
+      "name": "Pa-231",
+      "mass_g_per_tHM": 0.000690585103895904
+    },
+    {
+      "name": "U-232",
+      "mass_g_per_tHM": 0.00044837336272523614
+    },
+    {
+      "name": "U-233",
+      "mass_g_per_tHM": 0.004810437836273262
+    },
+    {
+      "name": "U-234",
+      "mass_g_per_tHM": 185.65698945667387
+    },
+    {
+      "name": "U-235",
+      "mass_g_per_tHM": 8762.702575085279
+    },
+    {
+      "name": "U-236",
+      "mass_g_per_tHM": 5375.23055403374
+    },
+    {
+      "name": "U-238",
+      "mass_g_per_tHM": 925852.6907755206
+    },
+    {
+      "name": "Np-237",
+      "mass_g_per_tHM": 646.727880250443
+    },
+    {
+      "name": "Pu-238",
+      "mass_g_per_tHM": 306.40348541208476
+    },
+    {
+      "name": "Pu-239",
+      "mass_g_per_tHM": 6664.0223303092935
+    },
+    {
+      "name": "Pu-240",
+      "mass_g_per_tHM": 2812.348690888574
+    },
+    {
+      "name": "Pu-241",
+      "mass_g_per_tHM": 1832.6754246586927
+    },
+    {
+      "name": "Pu-242",
+      "mass_g_per_tHM": 750.5173011914311
+    },
+    {
+      "name": "Pu-244",
+      "mass_g_per_tHM": 0.058919414247562446
+    },
+    {
+      "name": "Am-241",
+      "mass_g_per_tHM": 59.1223088270268
+    },
+    {
+      "name": "Am-242m",
+      "mass_g_per_tHM": 0.8460512447403326
+    },
+    {
+      "name": "Am-243",
+      "mass_g_per_tHM": 169.2722100911567
+    },
+    {
+      "name": "Cm-242",
+      "mass_g_per_tHM": 24.629554378342903
+    },
+    {
+      "name": "Cm-243",
+      "mass_g_per_tHM": 0.8347855823603015
+    },
+    {
+      "name": "Cm-244",
+      "mass_g_per_tHM": 78.60413143743831
+    },
+    {
+      "name": "Cm-245",
+      "mass_g_per_tHM": 6.297505270437362
+    },
+    {
+      "name": "Cm-246",
+      "mass_g_per_tHM": 0.5644096852395561
+    },
+    {
+      "name": "Cm-247",
+      "mass_g_per_tHM": 0.008201402212662611
+    },
+    {
+      "name": "Cm-248",
+      "mass_g_per_tHM": 0.0005508908903835188
+    },
+    {
+      "name": "Cm-250",
+      "mass_g_per_tHM": 5.069548071013977e-11
+    },
+    {
+      "name": "Bk-249",
+      "mass_g_per_tHM": 1.3631451479837582e-05
+    },
+    {
+      "name": "Cf-249",
+      "mass_g_per_tHM": 3.4472926882895046e-06
+    },
+    {
+      "name": "Cf-250",
+      "mass_g_per_tHM": 1.0285549752968358e-16
+    },
+    {
+      "name": "Cf-251",
+      "mass_g_per_tHM": 5.137142045294163e-12
+    }
+  ],
+  "dropped": {
+    "nuclides": [
+      "Se-82",
+      "Zr-96",
+      "Mo-100",
+      "Xe-136",
+      "Nd-150"
+    ],
+    "activity_frac": 2.296957780556627e-19
+  },
+  "source_ref": "SCK-CEN UOX PWR Serpent2 discharge library, Mendeley Data DOI 10.17632/shv89y2zzd (UOX file, version 4), CC BY 4.0. Discharge (zero cooling); cooling = the §9 reference-time control.",
+  "neutron_caveat": "Cooled spent fuel emits neutrons (SF + (α,n), e.g. Cm-244) — the dataset carries _SF/_AN — but v1 does NOT model spent-fuel neutron output (no source key); only γ/β/decay-heat are computed. A future hook.",
+  "selfcheck": {
+    "cs137_Bq_per_tHM": 5202667748379671.0,
+    "cs137_fission_yield_estimate_Bq_per_tHM": 5493146964949956.0,
+    "decay_heat_W_per_tHM": {
+      "t0": 15752.857232998234,
+      "t10yr": 1656.730098744508,
+      "t100yr": 440.2342641558258
+    }
+  }
+}

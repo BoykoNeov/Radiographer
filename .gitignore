@@ -46,3 +46,6 @@ data/raw/
 # re-include it despite the generic `build/` ignore in the Node section above.
 !data/build/
 !data/build/**
+
+# --- SCK-CEN spent-fuel CSV (370 MB, CC-BY; build extracts compact JSON) ---
+data/vendor/sckcen_sf/*.csv
