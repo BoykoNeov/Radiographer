@@ -794,7 +794,7 @@ def test_internal_dose_round_trip_and_coverage_states():
         "entries": [
             {"name": "Pu-239", "quantity": 1.0e6, "unit": "Bq"},
             {"name": "Kr-85", "quantity": 1.0e9, "unit": "Bq"},
-            {"name": "Cs-137", "quantity": 1.0e9, "unit": "Bq"},
+            {"name": "I-131", "quantity": 1.0e9, "unit": "Bq"},  # uncovered (iodine → gas/vapour batch)
         ]
     }
     solved = json.loads(bridge.solve(json.dumps(spec)))
@@ -810,7 +810,7 @@ def test_internal_dose_round_trip_and_coverage_states():
         assert "Pu-239" in res["covered"]
         # Kr-85 (added) plus any noble gas in the Pu-239 chain (e.g. Rn-219) are all N/A.
         assert "Kr-85" in res["noble_gas_na"]
-        assert "Cs-137" in res["uncovered"]
+        assert "I-131" in res["uncovered"]
         assert res["lower_bound"] is True  # set by uncovered, NOT noble gas
         # fold reconciles: e(Pu-239 ingestion worker)=2.5e-07 × 1e6 Bq at t=0
         assert res["per_nuclide_coeff"]["Pu-239"] == pytest.approx(2.5e-07)

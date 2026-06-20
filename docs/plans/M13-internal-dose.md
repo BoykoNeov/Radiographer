@@ -1,10 +1,14 @@
 # M13 — Internal / committed dose (ICRP dose coefficients, Sv/Bq)
 
-**Status:** in progress 🚧 — **data layer + engine landed** (micro-slice green); bridge + bulk
-nuclides + UI pending. Done so far: ICRP-119 vendored + PROVENANCE; `build_internal_dose.py`
-(both populations, 5 clean-particulate actinides) with the two cross-table transcription checks
-enforced at build time; `engine/internal_dose.py` (loader + `InternalDoseModel`, three coverage
-states); `tests/test_internal_dose.py` (26 tests, green); `DATA_DIRS` + data README registered.
+**Status:** in progress 🚧 — **data layer + engine + bridge + fission-product batch landed**;
+UI + actinide expansion + gas/vapour pending. Done so far: ICRP-119 vendored + PROVENANCE;
+`build_internal_dose.py` (both populations) with the cross-table transcription checks enforced at
+build time (ingestion **equal-f1⇒equal-e** + `DIFFERING_F1_INGESTION` exceptions; inhalation
+worker-1µm↔public-1µm per shipped type); `engine/internal_dose.py` (loader + `InternalDoseModel`,
+three coverage states, f1/per-nuclide-coeff provenance); **bridge `internal_dose()`**;
+`tests/test_internal_dose.py` + bridge tests, green; `DATA_DIRS` + data README registered.
+**Coverage = 13 nuclides:** 5 actinides (all F/M/S) + 8 fission/activation products (Co-60,
+Se-79, Sr-90, Tc-99, Ru-106, Cs-134, Cs-137, Ce-144 — default type only).
 **Milestone:** post-v1 extension — the single biggest unbuilt capability listed *Future* in
 HANDOFF_PLAN §2 ("Internal / committed dose (ICRP dose coefficients in Sv/Bq)") and §11. The
 tool has been **external-dose only**; this adds the **intake** pathway. User-chosen next batch
@@ -60,12 +64,23 @@ bundled ones.
 - **Routes:** ingestion **and** inhalation.
 - **Populations:** **both, selectable** — **public adult (ICRP-72**, 1 µm AMAD ingestion/inhalation)
   and **worker (ICRP-68**, 5 µm AMAD). User toggles. (User decision, 2026-06-20.)
-- **Inhalation absorption type:** capture **all tabulated F/M/S** values per nuclide (≈0 marginal
-  cost while reading the page) plus a **`default_type`**. The fold uses `default_type`; the UI can
-  toggle. **`default_type` = the ICRP-recommended / commonly-cited type, fixed by which value
-  matches the independent validation source** — NOT a max()/"most restrictive" pick (that would
-  disagree with every reference *and* make the validation triangle meaningless) and NOT picked from
-  memory. (Advisor, 2026-06-20.)
+- **Inhalation absorption type** *(LOCKED scope revised 2026-06-20 — see note)*: each nuclide
+  ships a **`default_type`** and the fold uses it. **`default_type` = the ICRP "unspecified /
+  all-other-compounds" catch-all per element**, read from **ICRP-119 Annex E (Table E.1)** — NOT
+  a max()/"most restrictive" pick and NOT from memory. (The earlier "match the validation source"
+  rule was unworkable: ICRP publishes several values per nuclide conditioned on chemical form, so
+  there is no single value to match — the catch-all designation is the principled discriminator.
+  Advisor, 2026-06-20.)
+  - **Revision to "capture all F/M/S":** the original LOCKED rule (capture every F/M/S type,
+    "≈0 marginal cost while reading the page") held for the 5 actinides but its premise is **false
+    on the public side** — Annex G is a dense multi-age table that needs per-type 300-DPI crops
+    (a full-page read miscounts adjacent columns; caught a Co-60 silent slip), and the E/A/G f1
+    reads conflict on non-default types. More decisively: **v1 folds only the default type** (the
+    bridge passes `absorption_type=None`; no UI toggle), so a non-default value would be shipped
+    but never folded — an unvalidated number for zero benefit (honesty register). **Decision:**
+    actinides keep all F/M/S; the **fission-product batch ships the default type only**;
+    non-default capture moves to the deferred type-toggle extension (where the correct shape is a
+    per-nuclide `{nuclide: type}` map, not a global scalar).
 - **Noble gases (Kr-85, Kr-81, Xe, Rn, Ar):** there is **no Sv/Bq intake coefficient** — ICRP-119
   Annex C gives *submersion effective-dose **rates*** for inert gases, a different quantity. These
   get a **third coverage state `intake_pathway: "none_noble_gas"`**, DISTINCT from "covered" and
@@ -204,12 +219,21 @@ as `dose()` minus `distance_m`, so the JS cursor/stacked-bar plumbing reuses cle
    **transcription fidelity, not methodology** — ICRP is the sole methodology source.
 4. `engine/internal_dose.py` + `tests/test_internal_dose.py` (schema, anchors, parent-only progeny
    assertion, three coverage states incl. noble-gas N/A, fold reconciliation Σ==series).
-5. **Bulk transcribe** the rest of the curated set into the now-test-guarded schema: the other
-   fission products (Cs-137, Sr-90, Co-60, Tc-99, Ru-106, Ce-144, …) and remaining actinides.
-6. Bridge `internal_dose()` + bridge test.
-7. **Gases/vapours (deferred special-casing):** H-3 (OBT/HTO, Annex B inhalation), I-131
-   (elemental/methyl-iodide vapour, Annexes B/H), as a labeled refinement — NOT in the first slices.
-8. UI panel + honesty block; dev + built gate green.
+5. **Bulk transcribe** the rest of the curated set into the now-test-guarded schema.
+   - ✅ **Fission-product batch** (default-type only): Co-60, Se-79, Sr-90, Tc-99, Ru-106,
+     Cs-134, Cs-137, Ce-144. Worker (Annex A 5µm+1µm+ingestion), public (Annex F ingestion +
+     Annex G inhalation 1µm, crop-read), Annex E default types. All cross-checks pass.
+   - ⏳ **Actinide expansion** (next batch): Th-228/230/232, Pa-231, U-234/235/236, Np-237,
+     Pu-238/240/241/242, Am-243, Cm-242…246, Pb-210, Sb-125, Sn-126, Pm-147, Eu-154/155, Se/…
+6. ✅ Bridge `internal_dose()` + bridge tests (route/population; default-type fold; no global
+   absorption_type — F/M/S is per-compound, out of v1 scope).
+7. **Gases/vapours (deferred special-casing — needs a `schema_version` bump):** H-3 (OBT/HTO),
+   I-129/I-131 (elemental/methyl-iodide vapour). These are **chemical forms, not F/M/S lung
+   types** — they don't map onto the `types:{F/M/S}` schema; design the form dimension as its own
+   decision. NOT in the particulate batches.
+8. UI panel + honesty block (state: hypothetical intake; default absorption type — e.g. Co-60
+   oxide is Type S, ~2–3× the default-M value; lower bound when uncovered; never summed with
+   external H*(10)); dev + built gate green.
 9. Serializer bump only if the panel state is persisted (decide at UI step).
 
 ## Open / deferred

@@ -20,18 +20,31 @@ transcription trap is the dominant risk. Two independent cross-checks are enforc
 build time (a value that fails refuses to build), exploiting that ICRP-119 typesets the SAME
 numbers twice in independent annexes:
 
-  (1) **Ingestion f1-ratio check.** For a nuclide whose worker and public-adult ingestion use
-      the SAME biokinetics, e_public / e_worker == f1_public / f1_worker (intestinal absorption
-      scales the swallowed coefficient). Po-210 (worker f1 0.1 → public f1 0.5) reconciles to
-      EXACTLY 5×; matched-f1 actinides reconcile to ~1×.
-  (2) **Inhalation worker-1µm ↔ public-adult-1µm check** (documented in PROVENANCE, applied to
-      the default type): Annex A also lists the worker 1 µm value, which must agree with the
-      Annex G public-adult 1 µm value to ~20 % (same lung model, ~same reference person). This
-      check CAUGHT a first-pass misread of Am-241 (M adult read as 9.6E-05 — actually the
-      F-row value; corrected to 4.2E-05 via a 300-DPI crop).
+  (1) **Ingestion equal-f1 check** (reframed in the M13 fission-product batch — see below).
+      When a nuclide's worker (Annex A) and public-adult (Annex F) ingestion f1 are EQUAL, the
+      committed-dose coefficient is identical (same biokinetics) → e_worker == e_public. This
+      is the strong, ASSUMPTION-FREE transcription check (independent typesetting), and it holds
+      exactly for the matched-f1 actinides and all but one fission product. When f1 DIFFERS, the
+      nuclide must be a documented exception in ``DIFFERING_F1_INGESTION`` (else a misread f1
+      would silently route a value around all cross-checking); the ratio e∝f1 is NOT asserted
+      there because it is physically invalid for ingested β-emitters (see that set's note).
+  (2) **Inhalation worker-1µm ↔ public-adult-1µm check**, for every SHIPPED public type: Annex A
+      also lists the worker 1 µm value, which must agree with the Annex G public-adult 1 µm value
+      to ~40 % (same HRTM lung model, ~same reference person). This caught a first-pass misread
+      of Am-241 (M adult read as 9.6E-05 — actually the F-row value; corrected to 4.2E-05 via a
+      300-DPI crop), and — in the fission-product batch — a Co-60 public-M adult miscount (15y
+      column read as adult, 1.7E-08 vs the true 1.0E-08; the crop resolved it to a 1.04× match).
 
 The coverage is a CURATED slice (not all ~800 ICRP-119 nuclides); a tracked nuclide absent
 here makes a committed-dose estimate a LOWER BOUND, surfaced loudly by the engine (§11).
+
+**Absorption-type coverage (M13 fission-product batch):** the 5 actinides ship all tabulated
+F/M/S types; the fission products ship the ICRP default type ONLY (the "unspecified compounds"
+catch-all from ICRP-119 Annex E, Table E.1). Rationale: v1 folds only the default type (the
+bridge passes ``absorption_type=None`` and there is no UI type toggle), so a non-default type
+would be a shipped-but-never-folded, unvalidated number — the honesty-register hazard for zero
+v1 benefit. Non-default capture is deferred to the type-toggle extension (see docs/plans). The
+default type per element is read from Annex E, not chosen by value or memory.
 """
 
 from __future__ import annotations
@@ -74,6 +87,33 @@ WORKER = {
         # Am-241  (printed p.56): ingestion f1 0.0005; inhalation 5µm M only
         "Am-241": {"ingestion": {"e_Sv_Bq": 2.0e-07, "f1": 5e-04},
                    "inhalation": {"default_type": "M", "types": {"M": 2.7e-05}}},
+
+        # --- M13 fission/activation-product batch (default-type-only inhalation, 5 µm) ---
+        # default_type = ICRP-119 Annex E "unspecified compounds" catch-all per element.
+        # Co-60  (Annex A printed p.28): ingestion f1 0.1; inhalation 5µm M (Annex E: Co M)
+        "Co-60": {"ingestion": {"e_Sv_Bq": 3.4e-09, "f1": 0.1},
+                  "inhalation": {"default_type": "M", "types": {"M": 7.1e-09}}},
+        # Se-79  (printed p.30): ingestion f1 0.8; inhalation 5µm F (Annex E: Se F)
+        "Se-79": {"ingestion": {"e_Sv_Bq": 2.9e-09, "f1": 0.8},
+                  "inhalation": {"default_type": "F", "types": {"F": 1.6e-09}}},
+        # Sr-90  (printed p.31): ingestion f1 0.3; inhalation 5µm F (Annex E: Sr F)
+        "Sr-90": {"ingestion": {"e_Sv_Bq": 2.8e-08, "f1": 0.3},
+                  "inhalation": {"default_type": "F", "types": {"F": 3.0e-08}}},
+        # Tc-99  (printed p.33): ingestion f1 0.8; inhalation 5µm F (Annex E: Tc F)
+        "Tc-99": {"ingestion": {"e_Sv_Bq": 7.8e-10, "f1": 0.8},
+                  "inhalation": {"default_type": "F", "types": {"F": 4.0e-10}}},
+        # Ru-106 (printed p.34): ingestion f1 0.05; inhalation 5µm F (Annex E: Ru F)
+        "Ru-106": {"ingestion": {"e_Sv_Bq": 7.0e-09, "f1": 0.05},
+                   "inhalation": {"default_type": "F", "types": {"F": 9.8e-09}}},
+        # Cs-134 (printed p.40): ingestion f1 1.0; inhalation 5µm F (Annex E: Cs F, all compounds)
+        "Cs-134": {"ingestion": {"e_Sv_Bq": 1.9e-08, "f1": 1.0},
+                   "inhalation": {"default_type": "F", "types": {"F": 9.6e-09}}},
+        # Cs-137 (printed p.40): ingestion f1 1.0; inhalation 5µm F
+        "Cs-137": {"ingestion": {"e_Sv_Bq": 1.3e-08, "f1": 1.0},
+                   "inhalation": {"default_type": "F", "types": {"F": 6.7e-09}}},
+        # Ce-144 (printed p.41): ingestion f1 0.0005; inhalation 5µm M (Annex E: Ce M)
+        "Ce-144": {"ingestion": {"e_Sv_Bq": 5.2e-09, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 2.3e-08}}},
     },
 }
 
@@ -105,6 +145,29 @@ PUBLIC_ADULT = {
         "Am-241": {"ingestion": {"e_Sv_Bq": 2.0e-07, "f1": 5e-04},
                    "inhalation": {"default_type": "M",
                                   "types": {"M": 4.2e-05}}},                 # dropped F,S (no worker F,S)
+
+        # --- M13 fission/activation-product batch (default-type-only inhalation, 1 µm adult) ---
+        # Ingestion = Annex F "Adult" column + the adult f1 (footnote-adjusted where flagged).
+        # Inhalation = Annex G "Adult" column, default type only (crop-read; cross-checked vs the
+        # worker 1 µm column in _WORKER_1UM below). Co-60 (printed p.72/89), Se-79 (73/91),
+        # Sr-90 (74/93), Tc-99 (75/95), Ru-106 (75/96), Cs-134/137 (77/102), Ce-144 (78/103).
+        "Co-60": {"ingestion": {"e_Sv_Bq": 3.4e-09, "f1": 0.1},     # adult f1 0.1 (Annex F **)
+                  "inhalation": {"default_type": "M", "types": {"M": 1.0e-08}}},
+        "Se-79": {"ingestion": {"e_Sv_Bq": 2.9e-09, "f1": 0.8},
+                  "inhalation": {"default_type": "F", "types": {"F": 1.1e-09}}},
+        "Sr-90": {"ingestion": {"e_Sv_Bq": 2.8e-08, "f1": 0.3},     # adult f1 0.3 (Annex F *)
+                  "inhalation": {"default_type": "F", "types": {"F": 2.4e-08}}},
+        # Tc-99 DIFFERING-f1 exception: public adult ingestion f1 0.5 vs worker 0.8 (see set below)
+        "Tc-99": {"ingestion": {"e_Sv_Bq": 6.4e-10, "f1": 0.5},
+                  "inhalation": {"default_type": "F", "types": {"F": 2.9e-10}}},
+        "Ru-106": {"ingestion": {"e_Sv_Bq": 7.0e-09, "f1": 0.05},
+                   "inhalation": {"default_type": "F", "types": {"F": 7.9e-09}}},
+        "Cs-134": {"ingestion": {"e_Sv_Bq": 1.9e-08, "f1": 1.0},
+                   "inhalation": {"default_type": "F", "types": {"F": 6.6e-09}}},
+        "Cs-137": {"ingestion": {"e_Sv_Bq": 1.3e-08, "f1": 1.0},
+                   "inhalation": {"default_type": "F", "types": {"F": 4.6e-09}}},
+        "Ce-144": {"ingestion": {"e_Sv_Bq": 5.2e-09, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 3.6e-08}}},
     },
 }
 
@@ -119,7 +182,29 @@ _WORKER_1UM = {
     "U-238": {"F": 4.9e-07, "M": 2.6e-06, "S": 7.3e-06},
     "Pu-239": {"M": 4.7e-05, "S": 1.5e-05},
     "Am-241": {"M": 3.9e-05},
+    # Fission-product batch — worker 1 µm, DEFAULT type only (public ships default only):
+    "Co-60": {"M": 9.6e-09},
+    "Se-79": {"F": 1.2e-09},
+    "Sr-90": {"F": 2.4e-08},
+    "Tc-99": {"F": 2.9e-10},
+    "Ru-106": {"F": 8.0e-09},
+    "Cs-134": {"F": 6.8e-09},
+    "Cs-137": {"F": 4.8e-09},
+    "Ce-144": {"M": 3.4e-08},
 }
+
+#: Nuclides whose worker (Annex A) and public-adult (Annex F) ingestion **f1 differ**, so the
+#: equal-f1 cross-check (1) cannot apply. The naive ratio e_public/e_worker == f1_public/f1_worker
+#: is NOT asserted here because it is physically valid only when the systemic (f1-scaled) dose
+#: dominates: committed ingestion dose is affine in f1, ``e = G + f1·(S−G)``, where ``G`` is the
+#: f1-INDEPENDENT GI-transit (e.g. colon) dose. The ratio holds only when ``G ≈ 0``:
+#:   * Po-210 (α, retained systemically → G≈0): worker f1 0.1 → public f1 0.5 reconciles to an
+#:     EXACT 5×, asserted as a golden in tests/test_internal_dose.py.
+#:   * Tc-99 (β, large colon transit dose → G≫0): worker (f1 0.8) 7.8E-10, public (f1 0.5)
+#:     6.4E-10. Solving the two-population affine model gives G≈4.1E-10, S≈8.7E-10 (both > 0).
+#: Each value here is a published ICRP-68/72 anchor. A nuclide whose f1 differs but is ABSENT
+#: from this set raises at build time (a misread f1 must not silently skip cross-checking).
+DIFFERING_F1_INGESTION: set[str] = {"Po-210", "Tc-99"}
 
 
 class BuildError(Exception):
@@ -130,15 +215,32 @@ def _validate_consistency() -> None:
     """The two build-time transcription cross-checks (see module docstring)."""
     wc, pc = WORKER["coefficients"], PUBLIC_ADULT["coefficients"]
     for nuc in wc:
-        # (1) ingestion f1-ratio: e_public/e_worker == f1_public/f1_worker
         we, wf = wc[nuc]["ingestion"]["e_Sv_Bq"], wc[nuc]["ingestion"]["f1"]
         pe, pf = pc[nuc]["ingestion"]["e_Sv_Bq"], pc[nuc]["ingestion"]["f1"]
-        got, want = pe / we, pf / wf
-        if abs(got - want) / want > 0.10:
+        # (1) ingestion cross-check — equal-f1 ⇒ equal-e (assumption-free); differing-f1 ⇒ must
+        # be a documented exception (the ratio e∝f1 is invalid; see DIFFERING_F1_INGESTION).
+        if wf == pf:
+            if abs(pe - we) / we > 0.10:
+                raise BuildError(
+                    f"{nuc} ingestion equal-f1 check FAILED: e_public={pe:.3g} != "
+                    f"e_worker={we:.3g} at shared f1={wf} (>10% — suspected transcription error)"
+                )
+        elif nuc not in DIFFERING_F1_INGESTION:
             raise BuildError(
-                f"{nuc} ingestion f1-ratio check FAILED: e_public/e_worker={got:.3g} "
-                f"!= f1_public/f1_worker={want:.3g} (>10% — suspected transcription error)"
+                f"{nuc} ingestion f1 differs (worker={wf}, public={pf}) but it is not in "
+                "DIFFERING_F1_INGESTION — verify the f1 reads (a misread f1 must not skip the check)"
             )
+        else:
+            # Affine sanity for a documented differing-f1 nuclide: e = G + f1·(S−G); solving the
+            # two populations must give G >= 0 and S > 0 (catches gross/sign/decade misreads).
+            slope = (pe - we) / (pf - wf)            # = S − G
+            g = we - wf * slope                      # GI-transit (f1-independent) intercept
+            s = g + slope                            # f1=1 (fully absorbed) coefficient
+            if not (g >= -1e-12 and s > 0.0):
+                raise BuildError(
+                    f"{nuc} differing-f1 affine solve nonphysical: G={g:.3g}, S={s:.3g} "
+                    "(suspected transcription error in an ingestion e or f1)"
+                )
         # (2) inhalation: EVERY shipped public-adult 1µm type ≈ worker 1µm same type (same lung
         # model). Every public type MUST have a worker-1µm counterpart — no unchecked value ships.
         w1_types = _WORKER_1UM[nuc]

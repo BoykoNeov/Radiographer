@@ -35,6 +35,17 @@ ROOT = Path(__file__).resolve().parents[1]
 CANON = ROOT / "data" / "internal_dose"
 
 MICRO_SLICE = ("Po-210", "Ra-226", "U-238", "Pu-239", "Am-241")
+# M13 fission/activation-product batch (default-type-only inhalation).
+FISSION_PRODUCTS = ("Co-60", "Se-79", "Sr-90", "Tc-99", "Ru-106", "Cs-134", "Cs-137", "Ce-144")
+CURATED = MICRO_SLICE + FISSION_PRODUCTS
+
+# ICRP default absorption type per element (ICRP-119 Annex E "unspecified compounds" catch-all)
+# — what the engine folds, so the anchor below is this type's value. NOT chosen by value/memory.
+DEFAULT_TYPE = {
+    "Po-210": "M", "Ra-226": "M", "U-238": "M", "Pu-239": "M", "Am-241": "M",
+    "Co-60": "M", "Se-79": "F", "Sr-90": "F", "Tc-99": "F",
+    "Ru-106": "F", "Cs-134": "F", "Cs-137": "F", "Ce-144": "M",
+}
 
 # Validated ICRP-119 anchors (Sv/Bq). ingestion = e; inhalation = DEFAULT-type e.
 # worker = ICRP-68 Annex A (5 µm); public_adult = ICRP-72 Annexes F/G (1 µm, Adult).
@@ -45,6 +56,14 @@ ANCHORS = {
         "U-238":  {"ingestion": 4.4e-08, "inhalation": 1.6e-06},  # M (5 µm)
         "Pu-239": {"ingestion": 2.5e-07, "inhalation": 3.2e-05},  # M
         "Am-241": {"ingestion": 2.0e-07, "inhalation": 2.7e-05},  # M
+        "Co-60":  {"ingestion": 3.4e-09, "inhalation": 7.1e-09},  # M
+        "Se-79":  {"ingestion": 2.9e-09, "inhalation": 1.6e-09},  # F
+        "Sr-90":  {"ingestion": 2.8e-08, "inhalation": 3.0e-08},  # F
+        "Tc-99":  {"ingestion": 7.8e-10, "inhalation": 4.0e-10},  # F
+        "Ru-106": {"ingestion": 7.0e-09, "inhalation": 9.8e-09},  # F
+        "Cs-134": {"ingestion": 1.9e-08, "inhalation": 9.6e-09},  # F
+        "Cs-137": {"ingestion": 1.3e-08, "inhalation": 6.7e-09},  # F
+        "Ce-144": {"ingestion": 5.2e-09, "inhalation": 2.3e-08},  # M
     },
     "public_adult": {
         "Po-210": {"ingestion": 1.2e-06, "inhalation": 3.3e-06},  # M
@@ -52,8 +71,20 @@ ANCHORS = {
         "U-238":  {"ingestion": 4.5e-08, "inhalation": 2.9e-06},  # M
         "Pu-239": {"ingestion": 2.5e-07, "inhalation": 5.0e-05},  # M
         "Am-241": {"ingestion": 2.0e-07, "inhalation": 4.2e-05},  # M
+        "Co-60":  {"ingestion": 3.4e-09, "inhalation": 1.0e-08},  # M
+        "Se-79":  {"ingestion": 2.9e-09, "inhalation": 1.1e-09},  # F
+        "Sr-90":  {"ingestion": 2.8e-08, "inhalation": 2.4e-08},  # F
+        "Tc-99":  {"ingestion": 6.4e-10, "inhalation": 2.9e-10},  # F (differing-f1 ingestion)
+        "Ru-106": {"ingestion": 7.0e-09, "inhalation": 7.9e-09},  # F
+        "Cs-134": {"ingestion": 1.9e-08, "inhalation": 6.6e-09},  # F
+        "Cs-137": {"ingestion": 1.3e-08, "inhalation": 4.6e-09},  # F
+        "Ce-144": {"ingestion": 5.2e-09, "inhalation": 3.6e-08},  # M
     },
 }
+
+# Nuclides whose worker/public ingestion f1 differ (the equal-f1 check cannot apply); kept in
+# lockstep with the build's DIFFERING_F1_INGESTION (see build_internal_dose.py for the physics).
+DIFFERING_F1_INGESTION = {"Po-210", "Tc-99"}
 
 
 def _load_raw(population: str) -> dict:
@@ -88,13 +119,13 @@ def test_loader_validates_and_caches(population):
     a = idose.load(population)
     b = idose.load(population)
     assert a is b  # lru_cache
-    assert set(a["coefficients"]) == set(MICRO_SLICE)
+    assert set(a["coefficients"]) == set(CURATED)
 
 
 # -- Pillar 2: anchor goldens ----------------------------------------------
 
 @pytest.mark.parametrize("population", idose.POPULATIONS)
-@pytest.mark.parametrize("nuclide", MICRO_SLICE)
+@pytest.mark.parametrize("nuclide", CURATED)
 def test_anchor_values(population, nuclide):
     for route in ("ingestion", "inhalation"):
         got = idose.coefficient(nuclide, route, population)
@@ -102,26 +133,50 @@ def test_anchor_values(population, nuclide):
         assert got == want, f"{population}/{nuclide}/{route}: {got} != {want}"
 
 
-def test_default_type_is_M_for_actinides():
-    # ICRP-recommended default for unspecified actinide chemical form is Type M; the shipped
-    # default-type inhalation value must equal the Type-M value.
+def test_default_type_matches_annex_e_catchall():
+    # default_type = ICRP-119 Annex E "unspecified compounds" catch-all per element (NOT a
+    # value/memory pick) — it is what the engine folds, so the shipped default-type inhalation
+    # value must equal that type's tabulated value.
     for population in idose.POPULATIONS:
         d = _load_raw(population)
-        for nuc in MICRO_SLICE:
+        for nuc in CURATED:
             inh = d["coefficients"][nuc]["inhalation"]
-            assert inh["default_type"] == "M"
-            assert idose.coefficient(nuc, "inhalation", population) == inh["types"]["M"]
+            assert inh["default_type"] == DEFAULT_TYPE[nuc], f"{nuc}: default_type drift"
+            assert idose.coefficient(nuc, "inhalation", population) == inh["types"][DEFAULT_TYPE[nuc]]
 
 
 # -- Pillar 3: cross-table consistency (transcription fidelity) -------------
 
-def test_ingestion_f1_ratio_worker_vs_public():
+def test_ingestion_equal_f1_implies_equal_e():
+    # The assumption-free transcription check: where worker and public-adult ingestion f1 are
+    # EQUAL, the same biokinetics give an identical coefficient → e_worker == e_public (≤10% for
+    # 2-sig-fig rounding). Holds for every curated nuclide except the differing-f1 exceptions.
     w = _load_raw("worker")["coefficients"]
     p = _load_raw("public_adult")["coefficients"]
-    for nuc in MICRO_SLICE:
-        we, wf = w[nuc]["ingestion"]["e_Sv_Bq"], w[nuc]["ingestion"]["f1"]
-        pe, pf = p[nuc]["ingestion"]["e_Sv_Bq"], p[nuc]["ingestion"]["f1"]
-        assert pe / we == pytest.approx(pf / wf, rel=0.10), f"{nuc}: f1-ratio mismatch"
+    checked = 0
+    for nuc in CURATED:
+        wf, pf = w[nuc]["ingestion"]["f1"], p[nuc]["ingestion"]["f1"]
+        if wf != pf:
+            assert nuc in DIFFERING_F1_INGESTION, f"{nuc}: undocumented differing f1"
+            continue
+        we, pe = w[nuc]["ingestion"]["e_Sv_Bq"], p[nuc]["ingestion"]["e_Sv_Bq"]
+        assert pe == pytest.approx(we, rel=0.10), f"{nuc}: equal-f1 but e differs ({pe} vs {we})"
+        checked += 1
+    assert checked >= len(CURATED) - len(DIFFERING_F1_INGESTION)
+
+
+def test_tc99_differing_f1_is_a_documented_exception():
+    # Tc-99 ingestion f1 differs (worker 0.8, public 0.5); the naive e∝f1 ratio is physically
+    # invalid (β-emitter, large f1-independent colon transit dose). It must be a documented
+    # exception, and the two-population affine solve e=G+f1·(S−G) must give G>=0, S>0.
+    assert "Tc-99" in DIFFERING_F1_INGESTION
+    we, wf = 7.8e-10, 0.8
+    pe, pf = 6.4e-10, 0.5
+    assert idose.coefficient("Tc-99", "ingestion", "worker") == we
+    assert idose.coefficient("Tc-99", "ingestion", "public_adult") == pe
+    slope = (pe - we) / (pf - wf)
+    g = we - wf * slope
+    assert g >= 0 and g + slope > 0  # G≈4.1e-10 (GI transit) , S≈8.7e-10 both physical
 
 
 def test_every_public_inhalation_type_has_a_worker_analog():
@@ -130,7 +185,7 @@ def test_every_public_inhalation_type_has_a_worker_analog():
     # that public types ⊆ worker types — uncross-checkable types were dropped, §M13/advisor).
     w = _load_raw("worker")["coefficients"]
     p = _load_raw("public_adult")["coefficients"]
-    for nuc in MICRO_SLICE:
+    for nuc in CURATED:
         wt = set(w[nuc]["inhalation"]["types"])
         pt = set(p[nuc]["inhalation"]["types"])
         assert pt <= wt, f"{nuc}: public inhalation types {pt} not all in worker {wt}"
@@ -138,7 +193,8 @@ def test_every_public_inhalation_type_has_a_worker_analog():
 
 def test_po210_population_difference_is_the_f1_ratio():
     # The teaching point that motivates shipping both populations: Po-210 ingestion differs by
-    # exactly the f1 ratio (public dietary f1 0.5 vs worker f1 0.1 → 5×).
+    # exactly the f1 ratio (public dietary f1 0.5 vs worker f1 0.1 → 5×). This is exact because
+    # Po-210 is systemic-dominated (α, retained) → the affine intercept G≈0 (see Tc-99 contrast).
     w = idose.coefficient("Po-210", "ingestion", "worker")
     p = idose.coefficient("Po-210", "ingestion", "public_adult")
     assert p / w == pytest.approx(5.0, rel=1e-6)
@@ -151,13 +207,14 @@ def _evaluate_stub(series: dict[str, list[float]], times=(0.0, 1.0)) -> dict:
 
 
 def test_three_coverage_states():
-    # covered (actinides) + noble-gas N/A (Kr-85) + uncovered (Cs-137, not in the curated set).
+    # covered (actinides) + noble-gas N/A (Kr-85) + uncovered (I-131, not in the curated set —
+    # iodine is deferred to the gas/vapour batch, so it is a genuine coverage gap here).
     model = idose.InternalDoseModel(
-        ["Pu-239", "Am-241", "Kr-85", "Cs-137"], "inhalation", "worker"
+        ["Pu-239", "Am-241", "Kr-85", "I-131"], "inhalation", "worker"
     )
     assert set(model.covered) == {"Pu-239", "Am-241"}
     assert model.noble_gas_na == ["Kr-85"]
-    assert model.uncovered == ["Cs-137"]
+    assert model.uncovered == ["I-131"]
 
 
 def test_lower_bound_only_from_uncovered_not_noble_gas():
@@ -169,8 +226,8 @@ def test_lower_bound_only_from_uncovered_not_noble_gas():
     assert out["noble_gas_na"] == ["Kr-85"]
     assert any(w["reason"] == "noble_gas_no_intake_pathway" for w in out["warnings"])
 
-    series2 = _evaluate_stub({"Pu-239": [1e6, 1e6], "Cs-137": [1e9, 1e9]})
-    out2 = idose.InternalDoseModel(["Pu-239", "Cs-137"], "inhalation", "worker") \
+    series2 = _evaluate_stub({"Pu-239": [1e6, 1e6], "I-131": [1e9, 1e9]})
+    out2 = idose.InternalDoseModel(["Pu-239", "I-131"], "inhalation", "worker") \
         .committed_dose_series(series2)
     assert out2["lower_bound"] is True
     assert any(w["reason"] == "uncovered_nuclides" for w in out2["warnings"])

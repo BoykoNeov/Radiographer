@@ -71,6 +71,102 @@
           "M": 4.2e-05
         }
       }
+    },
+    "Co-60": {
+      "ingestion": {
+        "e_Sv_Bq": 3.4e-09,
+        "f1": 0.1
+      },
+      "inhalation": {
+        "default_type": "M",
+        "types": {
+          "M": 1e-08
+        }
+      }
+    },
+    "Se-79": {
+      "ingestion": {
+        "e_Sv_Bq": 2.9e-09,
+        "f1": 0.8
+      },
+      "inhalation": {
+        "default_type": "F",
+        "types": {
+          "F": 1.1e-09
+        }
+      }
+    },
+    "Sr-90": {
+      "ingestion": {
+        "e_Sv_Bq": 2.8e-08,
+        "f1": 0.3
+      },
+      "inhalation": {
+        "default_type": "F",
+        "types": {
+          "F": 2.4e-08
+        }
+      }
+    },
+    "Tc-99": {
+      "ingestion": {
+        "e_Sv_Bq": 6.4e-10,
+        "f1": 0.5
+      },
+      "inhalation": {
+        "default_type": "F",
+        "types": {
+          "F": 2.9e-10
+        }
+      }
+    },
+    "Ru-106": {
+      "ingestion": {
+        "e_Sv_Bq": 7e-09,
+        "f1": 0.05
+      },
+      "inhalation": {
+        "default_type": "F",
+        "types": {
+          "F": 7.9e-09
+        }
+      }
+    },
+    "Cs-134": {
+      "ingestion": {
+        "e_Sv_Bq": 1.9e-08,
+        "f1": 1.0
+      },
+      "inhalation": {
+        "default_type": "F",
+        "types": {
+          "F": 6.6e-09
+        }
+      }
+    },
+    "Cs-137": {
+      "ingestion": {
+        "e_Sv_Bq": 1.3e-08,
+        "f1": 1.0
+      },
+      "inhalation": {
+        "default_type": "F",
+        "types": {
+          "F": 4.6e-09
+        }
+      }
+    },
+    "Ce-144": {
+      "ingestion": {
+        "e_Sv_Bq": 5.2e-09,
+        "f1": 0.0005
+      },
+      "inhalation": {
+        "default_type": "M",
+        "types": {
+          "M": 3.6e-08
+        }
+      }
     }
   }
 }
