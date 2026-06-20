@@ -2283,6 +2283,222 @@ async function runM7(page) {
   return { ok: checks.every((c) => c.pass), checks };
 }
 
+// --- M13: internal / committed dose panel (the intake pathway, §M13) ---
+// Drives the rendered InternalDose panel: committed E(50) = Σ e_n·A_n at the cursor, the
+// breakdown reconciles with the headline, a route/population toggle RE-FOLDS (registry stays
+// 1 — never a re-solve, §3), there is NO integrate control (committed scalar, not a rate), the
+// honesty block is present, and an uncovered nuclide drives the LOUD lower-bound banner (§11).
+async function runM13(page) {
+  const checks = [];
+  const record = (name, pass, detail) => checks.push({ name, pass, detail });
+
+  const PANEL = '[data-testid="internal-dose"]';
+
+  // Clean, known-covered inventory: Po-210 (α → stable Pb-206, so NO uncovered progeny → not a
+  // lower bound) at 1 GBq, ingestion + public-adult (the panel defaults).
+  await page.evaluate(async () => {
+    const app = window.__APP__;
+    await app.clear();
+    app.setInternalRoute("ingestion");
+    app.setInternalPopulation("public_adult");
+    await app.addEntry("Po-210", 1e9, "Bq");
+  });
+  await page.waitForFunction(
+    "window.__APP__.status === 'solved' && window.__APP__.internalDoseSeries && " +
+      "window.__APP__.internalDoseSeries.route === 'ingestion'",
+    null,
+    { timeout: 60_000 },
+  );
+  await page.waitForSelector(`${PANEL} [data-testid="internal-card"]`);
+
+  // 1) Committed E(50) > 0 and the per-nuclide breakdown Σ reconciles with the headline to float
+  //    (interp commutes with the linear matvec — same invariant as the per-line γ table). Po-210's
+  //    only daughter is STABLE Pb-206 (zero activity), so there is NO *active* uncovered nuclide:
+  //    the panel is not a lower bound here (the stable-daughter refinement — Pb-206 is flagged
+  //    uncovered by the engine but carries zero dose, so the loud banner must NOT fire).
+  const recon = await page.evaluate(() => {
+    const app = window.__APP__;
+    const head = app.internalCommittedAtCursor;
+    const bd = app.internalBreakdownAtCursor;
+    const sum = bd ? bd.rows.reduce((s, r) => s + r.committed_si, 0) : NaN;
+    return {
+      head,
+      sum,
+      activeUncovered: app.internalActiveUncoveredAtCursor, // null when only stable daughters are uncovered
+      rawLowerBound: app.internalDoseSeries.lower_bound, // engine flags Pb-206 → true (coarse)
+      nobleNA: app.internalDoseSeries.noble_gas_na.length,
+    };
+  });
+  record(
+    "M13 committed E(50) > 0; breakdown Σ == headline; stable daughter (Pb-206) does NOT trip the lower-bound banner",
+    recon.head > 0 &&
+      Math.abs(recon.sum - recon.head) / recon.head < 1e-9 &&
+      recon.activeUncovered === null &&
+      recon.rawLowerBound === true &&
+      recon.nobleNA === 0,
+    `head=${recon.head?.toExponential(3)} Sv, Σ=${recon.sum?.toExponential(3)}, activeUncovered=${JSON.stringify(recon.activeUncovered)}, rawLowerBound=${recon.rawLowerBound}, nobleNA=${recon.nobleNA}`,
+  );
+
+  // 2) ROUTE toggle (ingestion → inhalation) RE-FOLDS: registry stays 1, handle stable, the
+  //    committed value CHANGES (the §3 #1 rule on the new path — re-fold, not re-solve).
+  const beforeRoute = await page.evaluate(() => ({
+    handle: window.__APP__.handle,
+    size: window.__BRIDGE__.registry_size().size,
+    committed: window.__APP__.internalCommittedAtCursor,
+  }));
+  await page.click('[data-testid="internal-route-inhalation"]');
+  await page.waitForFunction(
+    "window.__APP__.internalDoseSeries && window.__APP__.internalDoseSeries.route === 'inhalation'",
+    null,
+    { timeout: 30_000 },
+  );
+  const afterRoute = await page.evaluate(() => ({
+    handle: window.__APP__.handle,
+    size: window.__BRIDGE__.registry_size().size,
+    committed: window.__APP__.internalCommittedAtCursor,
+  }));
+  record(
+    "M13 route toggle RE-FOLDS (registry 1, handle stable), committed changes — never a re-solve (#1/§3)",
+    afterRoute.size === 1 &&
+      beforeRoute.size === 1 &&
+      afterRoute.handle === beforeRoute.handle &&
+      afterRoute.committed > 0 &&
+      Math.abs(afterRoute.committed - beforeRoute.committed) / beforeRoute.committed > 1e-6,
+    `registry=${beforeRoute.size}→${afterRoute.size}, handleStable=${afterRoute.handle === beforeRoute.handle}, committed ${beforeRoute.committed?.toExponential(3)}→${afterRoute.committed?.toExponential(3)}`,
+  );
+
+  // 3) POPULATION toggle (public-adult → worker) RE-FOLDS too: registry stays 1, value changes,
+  //    and the response's ICRP publication flips (ICRP-72 → ICRP-68).
+  const beforePop = await page.evaluate(() => ({
+    size: window.__BRIDGE__.registry_size().size,
+    committed: window.__APP__.internalCommittedAtCursor,
+    pub: window.__APP__.internalDoseSeries.icrp_publication,
+  }));
+  await page.click('[data-testid="internal-population-worker"]');
+  await page.waitForFunction(
+    "window.__APP__.internalDoseSeries && window.__APP__.internalDoseSeries.population === 'worker'",
+    null,
+    { timeout: 30_000 },
+  );
+  const afterPop = await page.evaluate(() => ({
+    size: window.__BRIDGE__.registry_size().size,
+    committed: window.__APP__.internalCommittedAtCursor,
+    pub: window.__APP__.internalDoseSeries.icrp_publication,
+  }));
+  record(
+    "M13 population toggle RE-FOLDS (registry 1), committed changes, ICRP-72 → ICRP-68",
+    afterPop.size === 1 &&
+      beforePop.size === 1 &&
+      afterPop.committed > 0 &&
+      Math.abs(afterPop.committed - beforePop.committed) / beforePop.committed > 1e-6 &&
+      beforePop.pub.includes("ICRP-72") &&
+      afterPop.pub.includes("ICRP-68"),
+    `registry=${beforePop.size}→${afterPop.size}, committed ${beforePop.committed?.toExponential(3)}→${afterPop.committed?.toExponential(3)}, pub ${beforePop.pub}→${afterPop.pub}`,
+  );
+
+  // 4) NO integrate/accumulate control on this panel — committed E(50) is a SCALAR Sv, not a rate,
+  //    so there is no exposure window to integrate (the LOCKED quantity semantics). Proxy: the
+  //    panel carries no numeric input (the external Dose panel's distance/exposure fields), and the
+  //    honesty block is present and names Po-210 (the mandatory under-estimate-direction caveat).
+  const semantics = await page.evaluate(() => {
+    const panel = document.querySelector('[data-testid="internal-dose"]');
+    const honesty = document.querySelector('[data-testid="internal-honesty"]');
+    return {
+      hasNumberInput: !!panel.querySelector('input[type="number"]'),
+      honestyPresent: !!honesty,
+      mentionsPo210: honesty ? /Po-210/.test(honesty.textContent) : false,
+      neverSummed: honesty ? /never/i.test(honesty.textContent) && /H\*\(10\)|external/i.test(honesty.textContent) : false,
+    };
+  });
+  record(
+    "M13 committed is a scalar Sv: no integrate control; honesty block present (Po-210 under-estimate + never-summed caveats)",
+    semantics.hasNumberInput === false && semantics.honestyPresent && semantics.mentionsPo210 && semantics.neverSummed,
+    `numberInput=${semantics.hasNumberInput}, honesty=${semantics.honestyPresent}, Po-210=${semantics.mentionsPo210}, neverSummed=${semantics.neverSummed}`,
+  );
+
+  // 5) LOWER BOUND (no-silent-error): add Zr-95 (off-roadmap → uncovered, and its Nb-95 progeny
+  //    too) → the result is flagged a LOWER BOUND with the uncovered nuclide(s) listed, NOT a
+  //    silent under-count. The loud banner renders and `lower_bound` is true.
+  await page.evaluate(async () => {
+    await window.__APP__.addEntry("Zr-95", 1e9, "Bq");
+  });
+  await page.waitForFunction(
+    "window.__APP__.status === 'solved' && window.__APP__.internalDoseSeries && " +
+      "window.__APP__.internalDoseSeries.lower_bound === true",
+    null,
+    { timeout: 30_000 },
+  );
+  const lb = await page.evaluate(() => {
+    const app = window.__APP__;
+    const banner = document.querySelector('[data-testid="internal-lowerbound"]');
+    const au = app.internalActiveUncoveredAtCursor;
+    return {
+      rawLowerBound: app.internalDoseSeries.lower_bound,
+      activeUncovered: au ? au.nuclides : null,
+      share: au ? au.share : null,
+      bannerPresent: !!banner,
+      bannerNamesZr: banner ? /Zr-95/.test(banner.textContent) : false,
+    };
+  });
+  record(
+    "M13 ACTIVE uncovered nuclide (Zr-95) → LOUD lower-bound banner with the gap listed (§11), not a silent under-count",
+    lb.rawLowerBound === true &&
+      lb.activeUncovered !== null &&
+      lb.activeUncovered.includes("Zr-95") &&
+      lb.bannerPresent &&
+      lb.bannerNamesZr &&
+      lb.share > 0,
+    `rawLowerBound=${lb.rawLowerBound}, activeUncovered=[${lb.activeUncovered?.join(", ")}], banner=${lb.bannerPresent}, namesZr=${lb.bannerNamesZr}, share=${(lb.share * 100)?.toFixed(1)}%`,
+  );
+
+  // 6) The CANONICAL nuclide Cs-137 (the plan's "first nuclide a tester hits"): its Ba-137m
+  //    daughter (2.6 min, uncovered) sits in secular equilibrium → ~47% activity share → the
+  //    lower-bound banner fires. The honesty trap is that Ba-137m's committed INTAKE dose is
+  //    negligible despite the high activity share, so the banner MUST carry the activity≠dose
+  //    caveat (the inverse wrong-but-quiet hazard, §11). Assert both render — Cs-137 itself is
+  //    covered, so the committed value is still > 0.
+  await page.evaluate(async () => {
+    const app = window.__APP__;
+    await app.clear();
+    app.setInternalRoute("ingestion");
+    app.setInternalPopulation("public_adult");
+    await app.addEntry("Cs-137", 1e9, "Bq");
+  });
+  await page.waitForFunction(
+    "window.__APP__.status === 'solved' && window.__APP__.internalDoseSeries && " +
+      "window.__APP__.internalActiveUncoveredAtCursor",
+    null,
+    { timeout: 60_000 },
+  );
+  const cs = await page.evaluate(() => {
+    const app = window.__APP__;
+    const au = app.internalActiveUncoveredAtCursor;
+    const banner = document.querySelector('[data-testid="internal-lowerbound"]');
+    const note = document.querySelector('[data-testid="internal-lowerbound-note"]');
+    return {
+      committed: app.internalCommittedAtCursor,
+      activeUncovered: au ? au.nuclides : null,
+      share: au ? au.share : null,
+      bannerNamesBa: banner ? /Ba-137m/.test(banner.textContent) : false,
+      noteHasActivityNotDose: note ? /activity share is not dose share/i.test(note.textContent) : false,
+      noteNamesBa137m: note ? /Ba-137m/.test(note.textContent) : false,
+    };
+  });
+  record(
+    "M13 Cs-137 (canonical): Ba-137m equilibrium daughter flags lower bound, but the banner carries the activity≠dose caveat (inverse honesty hazard, §11)",
+    cs.committed > 0 &&
+      cs.activeUncovered !== null &&
+      cs.activeUncovered.includes("Ba-137m") &&
+      cs.share > 0.3 &&
+      cs.bannerNamesBa &&
+      cs.noteHasActivityNotDose &&
+      cs.noteNamesBa137m,
+    `committed=${cs.committed?.toExponential(3)} Sv, activeUncovered=[${cs.activeUncovered?.join(", ")}], share=${(cs.share * 100)?.toFixed(1)}%, bannerNamesBa=${cs.bannerNamesBa}, caveat=${cs.noteHasActivityNotDose}, noteNamesBa=${cs.noteNamesBa137m}`,
+  );
+
+  return { ok: checks.every((c) => c.pass), checks };
+}
+
 let exitCode = 1;
 let browser;
 let server;
@@ -2314,6 +2530,7 @@ try {
   let m6g = { ok: false, checks: [] };
   let m6h = { ok: false, checks: [] };
   let m7 = { ok: false, checks: [] };
+  let m13 = { ok: false, checks: [] };
   if (m6aOk) {
     m6b = await runM6b(page);
     if (m6b.ok) {
@@ -2330,8 +2547,13 @@ try {
                 m6h = await runM6h(page);
                 if (m6h.ok) {
                   m7 = await runM7(page);
+                  if (m7.ok) {
+                    m13 = await runM13(page);
+                  } else {
+                    console.log("[gate] skipping M13 — M7 checks failed");
+                  }
                 } else {
-                  console.log("[gate] skipping M7 — M6h checks failed");
+                  console.log("[gate] skipping M7/M13 — M6h checks failed");
                 }
               } else {
                 console.log("[gate] skipping M6h/M7 — M6g checks failed");
@@ -2395,12 +2617,19 @@ try {
     console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
   }
 
+  console.log("\n===== M13 internal / committed dose =====");
+  for (const c of m13.checks) {
+    console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
+  }
+
   exitCode =
-    m6aOk && m6b.ok && m6c.ok && m6d.ok && m6e.ok && m6f.ok && m6g.ok && m6h.ok && m7.ok ? 0 : 1;
+    m6aOk && m6b.ok && m6c.ok && m6d.ok && m6e.ok && m6f.ok && m6g.ok && m6h.ok && m7.ok && m13.ok
+      ? 0
+      : 1;
   console.log(
     exitCode === 0
-      ? "\n✅ M7 PASS (real browser): boot + inventory + curves + time + chain + dose + shield + honesty/round-trip + sources/neutron + spent-fuel/decay-heat"
-      : "\n❌ M7 FAIL (real browser)",
+      ? "\n✅ M13 PASS (real browser): boot + inventory + curves + time + chain + dose + shield + honesty/round-trip + sources/neutron + spent-fuel/decay-heat + internal/committed dose"
+      : "\n❌ M13 FAIL (real browser)",
   );
 } catch (err) {
   console.error("Driver error:", err);

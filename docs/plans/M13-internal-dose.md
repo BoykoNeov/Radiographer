@@ -1,7 +1,7 @@
 # M13 — Internal / committed dose (ICRP dose coefficients, Sv/Bq)
 
-**Status:** in progress 🚧 — **data layer + engine + bridge + all particulate batches + gas/vapour
-(schema v2) landed; UI pending.** Done so far: ICRP-119 vendored + PROVENANCE;
+**Status:** ✅ **COMPLETE** — data layer + engine + bridge + all particulate batches + gas/vapour
+(schema v2) + **UI panel (step 8)** all landed; dev + built gates green. Done so far: ICRP-119 vendored + PROVENANCE;
 `build_internal_dose.py` (both populations) with the cross-table transcription checks enforced at
 build time (ingestion **equal-f1⇒equal-e** + `DIFFERING_F1_INGESTION` exceptions; inhalation
 worker-1µm↔public-1µm per shipped type; gas/vapour `_validate_gas_vapour`); `engine/internal_dose.py`
@@ -280,7 +280,44 @@ as `dose()` minus `distance_m`, so the JS cursor/stacked-bar plumbing reuses cle
    nearly re-ran the Po-210 trap — an earlier draft added iodine particulate-F and would have
    defaulted to vapour while Annex E says iodine-particulate = F; pulling back to vapour-only (the
    locked scope) removed the conflict.
-8. UI panel + honesty block; dev + built gate green. **The honesty block MUST surface these
+8. ✅ **UI panel + honesty block DONE** (commit pending; dev + built gates green). New
+   `web/src/lib/InternalDose.svelte` (mounted in `App.svelte` after the external Dose/Shield
+   panels). Mirrors `DecayHeat.svelte` (scalar-series, distance/quantity-free) + `gammaLinesAtCursor`
+   (cursor breakdown). Bridge `InternalDoseOk` + `internal_dose()` client (bridge.ts); store
+   `internalRoute`/`internalPopulation` (**EPHEMERAL** — not serialized, like the curve axis; the
+   panel labels the active scenario) + `recomputeInternalDose()` (recompute on solve + source-age
+   + route + population, NEVER the external-dose inputs) + cursor getters
+   (`internalCommittedAtCursor`, `internalBreakdownAtCursor`, `internalActiveUncoveredAtCursor`).
+   Wired into `solve()` success + `setReferenceTimeS()`; cleared in `clearChain` (covers the
+   empty/failed-solve branches). Schema-v2 `internal_dose` JSON rebuilt into the web runtime zip
+   (`build-archive.mjs --force`). Gate scene `runM13` (6 checks): committed E(50) > 0 +
+   breakdown Σ == headline (interp ∘ matvec reconciliation); route + population toggles RE-FOLD
+   (registry stays 1 — never a re-solve, §3); committed is a scalar (no integrate control) +
+   honesty block present; active-uncovered → loud lower-bound banner; Cs-137 inverse-hazard case
+   (see below). **Cross-validation bonus:** the gate's Cs-137 1 GBq ingestion folds to exactly
+   13.0 Sv = 1e9 Bq × 1.3e-8 Sv/Bq — the canonical ICRP-72 coefficient, confirming the fold.
+
+   **Two UI-layer honesty decisions made at this step (the panel intentionally diverges from the
+   engine's raw `series.lower_bound`):**
+   - **Stable-daughter refinement.** The engine flags EVERY uncovered closure nuclide (it has no
+     activity at construction), so a stable end-product (Pb-206 after Po-210, Ba-137 after Cs-137)
+     sets `lower_bound=true` even though a stable nuclide has zero activity ⇒ zero possible
+     committed dose. Left raw, the loud banner would fire on essentially every chain (all end
+     stable) — meaningless noise. The panel drives the banner off
+     `internalActiveUncoveredAtCursor` (uncovered nuclides with NONZERO activity at the cursor),
+     which is exactly the plan's stated `uncovered` definition ("nonzero activity but no
+     coefficient"). A future session seeing `series.lower_bound===true` against a quiet UI banner
+     should NOT log it as a bug — the divergence is deliberate.
+   - **Activity-share ≠ dose-share (the inverse wrong-but-quiet hazard, advisor-caught on the
+     canonical nuclide).** On plain **Cs-137**, the Ba-137m daughter (2.6 min, uncovered) sits in
+     secular equilibrium → ~49% activity share → the loud banner fires — yet Ba-137m's committed
+     *intake* dose is negligible (it decays before uptake). There is no dose-share available for an
+     uncovered nuclide (that's the gap), so the banner keeps the (technically-correct) lower-bound
+     flag but a mandatory muted caveat states activity share is NOT dose share and that short-lived
+     equilibrium progeny (Ba-137m) contribute negligibly while longer-lived omissions (Y-90, Nb-95)
+     matter. A dedicated Cs-137 gate scene asserts both the banner and the caveat render.
+
+   **The honesty block MUST surface these
    default-choice caveats (the engine silently folds ONE form/type — the "wrong-but-quiet" §11
    hazard):**
    - **Co-60** default Type M; oxide is Type S, ~2–3× higher.

@@ -104,6 +104,31 @@ export const GEOMETRY_OPTIONS: ReadonlyArray<{ value: string; label: string }> =
  *  conservative, highest-E ICRP-116 geometry). See HANDOFF_PLAN §13, M6f-dose.md #4. */
 export const DEFAULT_GEOMETRY = "AP";
 
+// -- internal / committed dose (M13 §M13) ---------------------------------------
+// The intake pathway: committed E(50) = Σ e_n[Sv/Bq]·A_n(t). Two routes × two reference
+// populations are user-selectable (LOCKED scope, docs/plans/M13-internal-dose.md). Both
+// are EPHEMERAL view state (not serialized) — like the curve axis, a re-pick is cheap and
+// avoids a serializer bump; the panel labels the active scenario so a loaded state is never
+// silently a different route/population than when it was saved.
+export type InternalRoute = "ingestion" | "inhalation";
+export type InternalPopulation = "public_adult" | "worker";
+
+export const INTERNAL_ROUTE_OPTIONS: ReadonlyArray<{ value: InternalRoute; label: string; verb: string }> = [
+  { value: "ingestion", label: "Ingestion", verb: "ingested" },
+  { value: "inhalation", label: "Inhalation", verb: "inhaled" },
+];
+
+/** Reference person + AMAD per population (ICRP-72 public-adult 1 µm / ICRP-68 worker 5 µm). */
+export const INTERNAL_POPULATION_OPTIONS: ReadonlyArray<{ value: InternalPopulation; label: string }> = [
+  { value: "public_adult", label: "Public (adult)" },
+  { value: "worker", label: "Worker" },
+];
+
+/** Past-tense intake verb for the headline label ("if {ingested|inhaled} at t = …"). */
+export function internalRouteVerb(route: InternalRoute): string {
+  return INTERNAL_ROUTE_OPTIONS.find((r) => r.value === route)?.verb ?? route;
+}
+
 /** Human label for the γ/n quantity (for axis/readout labels, §12). γ/n render in
  *  Sv; β skin dose is a separate Gy / Hp(0.07) quantity (never one of these). */
 export function doseQuantityLabel(quantity: DoseQuantity, geometry: string): string {

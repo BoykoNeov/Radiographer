@@ -28,6 +28,7 @@ import {
   type DoseThicknessOk,
   type EvaluateOk,
   type Handle,
+  type InternalDoseOk,
   type MaterialInfo,
   type ShieldSpec,
   type SolveEntry,
@@ -51,6 +52,8 @@ import {
   DEFAULT_UNIT,
   type Axis,
   type DoseQuantity,
+  type InternalPopulation,
+  type InternalRoute,
   type InventoryEntry,
   type Precision,
   type ShieldLayer,
@@ -273,6 +276,25 @@ export class AppState {
   decayHeatSeries = $state<DecayHeatOk | null>(null);
   /** Loud decay-heat-path error (#3) — surfaced, never a silent blank readout. */
   decayHeatError = $state<string>("");
+
+  // -- internal / committed dose (M13 §M13) ---------------------------------
+  // The INTAKE pathway: committed E(50) = Σ e_n[Sv/Bq]·A_n(t), the §3 solve-once/evaluate-many
+  // way (one matvec of the fixed per-nuclide coefficients against the activity series). DISTANCE-,
+  // geometry-, and shield-FREE (committed dose folds biokinetics, not a point field), so it
+  // recomputes on solve + source-age + route + population ONLY — like decay heat, plus the two
+  // route/population selectors. The result is a committed SCALAR Sv at each intake-time (NOT a
+  // rate), so the cursor INDEXES `committed_si` and there is NO integrate (per is null). Effective
+  // Sv but NEVER summed with external H*(10)/air-kerma (§6.4, §11). route/population are EPHEMERAL
+  // view state (not serialized) — a cheap re-pick, no serializer bump; the panel labels the active
+  // scenario. See docs/plans/M13-internal-dose.md.
+  /** Intake route — ingestion (default) | inhalation. A re-fold, never a re-solve (#1). */
+  internalRoute = $state<InternalRoute>("ingestion");
+  /** Reference population — public-adult (ICRP-72, 1 µm, default) | worker (ICRP-68, 5 µm). */
+  internalPopulation = $state<InternalPopulation>("public_adult");
+  /** Committed E(50) series (Sv) over `curveX`; null when empty/stale/failed/all-stable. */
+  internalDoseSeries = $state<InternalDoseOk | null>(null);
+  /** Loud internal-dose-path error (#3) — surfaced, never a silent blank readout. */
+  internalDoseError = $state<string>("");
 
   // -- spent-fuel catalog (fetched once after boot, M7c §8) -----------------
   // Prebuilt spent-fuel sources whose inventory comes from validated `data/spent_fuel`
@@ -685,6 +707,85 @@ export class AppState {
     return out;
   }
 
+  // -- internal / committed dose at the cursor (M13; pure client-side, #1/§3) ----
+  // The headline reads the AUTHORITATIVE `committed_si` series at the cursor (survives a null
+  // activity series); the breakdown folds `per_nuclide_coeff·A_n(cursor)`. interp commutes with
+  // the linear matvec (the series IS that matvec over the same activity grid), so the breakdown
+  // total reconciles with the headline to float — exactly like gammaLinesAtCursor ↔ gammaRateAtCursor.
+
+  /** Committed E(50) (Sv, a SCALAR — not a rate) at the cursor; null when no series. */
+  get internalCommittedAtCursor(): number | null {
+    const s = this.internalDoseSeries;
+    return s ? interpAt(this.curveX, s.committed_si, this.cursorOffsetS) : null;
+  }
+
+  /**
+   * Per-nuclide committed-dose breakdown at the cursor (M13): each contributing nuclide's
+   * committed Sv = `e_n·A_n(cursor)`, folded client-side off `per_nuclide_coeff` and the
+   * activity at the cursor (zero re-fetch on scrub, §3). Rows carry the folded absorption
+   * type/form + f1 provenance (from `types_used`/`forms_used`/`f1_used`) so the panel shows
+   * WHICH coefficient was used. Sorted by descending contribution; `Σ committed_si` reconciles
+   * with `internalCommittedAtCursor`. Null when there is no series OR the per-nuclide activity
+   * is unavailable — the panel shows a note, never a fabricated/blank table (§11).
+   */
+  get internalBreakdownAtCursor(): {
+    rows: { nuclide: string; coeff: number; activity: number; committed_si: number; type: string | null; form: string | null; f1: number | null; frac: number }[];
+    total: number;
+  } | null {
+    const s = this.internalDoseSeries;
+    if (!s) return null;
+    const act = this.activityAtCursor;
+    if (!act) return null; // activity unavailable — caller shows a note, never a blank table
+    const rows = Object.entries(s.per_nuclide_coeff).map(([nuclide, coeff]) => {
+      const activity = act[nuclide] ?? 0;
+      return {
+        nuclide,
+        coeff,
+        activity,
+        committed_si: coeff * activity,
+        type: s.types_used[nuclide] ?? null, // inhalation F/M/S or vapour form
+        form: s.forms_used[nuclide] ?? null, // ingestion chemical form (H-3 HTO/OBT)
+        f1: s.f1_used[nuclide] ?? null, // ingestion gut-transfer fraction
+        frac: 0,
+      };
+    });
+    const total = rows.reduce((sum, r) => sum + r.committed_si, 0);
+    if (total > 0) for (const r of rows) r.frac = r.committed_si / total;
+    rows.sort((a, b) => b.committed_si - a.committed_si);
+    return { rows, total };
+  }
+
+  /**
+   * The uncovered nuclides that ACTUALLY CARRY ACTIVITY at the cursor, with their activity share
+   * (0..1) of the tracked inventory — the genuine curated-set gap that makes E(50) a lower bound.
+   *
+   * The engine's `series.lower_bound` flags EVERY uncovered closure nuclide, including STABLE
+   * end-products (Pb-206 at the end of the Po-210 chain, Ba-137 after Cs-137, …): a stable nuclide
+   * has zero activity ⇒ zero possible committed dose ⇒ it is NOT a real gap, just chain topology.
+   * The plan's `uncovered` is explicitly "tracked nuclides with NONZERO activity but no
+   * coefficient" (docs/plans/M13-internal-dose.md, Engine §) — the activity filter lives here,
+   * where the activity series exists. Without it the lower-bound banner would fire for essentially
+   * every chain (all end in a stable nuclide) and become meaningless noise.
+   *
+   * Null when there is no series, no uncovered nuclides, activity is unavailable, OR every
+   * uncovered nuclide is zero-activity (then the committed value is complete for this intake time).
+   */
+  get internalActiveUncoveredAtCursor(): { nuclides: string[]; share: number } | null {
+    const s = this.internalDoseSeries;
+    if (!s || s.uncovered.length === 0) return null;
+    const act = this.activityAtCursor;
+    if (!act) return null;
+    let total = 0;
+    for (const a of Object.values(act)) total += a;
+    const active = s.uncovered
+      .map((n) => ({ n, a: act[n] ?? 0 }))
+      .filter((x) => x.a > 0)
+      .sort((x, y) => y.a - x.a);
+    if (active.length === 0) return null; // all uncovered nuclides are stable / zero-activity
+    const uncoveredA = active.reduce((sum, x) => sum + x.a, 0);
+    return { nuclides: active.map((x) => x.n), share: total > 0 ? uncoveredA / total : 0 };
+  }
+
   // -- wiring ---------------------------------------------------------------
 
   /** Attach the engine client (after boot) and load the add-by-name nuclide list. */
@@ -823,6 +924,7 @@ export class AppState {
     this.recomputeDose(); // and the dose series at the shifted times (same offset, #1)
     this.recomputeChainActivity(); // and the DAG activity series (topology unchanged, #1)
     this.recomputeDecayHeat(); // and the decay-heat series at the shifted times (#1)
+    this.recomputeInternalDose(); // and the committed-dose series at the shifted intake-times (#1)
   }
 
   /**
@@ -892,6 +994,22 @@ export class AppState {
   setExposureS(s: number): void {
     if (!Number.isFinite(s) || s < 0) return;
     this.exposureS = s;
+  }
+
+  // -- internal-dose inputs (each RE-FOLDS the committed series, never re-solves; #1) ----
+  // Route/population change which fixed per-nuclide e_n vector is folded — a pure re-evaluate
+  // off the live handle (the gate asserts the registry stays 1 across a toggle), never a re-solve.
+
+  setInternalRoute(r: InternalRoute): void {
+    if (r === this.internalRoute) return;
+    this.internalRoute = r;
+    this.recomputeInternalDose();
+  }
+
+  setInternalPopulation(p: InternalPopulation): void {
+    if (p === this.internalPopulation) return;
+    this.internalPopulation = p;
+    this.recomputeInternalDose();
   }
 
   // -- shield inputs (each RE-EVALUATES the dose path through the shield; #1) -------
@@ -1043,6 +1161,7 @@ export class AppState {
     this.fetchChain(); // the DAG topology (time-independent → only here, M6e)
     this.recomputeChainActivity(); // and its activity series over `curveX` (after recomputeCurves)
     this.recomputeDecayHeat(); // and the decay-heat series over `curveX` (M7c; after recomputeCurves)
+    this.recomputeInternalDose(); // and the committed-dose series over `curveX` (M13; after recomputeCurves)
   }
 
   /**
@@ -1402,6 +1521,10 @@ export class AppState {
     // empty/failed-solve paths (clearChain is called in both) so a stale readout can't linger.
     this.decayHeatSeries = null;
     this.decayHeatError = "";
+    // Internal/committed dose (M13) is the same shape — cleared here so a stale committed-Sv
+    // readout can't survive a Clear or a failed re-solve (both call clearChain).
+    this.internalDoseSeries = null;
+    this.internalDoseError = "";
   }
 
   // -- decay heat (M7c §5) --------------------------------------------------
@@ -1430,6 +1553,40 @@ export class AppState {
       return;
     }
     this.decayHeatSeries = res;
+  }
+
+  // -- internal / committed dose (M13 §M13) ---------------------------------
+
+  /**
+   * Evaluate the committed E(50) series (Sv) over the curve grid for the current route +
+   * population — `Σ e_n·A_n(t)`, one matvec of the fixed per-nuclide coefficients against the
+   * inventory's activity. DISTANCE-, geometry-, and shield-FREE, so it recomputes on inventory +
+   * source-age + route + population only (NOT the external-dose inputs). The bridge builds the
+   * activity series internally from the same handle; we feed the IDENTICAL absolute-time grid the
+   * other recomputes use (`referenceTimeS + curveX`) so the cursor read reconciles 1:1 with the
+   * `chainActivity`-folded breakdown. Pure evaluate, NEVER a re-solve (#1; the gate asserts the
+   * registry stays at 1 across a route/population toggle). Loud on failure (#3): nulls the series
+   * + sets `internalDoseError`, never a silently blank readout.
+   */
+  private recomputeInternalDose(): void {
+    this.internalDoseError = "";
+    if (!this.client || !this.handle || this.curveX.length === 0) {
+      this.internalDoseSeries = null;
+      return;
+    }
+    const t0 = this.referenceTimeS;
+    const times = t0 > 0 ? this.curveX.map((x) => x + t0) : this.curveX.slice();
+    const res = this.client.internal_dose(this.handle, {
+      times_s: times,
+      route: this.internalRoute,
+      population: this.internalPopulation,
+    });
+    if (!res.ok) {
+      this.internalDoseSeries = null;
+      this.internalDoseError = `${res.error.type}: ${res.error.message}`;
+      return;
+    }
+    this.internalDoseSeries = res;
   }
 
   // -- persistence (M6b: inventory slice; later chunks extend the envelope) --

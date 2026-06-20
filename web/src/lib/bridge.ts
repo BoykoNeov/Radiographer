@@ -177,6 +177,45 @@ export interface DoseOk {
   neutron_transmission?: number;
 }
 
+/**
+ * Committed-effective-dose E(50) response (M13 §M13). The §3 "solve once, evaluate many"
+ * intake pathway: `committed_si[j] = Σ_n e_n[Sv/Bq]·A_n(t_j)` — a committed **scalar Sv at
+ * each intake-time** (NOT a rate; `per` is null, so the UI's integrate is disabled). No
+ * distance/geometry/shield — committed dose folds biokinetics, not a point field. Never
+ * summed with external H*(10)/air-kerma (§6.4, §11).
+ *
+ * `per_nuclide_coeff` (Sv/Bq) lets the client fold the cursor breakdown live off the activity
+ * series with no re-fetch (mirrors `dose_lines`' coeff_si). `types_used` carries the inhalation
+ * F/M/S-or-vapour-form per nuclide; `forms_used` the ingestion chemical form (H-3 HTO/OBT only);
+ * `f1_used` the gut-transfer fraction. `uncovered` (a curated-set gap) sets `lower_bound` loudly;
+ * `noble_gas_na` (no intake coefficient physically exists — submersion is a different quantity)
+ * does NOT.
+ */
+export interface InternalDoseOk {
+  quantity: "committed_effective_E50";
+  si_unit: "Sv";
+  per: null;
+  route: "ingestion" | "inhalation";
+  population: "public_adult" | "worker";
+  icrp_publication: string;
+  amad_um: number;
+  times_s: number[];
+  committed_si: number[];
+  covered: string[];
+  noble_gas_na: string[];
+  uncovered: string[];
+  /** Inhalation F/M/S or vapour-form token, per contributing nuclide. */
+  types_used: Record<string, string>;
+  /** Ingestion chemical form (H-3 HTO/OBT only), per contributing nuclide. */
+  forms_used: Record<string, string>;
+  /** Ingestion gut-transfer fraction f1, per contributing nuclide. */
+  f1_used: Record<string, number>;
+  /** Per-nuclide e(50) coefficient (Sv/Bq) — the client folds A_n(cursor) for the breakdown. */
+  per_nuclide_coeff: Record<string, number>;
+  lower_bound: boolean;
+  warnings: DoseWarning[];
+}
+
 /** One shield material for the picker. `has_buildup` is the γ-shield gate (a material without
  *  ANS-6.4.3 buildup raises in the γ engine; the UI filters the γ picker to it). `has_removal`
  *  (M10) is the neutron-shield gate: a hydrogenous material attenuates the neutron dose; one
@@ -300,6 +339,7 @@ export type ReleaseResponse = Result<ReleaseOk>;
 export type SpentFuelCatalogResponse = Result<SpentFuelCatalogOk>;
 export type FalloutCatalogResponse = Result<FalloutCatalogOk>;
 export type DecayHeatResponse = Result<DecayHeatOk>;
+export type InternalDoseResponse = Result<InternalDoseOk>;
 
 // --- the client --------------------------------------------------------------
 
@@ -393,6 +433,14 @@ export class BridgeClient {
    *  source-age); distance/quantity-free (heat is total locally-deposited power). */
   decay_heat(handle: Handle, req: { times_s: number[] }): DecayHeatResponse {
     return this.call<DecayHeatResponse>("decay_heat", handle, JSON.stringify(req));
+  }
+
+  /** The §M13 committed-effective-dose E(50) series (Sv) from intaking the whole inventory at
+   *  each grid time. Same solve-once/evaluate-many shape as `dose()` minus distance/geometry/
+   *  shield — `req`: {times_s, route:"ingestion"|"inhalation", population:"public_adult"|"worker"}.
+   *  Re-folds the fixed per-nuclide coefficients on a route/population change; NEVER re-solves. */
+  internal_dose(handle: Handle, req: { times_s: number[]; route: string; population: string }): InternalDoseResponse {
+    return this.call<InternalDoseResponse>("internal_dose", handle, JSON.stringify(req));
   }
 
   release(handle: Handle): ReleaseResponse {

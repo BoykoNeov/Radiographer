@@ -11,6 +11,7 @@
   import Chain from "./lib/Chain.svelte";
   import Dose from "./lib/Dose.svelte";
   import Shield from "./lib/Shield.svelte";
+  import InternalDose from "./lib/InternalDose.svelte";
   import DecayHeat from "./lib/DecayHeat.svelte";
   import Honesty from "./lib/Honesty.svelte";
 
@@ -98,6 +99,7 @@
     <Chain />
     <Dose />
     <Shield />
+    <InternalDose />
     <DecayHeat />
     <Honesty />
   {/if}
