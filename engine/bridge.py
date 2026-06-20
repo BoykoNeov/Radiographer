@@ -28,6 +28,7 @@ from engine.conversion import ConversionError
 from engine.decay_heat import DecayHeatError, DecayHeatModel
 from engine.dose import SCORING_FLOOR_MEV, DoseError, GammaDoseModel
 from engine.emissions import EmissionsError
+from engine.internal_dose import InternalDoseError, InternalDoseModel
 from engine.inventory import EngineError, SolvedInventory
 from engine.neutron_dose import NeutronDoseError, NeutronDoseModel
 from engine.neutron_source import NeutronSourceError
@@ -52,6 +53,7 @@ _EXPECTED_ERRORS = (
     BuildupError,
     ConversionError,
     EmissionsError,
+    InternalDoseError,
 )
 
 _REGISTRY: dict[str, SolvedInventory] = {}
@@ -564,6 +566,48 @@ def decay_heat(handle: str, request_json: str) -> str:
         activities = solved.evaluate(req["times_s"], axis="activity", unit="Bq")
         model = DecayHeatModel(solved.names)
         return _ok(model.heat_series(activities))
+    except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
+        return _err(exc)
+
+
+def internal_dose(handle: str, request_json: str) -> str:
+    """``{"times_s":[...], "route":"ingestion"|"inhalation",
+        "population":"public_adult"|"worker"}`` ->
+    ``{ok, quantity:"committed_effective_E50", si_unit:"Sv", per:null, route, population,
+       icrp_publication, amad_um, times_s, committed_si, covered, noble_gas_na, uncovered,
+       types_used, f1_used, per_nuclide_coeff, lower_bound, warnings}``.
+
+    The §M13 **internal / committed dose** E(50) from *intaking* the whole inventory at each
+    grid time, the §3 "solve once, evaluate many" way: one Bateman solve (the handle), one
+    ``InternalDoseModel`` (the fixed per-nuclide e(50) coefficients ``e_n`` for this
+    route/population), one matvec against the activity series ``Σ e_n·A_n(t)``. **No
+    ``distance_m``, no geometry, no shield** — committed dose folds biokinetics, not a point
+    field. The series is a committed **scalar Sv at each intake-time** (``per`` is null), NOT a
+    rate, so the UI's accumulate/integrate is disabled.
+
+    Inhalation uses each nuclide's ICRP-recommended ``default_type`` (the model's
+    ``absorption_type=None`` path — the v1 scope: non-default types are an explicit extension).
+    A *global* absorption type is intentionally NOT a request parameter: F/M/S is a per-compound
+    chemical-form property, not an inventory-wide one, so forcing one type across a chain is
+    physically incoherent (and would raise for a covered nuclide that lacks it, e.g. Ra-226 in a
+    U-238 chain is M-only). When the UI wants a toggle, the correct shape is a per-nuclide
+    ``{nuclide: type}`` map surfaced in the breakdown — not a global scalar here.
+
+    ``per_nuclide_coeff`` (Sv/Bq) + the activity series let the client build the cursor
+    breakdown live with no re-fetch (mirrors :func:`dose_lines`); ``f1_used`` / ``types_used``
+    carry the gut-transfer / lung-absorption provenance. ``uncovered`` (a curated-set gap) sets
+    ``lower_bound`` loudly; ``noble_gas_na`` (no intake coefficient exists) does NOT. The result
+    is effective Sv but **never** summed with external H*(10)/air-kerma (§6.4, §11)."""
+    try:
+        req = json.loads(request_json)
+        solved = _get(handle)
+        activities = solved.evaluate(req["times_s"], axis="activity", unit="Bq")
+        model = InternalDoseModel(
+            solved.names,
+            req.get("route", "ingestion"),
+            req.get("population", "public_adult"),
+        )
+        return _ok(model.committed_dose_series(activities))
     except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
         return _err(exc)
 

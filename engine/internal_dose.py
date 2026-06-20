@@ -201,6 +201,7 @@ class InternalDoseModel:
         self.icrp_publication = data.get("icrp_publication")
         coeffs: dict[str, float] = {}
         types_used: dict[str, str] = {}
+        f1_used: dict[str, float] = {}
         covered: list[str] = []
         noble_gas_na: list[str] = []
         uncovered: list[str] = []
@@ -210,6 +211,10 @@ class InternalDoseModel:
                 coeffs[n] = coefficient(n, route, population, absorption_type=absorption_type)
                 if route == "inhalation":
                     types_used[n] = absorption_type or rec["inhalation"]["default_type"]
+                else:  # ingestion — capture the f1 (gut transfer factor) provenance
+                    f1 = rec["ingestion"].get("f1")
+                    if f1 is not None:
+                        f1_used[n] = float(f1)
                 covered.append(n)
             elif _element(n) in NOBLE_GAS_ELEMENTS:
                 noble_gas_na.append(n)
@@ -217,6 +222,7 @@ class InternalDoseModel:
                 uncovered.append(n)
         self.coeff = coeffs
         self.types_used = types_used
+        self.f1_used = f1_used
         self.covered = covered
         self.noble_gas_na = noble_gas_na
         self.uncovered = uncovered
@@ -291,6 +297,10 @@ class InternalDoseModel:
             "noble_gas_na": list(self.noble_gas_na),
             "uncovered": list(self.uncovered),
             "types_used": dict(self.types_used),
+            "f1_used": dict(self.f1_used),
+            # Per-nuclide e_n (Sv/Bq) for the cursor breakdown — the client folds A_n(t) at the
+            # cursor (mirrors dose_lines' coeff_si), so the table is live on scrub with no re-fetch.
+            "per_nuclide_coeff": self.per_nuclide_coeff(),
             "lower_bound": bool(self.uncovered),
             "warnings": warnings,
         }

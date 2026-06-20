@@ -781,3 +781,70 @@ def test_no_false_raise_across_isotopes_and_times(iso):
             )
     finally:
         bridge.release(handle)
+
+
+# -- internal (committed) dose bridge (§M13) --------------------------------
+
+
+def test_internal_dose_round_trip_and_coverage_states():
+    """internal_dose folds Σ e_n·A_n(t) over the grid: a committed scalar Sv (NOT a rate),
+    with the three coverage states surfaced. Pu-239 (covered), Kr-85 (noble-gas N/A), Cs-137
+    (uncovered → lower bound). per_nuclide_coeff + f1_used carry the cursor/provenance source."""
+    spec = {
+        "entries": [
+            {"name": "Pu-239", "quantity": 1.0e6, "unit": "Bq"},
+            {"name": "Kr-85", "quantity": 1.0e9, "unit": "Bq"},
+            {"name": "Cs-137", "quantity": 1.0e9, "unit": "Bq"},
+        ]
+    }
+    solved = json.loads(bridge.solve(json.dumps(spec)))
+    assert solved["ok"] is True
+    handle = solved["handle"]
+    try:
+        req = {"times_s": [0.0, 1.0e7], "route": "ingestion", "population": "worker"}
+        res = json.loads(bridge.internal_dose(handle, json.dumps(req)))
+        assert res["ok"] is True
+        assert res["quantity"] == "committed_effective_E50"
+        assert res["si_unit"] == "Sv"
+        assert res["per"] is None  # committed scalar — integrate disabled
+        assert "Pu-239" in res["covered"]
+        # Kr-85 (added) plus any noble gas in the Pu-239 chain (e.g. Rn-219) are all N/A.
+        assert "Kr-85" in res["noble_gas_na"]
+        assert "Cs-137" in res["uncovered"]
+        assert res["lower_bound"] is True  # set by uncovered, NOT noble gas
+        # fold reconciles: e(Pu-239 ingestion worker)=2.5e-07 × 1e6 Bq at t=0
+        assert res["per_nuclide_coeff"]["Pu-239"] == pytest.approx(2.5e-07)
+        assert res["committed_si"][0] == pytest.approx(2.5e-07 * 1.0e6, rel=1e-9)
+        assert res["f1_used"]["Pu-239"] == pytest.approx(5e-04)
+    finally:
+        bridge.release(handle)
+
+
+def test_internal_dose_inhalation_uses_per_nuclide_default_type():
+    """Inhalation folds each nuclide's ICRP-recommended default_type (v1: no global override
+    parameter — F/M/S is per-compound). U-238 worker inhalation defaults to Type M (1.6e-06),
+    reported in types_used so the provenance is one source for the UI."""
+    solved = json.loads(bridge.solve(json.dumps({"nuclides": {"U-238": 1.0e6}, "unit": "Bq"})))
+    handle = solved["handle"]
+    try:
+        req = {"times_s": [0.0], "route": "inhalation", "population": "worker"}
+        m = json.loads(bridge.internal_dose(handle, json.dumps(req)))
+        assert m["ok"] is True
+        assert m["types_used"]["U-238"] == "M"
+        assert m["per_nuclide_coeff"]["U-238"] == pytest.approx(1.6e-06)
+    finally:
+        bridge.release(handle)
+
+
+def test_internal_dose_unknown_route_is_loud_not_swallowed():
+    solved = json.loads(bridge.solve(json.dumps({"nuclides": {"Pu-239": 1.0e6}, "unit": "Bq"})))
+    handle = solved["handle"]
+    try:
+        res = json.loads(
+            bridge.internal_dose(handle, json.dumps({"times_s": [0.0], "route": "dermal"}))
+        )
+        assert res["ok"] is False
+        assert res["error"]["type"] == "InternalDoseError"
+        assert res["error"]["traceback"] is None  # expected domain error, no traceback
+    finally:
+        bridge.release(handle)
