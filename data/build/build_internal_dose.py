@@ -60,9 +60,10 @@ DATA_DIR = Path(__file__).resolve().parents[1]  # .../data
 OUT_DIR = DATA_DIR / "internal_dose"
 
 # Source-of-record: e(50) in Sv/Bq read from ICRP-119 (PDF pages are printed-page + 2).
-# Each inhalation entry ships ALL tabulated F/M/S types + a default_type (ICRP-recommended
-# absorption type for unspecified chemical form — Type M for these actinide oxides/hydroxides;
-# also the commonly-cited value). Ingestion ships e + the f1 used.
+# Each inhalation entry ships its tabulated types + a default_type = the ICRP-119 Annex E
+# (Table E.1) "unspecified compounds" catch-all per element (read, never value/memory-picked):
+# the actinide oxides/hydroxides are Type M, Polonium is Type F (M13 re-verify correction).
+# Ingestion ships e + the f1 used.
 
 # WORKER — ICRP-68, Annex A / Table A.1, 5 µm AMAD inhalation (occupational default).
 WORKER = {
@@ -72,8 +73,12 @@ WORKER = {
     "amad_um": 5.0,
     "coefficients": {
         # Po-210  (printed p.52): ingestion f1 0.1; inhalation 5µm F/M
+        # default_type CORRECTED M -> F (M13 non-actinide batch): ICRP-119 Annex E (Table E.1)
+        # lists Polonium "Unspecified compounds" = Type F (f1 0.1) — the LOCKED catch-all rule —
+        # while the original micro-slice chose M as "commonly-cited". A re-verify against Table E.1
+        # caught the rule violation; switched to F (folds 7.1E-07 not 2.2E-06). See PROVENANCE.md.
         "Po-210": {"ingestion": {"e_Sv_Bq": 2.4e-07, "f1": 0.1},
-                   "inhalation": {"default_type": "M", "types": {"F": 7.1e-07, "M": 2.2e-06}}},
+                   "inhalation": {"default_type": "F", "types": {"F": 7.1e-07, "M": 2.2e-06}}},
         # Ra-226  (printed p.53): ingestion f1 0.2; inhalation 5µm M only
         "Ra-226": {"ingestion": {"e_Sv_Bq": 2.8e-07, "f1": 0.2},
                    "inhalation": {"default_type": "M", "types": {"M": 2.2e-06}}},
@@ -161,6 +166,28 @@ WORKER = {
                    "inhalation": {"default_type": "M", "types": {"M": 2.7e-05}}},
         "Cm-246": {"ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
                    "inhalation": {"default_type": "M", "types": {"M": 2.7e-05}}},
+
+        # ============ M13 NON-ACTINIDE EXPANSION (default type only, 5 µm) ============
+        # Fission/activation products outside the actinides. Ship the ICRP default type ONLY
+        # (Annex E "unspecified compounds" catch-all per element: Pb F, Sb F, Sn F, Pm M, Eu M),
+        # same rationale as the fission-product batch — v1 folds only the default, so non-default
+        # types would be shipped-but-never-folded unvalidated numbers. Worker Annex A, 5 µm shipped;
+        # ingestion = the f1-matched public row (all six share worker↔public f1 → equal-e check).
+        # The shipped 5 µm value was 300-DPI crop-read TWICE (it is the one column the build's
+        # inhalation cross-check never touches — the U-238 soft spot; see PROVENANCE.md).
+        # Pb-210 (printed p.51), Sb-125 (p.38), Sn-126 (p.37), Pm-147 (p.42), Eu-154/155 (p.43).
+        "Pb-210": {"ingestion": {"e_Sv_Bq": 6.8e-07, "f1": 0.2},
+                   "inhalation": {"default_type": "F", "types": {"F": 1.1e-06}}},
+        "Sb-125": {"ingestion": {"e_Sv_Bq": 1.1e-09, "f1": 0.1},
+                   "inhalation": {"default_type": "F", "types": {"F": 1.7e-09}}},
+        "Sn-126": {"ingestion": {"e_Sv_Bq": 4.7e-09, "f1": 0.02},
+                   "inhalation": {"default_type": "F", "types": {"F": 1.4e-08}}},
+        "Pm-147": {"ingestion": {"e_Sv_Bq": 2.6e-10, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 3.5e-09}}},
+        "Eu-154": {"ingestion": {"e_Sv_Bq": 2.0e-09, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 3.5e-08}}},
+        "Eu-155": {"ingestion": {"e_Sv_Bq": 3.2e-10, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 4.7e-09}}},
     },
 }
 
@@ -176,8 +203,9 @@ PUBLIC_ADULT = {
     # — are DROPPED here, to be re-read via 300-DPI crops in the later UI absorption-type batch.
     "coefficients": {
         # Po-210  (Annex F printed p.84 / Annex G printed p.114): ingestion f1 0.5
+        # default_type F (corrected from M; Annex E catch-all — see worker block). Folds 6.0E-07.
         "Po-210": {"ingestion": {"e_Sv_Bq": 1.2e-06, "f1": 0.5},
-                   "inhalation": {"default_type": "M",
+                   "inhalation": {"default_type": "F",
                                   "types": {"F": 6.0e-07, "M": 3.3e-06}}},   # dropped S (no worker S)
         "Ra-226": {"ingestion": {"e_Sv_Bq": 2.8e-07, "f1": 0.2},
                    "inhalation": {"default_type": "M",
@@ -255,6 +283,25 @@ PUBLIC_ADULT = {
                    "inhalation": {"default_type": "M", "types": {"M": 4.2e-05}}},
         "Cm-246": {"ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
                    "inhalation": {"default_type": "M", "types": {"M": 4.2e-05}}},
+
+        # ============ M13 NON-ACTINIDE EXPANSION (default type only, 1 µm adult) ============
+        # Annex F (ingestion, Adult column + the adult f1) + Annex G (inhalation, 1 µm Adult column,
+        # default type only — crop-read; cross-checked vs the worker 1 µm column in _WORKER_1UM).
+        # Pb-210's adult ingestion f1 is 0.2 (Annex F footnote ††, NOT the 0.4 child column) →
+        # matches worker 0.2, so the equal-f1 check applies. Pb-210 (Annex F p.83 / Annex G p.113),
+        # Sb-125 (p.76/99), Sn-126 (p.76/99), Pm-147 (p.79/105), Eu-154/155 (p.79/105).
+        "Pb-210": {"ingestion": {"e_Sv_Bq": 6.9e-07, "f1": 0.2},
+                   "inhalation": {"default_type": "F", "types": {"F": 9.0e-07}}},
+        "Sb-125": {"ingestion": {"e_Sv_Bq": 1.1e-09, "f1": 0.1},
+                   "inhalation": {"default_type": "F", "types": {"F": 1.4e-09}}},
+        "Sn-126": {"ingestion": {"e_Sv_Bq": 4.7e-09, "f1": 0.02},
+                   "inhalation": {"default_type": "F", "types": {"F": 1.1e-08}}},
+        "Pm-147": {"ingestion": {"e_Sv_Bq": 2.6e-10, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 5.0e-09}}},
+        "Eu-154": {"ingestion": {"e_Sv_Bq": 2.0e-09, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 5.3e-08}}},
+        "Eu-155": {"ingestion": {"e_Sv_Bq": 3.2e-10, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 6.9e-09}}},
     },
 }
 
@@ -293,6 +340,13 @@ _WORKER_1UM = {
     "Cm-244": {"M": 2.5e-05},
     "Cm-245": {"M": 4.0e-05},
     "Cm-246": {"M": 4.0e-05},
+    # M13 non-actinide expansion — worker 1 µm, DEFAULT type only (public ships default only):
+    "Pb-210": {"F": 8.9e-07},
+    "Sb-125": {"F": 1.4e-09},
+    "Sn-126": {"F": 1.1e-08},
+    "Pm-147": {"M": 4.7e-09},
+    "Eu-154": {"M": 5.0e-08},
+    "Eu-155": {"M": 6.5e-09},
 }
 
 #: Nuclides whose worker (Annex A) and public-adult (Annex F) ingestion **f1 differ**, so the

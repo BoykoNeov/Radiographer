@@ -7,12 +7,13 @@ build time (ingestion **equal-f1⇒equal-e** + `DIFFERING_F1_INGESTION` exceptio
 worker-1µm↔public-1µm per shipped type); `engine/internal_dose.py` (loader + `InternalDoseModel`,
 three coverage states, f1/per-nuclide-coeff provenance); **bridge `internal_dose()`**;
 `tests/test_internal_dose.py` + bridge tests, green; `DATA_DIRS` + data README registered.
-**Coverage = 27 nuclides:** 5 micro-slice actinides (all F/M/S) + 8 fission/activation products
-(default type only) + **actinide-expansion core (committed): U-234/235/236, Np-237,
-Pu-238/240/241/242, Am-243, Cm-242/243/244/245/246** (all cross-checkable tabulated types). A
-pre-existing U-238 worker-5µm-S transcription error was found and fixed in this batch. **In
-progress:** Th/Pa (resume point — see step 5), then the non-actinide expansion, then the
-schema-v2 gas/vapour batch (H-3, I-129/I-131).
+**Coverage = 33 nuclides:** 5 micro-slice actinides (all F/M/S) + 8 fission/activation products
+(default type only) + **actinide-expansion core: U-234/235/236, Np-237, Pu-238/240/241/242,
+Am-243, Cm-242/243/244/245/246** (all cross-checkable tabulated types) + **non-actinide expansion:
+Pb-210, Sb-125, Sn-126, Pm-147, Eu-154/155** (default type only). A pre-existing U-238 worker-5µm-S
+transcription error was found and fixed; the non-actinide batch corrected the **Po-210 default type
+M → F** (Annex E catch-all). **Still open:** Th/Pa (actinide remainder), then the schema-v2
+gas/vapour batch (H-3, I-129/I-131).
 **Milestone:** post-v1 extension — the single biggest unbuilt capability listed *Future* in
 HANDOFF_PLAN §2 ("Internal / committed dose (ICRP dose coefficients in Sv/Bq)") and §11. The
 tool has been **external-dose only**; this adds the **intake** pathway. User-chosen next batch
@@ -249,10 +250,14 @@ as `dose()` minus `distance_m`, so the JS cursor/stacked-bar plumbing reuses cle
        **Annex G** inhalation adult — already on PDF p.117 (full-page read, must crop); (d) note
        the **thorium dual-f1** (Th-228 lists ingestion f1 0.0005 *and* 0.0002 — pick the one
        matching public Annex F, add to `DIFFERING_F1_INGESTION` if it differs worker↔public).
-     - ⏳ **Then the non-actinide expansion** (all on earlier worker/public pages, default-only or
-       cross-checkable types): Pb-210, Sb-125, Sn-126, Pm-147, Eu-154/155. Plus **re-verify the
-       remaining existing worker 5 µm values** not yet re-checked: Po-210 (M default + F), and the
-       8 fission-product 5 µm defaults (Co-60…Ce-144).
+     - ✅ **Non-actinide expansion DONE (33 nuclides total):** Pb-210, Sb-125, Sn-126, Pm-147,
+       Eu-154/155 — **default type only** (Annex E: Pb F, Sb F, Sn F, Pm M, Eu M), both
+       populations, worker 5 µm crop-read **twice**. All build cross-checks pass (every nuclide
+       shares worker↔public ingestion f1 → equal-e holds; Pb-210 adult f1 = 0.2 via Annex F
+       footnote). **Re-verified** the 8 fission-product + Po-210 worker 5 µm defaults — all
+       transcription-correct. **Po-210 `default_type` corrected M → F** (ICRP-119 Annex E lists
+       Polonium "Unspecified compounds" = Type F; the micro-slice's M violated the LOCKED catch-all
+       rule — folds 7.1E-07 worker / 6.0E-07 public now, ~3× lower; user decision 2026-06-20).
 6. ✅ Bridge `internal_dose()` + bridge tests (route/population; default-type fold; no global
    absorption_type — F/M/S is per-compound, out of v1 scope).
 7. **Gases/vapours (deferred special-casing — needs a `schema_version` bump):** H-3 (OBT/HTO),

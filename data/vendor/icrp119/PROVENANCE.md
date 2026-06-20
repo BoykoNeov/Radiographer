@@ -61,6 +61,16 @@ Non-default capture is deferred to the type-toggle extension. (The micro-slice's
 of Po-210 S, Ra-226 F/S, Am-241 F/S, suspect Pu-239 F still stands.)
 
 **Errors these checks actually caught** (recorded for honesty):
+- **Po-210** `default_type` was **M**, but ICRP-119 **Annex E (Table E.1)** lists Polonium
+  "Unspecified compounds" = **Type F** (f1 0.1) — and the LOCKED rule is "default = the Annex E
+  catch-all". The original micro-slice chose M as the "commonly-cited" Po-210 inhalation value
+  (and many regulatory tables do cite Type M, ~3E-6); the **M13 non-actinide re-verify** caught
+  the rule violation and corrected it to **F**, so the folded committed inhalation dose is now
+  **7.1E-07** (worker) / **6.0E-07** (public), ~3× lower than the M value. Both F and M values
+  remain tabulated in the data; only which one is *folded* (the default) changed. This was NOT a
+  transcription error — the F/M values were always right — but a default-type-selection error
+  that the build's value cross-checks cannot catch (they validate every type, not the choice of
+  default); only re-reading Annex E does. (User decision, 2026-06-20: switch to F, rule-compliant.)
 - **Am-241** public-adult Type-M adult misread as `9.6E-05` (the *F*-row value) → corrected to
   **`4.2E-05`** via a 300-DPI crop (worker M 1 µm = 3.9E-05 confirms).
 - **U-238** worker 5 µm M corrected from a first-pass **1 µm** read (`2.6E-06`) to the 5 µm
@@ -85,23 +95,27 @@ a different quantity, not e(50), so they cannot validate the dose values).
 
 ## Coverage
 
-A **curated slice** (21 nuclides), extensible like spent-fuel's `GRID_POINTS`:
+A **curated slice** (33 nuclides), extensible like spent-fuel's `GRID_POINTS`:
 - **Actinide micro-slice** (all F/M/S): Po-210, Ra-226, U-238, Pu-239, Am-241.
 - **Fission/activation products** (default type only): Co-60, Se-79, Sr-90, Tc-99, Ru-106,
   Cs-134, Cs-137, Ce-144.
-- **Actinide expansion** (all *cross-checkable* tabulated types; 300-DPI crop-verified, in
-  progress): U-234/235/236, Np-237, Pu-238/240/241/242, Am-243, Cm-242/243/244/245/246. Per
-  element the worker (Annex A, ICRP-68) tabulates fewer absorption types than the public Annex G
-  (ICRP-72): worker **Np/Am/Cm = M only**, worker **Pu = M & S (no F)**. A public type without a
-  worker-1µm counterpart cannot be cross-checked, so it is **not shipped** — the shipped set is
-  "all types tabulated for *both* populations", which the build's per-type worker-1µm↔public
-  guard enforces. Still to do: **Th-228/230/232, Pa-231**, and the non-actinide expansion
-  (Pb-210, Sb-125, Sn-126, Pm-147, Eu-154/155).
+- **Actinide expansion** (all *cross-checkable* tabulated types; 300-DPI crop-verified):
+  U-234/235/236, Np-237, Pu-238/240/241/242, Am-243, Cm-242/243/244/245/246. Per element the
+  worker (Annex A, ICRP-68) tabulates fewer absorption types than the public Annex G (ICRP-72):
+  worker **Np/Am/Cm = M only**, worker **Pu = M & S (no F)**. A public type without a worker-1µm
+  counterpart cannot be cross-checked, so it is **not shipped** — the shipped set is "all types
+  tabulated for *both* populations", which the build's per-type worker-1µm↔public guard enforces.
+- **Non-actinide expansion** (default type only — Annex E: Pb F, Sb F, Sn F, Pm M, Eu M):
+  Pb-210, Sb-125, Sn-126, Pm-147, Eu-154/155. Worker 5 µm shipped value 300-DPI crop-read TWICE
+  (it is the one column the build never cross-checks — the U-238/Po-210 soft spot). All six share
+  worker↔public ingestion f1, so the equal-f1 check holds (Pb-210's adult f1 is 0.2 via the
+  Annex F footnote, NOT the 0.4 child column). This batch also re-verified the existing 8
+  fission-product + Po-210 worker 5 µm defaults (all correct) and corrected the Po-210 default
+  type (see "Errors caught").
 
 A tracked nuclide absent from the shipped set makes a committed-dose estimate a **LOWER BOUND**,
-surfaced loudly by the engine (§11). Still uncovered (future batches): the remaining must-cover
-particulates (Sb-125, Sn-126, Pm-147, Eu-154/155, Pb-210, …), the **actinide expansion**
-(Th/Pa/U/Np/Pu/Am/Cm isotopes), and the **gas/vapour special cases** (H-3 HTO/OBT, I-129/I-131
+surfaced loudly by the engine (§11). Still uncovered (future batches): **Th-228/230/232, Pa-231**
+(actinide expansion remainder), and the **gas/vapour special cases** (H-3 HTO/OBT, I-129/I-131
 elemental & methyl-iodide vapour) which need a chemical-form schema bump, not F/M/S types.
 Noble gases (Kr/Xe/Rn/…) have **no intake coefficient** (Annex C is submersion dose *rate*, a
 different quantity) — the engine treats them as a distinct "N/A" state, not a gap.

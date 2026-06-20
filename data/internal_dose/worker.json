@@ -14,7 +14,7 @@
         "f1": 0.1
       },
       "inhalation": {
-        "default_type": "M",
+        "default_type": "F",
         "types": {
           "F": 7.1e-07,
           "M": 2.2e-06
@@ -343,6 +343,78 @@
         "default_type": "M",
         "types": {
           "M": 2.7e-05
+        }
+      }
+    },
+    "Pb-210": {
+      "ingestion": {
+        "e_Sv_Bq": 6.8e-07,
+        "f1": 0.2
+      },
+      "inhalation": {
+        "default_type": "F",
+        "types": {
+          "F": 1.1e-06
+        }
+      }
+    },
+    "Sb-125": {
+      "ingestion": {
+        "e_Sv_Bq": 1.1e-09,
+        "f1": 0.1
+      },
+      "inhalation": {
+        "default_type": "F",
+        "types": {
+          "F": 1.7e-09
+        }
+      }
+    },
+    "Sn-126": {
+      "ingestion": {
+        "e_Sv_Bq": 4.7e-09,
+        "f1": 0.02
+      },
+      "inhalation": {
+        "default_type": "F",
+        "types": {
+          "F": 1.4e-08
+        }
+      }
+    },
+    "Pm-147": {
+      "ingestion": {
+        "e_Sv_Bq": 2.6e-10,
+        "f1": 0.0005
+      },
+      "inhalation": {
+        "default_type": "M",
+        "types": {
+          "M": 3.5e-09
+        }
+      }
+    },
+    "Eu-154": {
+      "ingestion": {
+        "e_Sv_Bq": 2e-09,
+        "f1": 0.0005
+      },
+      "inhalation": {
+        "default_type": "M",
+        "types": {
+          "M": 3.5e-08
+        }
+      }
+    },
+    "Eu-155": {
+      "ingestion": {
+        "e_Sv_Bq": 3.2e-10,
+        "f1": 0.0005
+      },
+      "inhalation": {
+        "default_type": "M",
+        "types": {
+          "M": 4.7e-09
         }
       }
     }

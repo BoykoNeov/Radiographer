@@ -42,24 +42,32 @@ FISSION_PRODUCTS = ("Co-60", "Se-79", "Sr-90", "Tc-99", "Ru-106", "Cs-134", "Cs-
 ACTINIDE_EXPANSION = ("U-234", "U-235", "U-236",
                       "Np-237", "Pu-238", "Pu-240", "Pu-241", "Pu-242",
                       "Am-243", "Cm-242", "Cm-243", "Cm-244", "Cm-245", "Cm-246")
-CURATED = MICRO_SLICE + FISSION_PRODUCTS + ACTINIDE_EXPANSION
+# M13 non-actinide expansion (default-type only, like the fission products). The shipped worker
+# 5 µm value was 300-DPI crop-read twice (the one column the build never cross-checks).
+NON_ACTINIDE = ("Pb-210", "Sb-125", "Sn-126", "Pm-147", "Eu-154", "Eu-155")
+CURATED = MICRO_SLICE + FISSION_PRODUCTS + ACTINIDE_EXPANSION + NON_ACTINIDE
 
 # ICRP default absorption type per element (ICRP-119 Annex E "unspecified compounds" catch-all)
 # — what the engine folds, so the anchor below is this type's value. NOT chosen by value/memory.
 DEFAULT_TYPE = {
-    "Po-210": "M", "Ra-226": "M", "U-238": "M", "Pu-239": "M", "Am-241": "M",
+    # Po-210 = F: Annex E Table E.1 Polonium "Unspecified compounds" is Type F (f1 0.1). The
+    # original micro-slice shipped M ("commonly-cited"); the M13 non-actinide re-verify caught the
+    # rule violation and corrected it to F (folds 7.1E-07 worker / 6.0E-07 public). See PROVENANCE.
+    "Po-210": "F", "Ra-226": "M", "U-238": "M", "Pu-239": "M", "Am-241": "M",
     "Co-60": "M", "Se-79": "F", "Sr-90": "F", "Tc-99": "F",
     "Ru-106": "F", "Cs-134": "F", "Cs-137": "F", "Ce-144": "M",
     "U-234": "M", "U-235": "M", "U-236": "M",  # uranium catch-all = Type M (same element as U-238)
     "Np-237": "M", "Pu-238": "M", "Pu-240": "M", "Pu-241": "M", "Pu-242": "M",
     "Am-243": "M", "Cm-242": "M", "Cm-243": "M", "Cm-244": "M", "Cm-245": "M", "Cm-246": "M",
+    # Non-actinides (Annex E: Pb F, Sb F, Sn F, Pm M, Eu M):
+    "Pb-210": "F", "Sb-125": "F", "Sn-126": "F", "Pm-147": "M", "Eu-154": "M", "Eu-155": "M",
 }
 
 # Validated ICRP-119 anchors (Sv/Bq). ingestion = e; inhalation = DEFAULT-type e.
 # worker = ICRP-68 Annex A (5 µm); public_adult = ICRP-72 Annexes F/G (1 µm, Adult).
 ANCHORS = {
     "worker": {
-        "Po-210": {"ingestion": 2.4e-07, "inhalation": 2.2e-06},  # M
+        "Po-210": {"ingestion": 2.4e-07, "inhalation": 7.1e-07},  # F (corrected from M; Annex E)
         "Ra-226": {"ingestion": 2.8e-07, "inhalation": 2.2e-06},  # M
         "U-238":  {"ingestion": 4.4e-08, "inhalation": 1.6e-06},  # M (5 µm)
         "Pu-239": {"ingestion": 2.5e-07, "inhalation": 3.2e-05},  # M
@@ -86,9 +94,16 @@ ANCHORS = {
         "Cm-244": {"ingestion": 1.2e-07, "inhalation": 1.7e-05},  # M (5 µm)
         "Cm-245": {"ingestion": 2.1e-07, "inhalation": 2.7e-05},  # M (5 µm)
         "Cm-246": {"ingestion": 2.1e-07, "inhalation": 2.7e-05},  # M (5 µm)
+        # Non-actinide expansion (default type, worker 5 µm):
+        "Pb-210": {"ingestion": 6.8e-07, "inhalation": 1.1e-06},  # F
+        "Sb-125": {"ingestion": 1.1e-09, "inhalation": 1.7e-09},  # F
+        "Sn-126": {"ingestion": 4.7e-09, "inhalation": 1.4e-08},  # F
+        "Pm-147": {"ingestion": 2.6e-10, "inhalation": 3.5e-09},  # M
+        "Eu-154": {"ingestion": 2.0e-09, "inhalation": 3.5e-08},  # M
+        "Eu-155": {"ingestion": 3.2e-10, "inhalation": 4.7e-09},  # M
     },
     "public_adult": {
-        "Po-210": {"ingestion": 1.2e-06, "inhalation": 3.3e-06},  # M
+        "Po-210": {"ingestion": 1.2e-06, "inhalation": 6.0e-07},  # F (corrected from M; Annex E)
         "Ra-226": {"ingestion": 2.8e-07, "inhalation": 3.5e-06},  # M
         "U-238":  {"ingestion": 4.5e-08, "inhalation": 2.9e-06},  # M
         "Pu-239": {"ingestion": 2.5e-07, "inhalation": 5.0e-05},  # M
@@ -115,6 +130,13 @@ ANCHORS = {
         "Cm-244": {"ingestion": 1.2e-07, "inhalation": 2.7e-05},  # M (1 µm adult)
         "Cm-245": {"ingestion": 2.1e-07, "inhalation": 4.2e-05},  # M (1 µm adult)
         "Cm-246": {"ingestion": 2.1e-07, "inhalation": 4.2e-05},  # M (1 µm adult)
+        # Non-actinide expansion (default type, public 1 µm adult):
+        "Pb-210": {"ingestion": 6.9e-07, "inhalation": 9.0e-07},  # F
+        "Sb-125": {"ingestion": 1.1e-09, "inhalation": 1.4e-09},  # F
+        "Sn-126": {"ingestion": 4.7e-09, "inhalation": 1.1e-08},  # F
+        "Pm-147": {"ingestion": 2.6e-10, "inhalation": 5.0e-09},  # M
+        "Eu-154": {"ingestion": 2.0e-09, "inhalation": 5.3e-08},  # M
+        "Eu-155": {"ingestion": 3.2e-10, "inhalation": 6.9e-09},  # M
     },
 }
 
