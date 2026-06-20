@@ -277,11 +277,21 @@ as `dose()` minus `distance_m`, so the JS cursor/stacked-bar plumbing reuses cle
    nearly re-ran the Po-210 trap — an earlier draft added iodine particulate-F and would have
    defaulted to vapour while Annex E says iodine-particulate = F; pulling back to vapour-only (the
    locked scope) removed the conflict.
-8. UI panel + honesty block (state: hypothetical intake; default absorption type/form — e.g. Co-60
-   oxide is Type S ~2–3× default-M; H-3 OBT ingestion ~2.3× HTO; lower bound when uncovered; never
-   summed with external H*(10)); dev + built gate green. **Note:** the schema bump to v2 means the
-   web runtime bundle must be regenerated at the UI step (build-archive picks up the new JSON;
-   pytest is the gate now).
+8. UI panel + honesty block; dev + built gate green. **The honesty block MUST surface these
+   default-choice caveats (the engine silently folds ONE form/type — the "wrong-but-quiet" §11
+   hazard):**
+   - **Co-60** default Type M; oxide is Type S, ~2–3× higher.
+   - **H-3** ingestion default HTO; **OBT is ~2.3× higher** (4.2E-11 vs 1.8E-11).
+   - **Po-210** default Type **F** (the Annex-E unspecified-compound form); **Type M is ~3× higher**
+     (worker 2.2E-6 vs 7.1E-7) and is the value many regulatory tables cite. The M→F switch lowered
+     the folded dose ~3× — the *dangerous* direction — so this caveat is mandatory, not optional.
+   - **Iodine** inhalation default **elemental vapour**; methyl is ~25% lower, and **particulate
+     iodine is NOT modeled** (vapour-only scope) — a user comparing to a particulate textbook value
+     (I-131 F adult 7.4E-9, ~2.7× below elemental) must be told.
+   Also: hypothetical intake; lower bound when uncovered; never summed with external H*(10).
+   **Note:** the schema bump to v2 means the web runtime bundle must be regenerated at THIS step
+   (build-archive picks up the new JSON; the bundle currently carries no internal_dose data at all,
+   and nothing in `web/src` loads it yet, so there is no stale-v1 crash — pytest is the gate now).
 9. Serializer bump only if the panel state is persisted (decide at UI step).
 
 ## Open / deferred

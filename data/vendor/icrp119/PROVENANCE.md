@@ -55,11 +55,15 @@ time in `data/build/build_internal_dose.py` — a value that fails refuses to bu
 3. **Gas/vapour worker ↔ public, per form (schema v2 — `_validate_gas_vapour`).** H-3 (HTO/OBT)
    and iodine (elemental/methyl vapour) have **no AMAD**: the coefficient is reference-adult and
    age-independent, so the worker (Annex B) and public (Annex H) values are **identical**, asserted
-   exactly per form. This is **WEAKER** than check 2 — it cannot catch a value misread the *same*
-   way in both annexes — but it is still a real transcription check between two **independently
-   typeset** tables (Annex B p.59 vs Annex H p.121, different pages, different layouts), so a
-   one-sided slip is caught. (Honesty: stated weaker on purpose; the differing 5µm/1µm particulate
-   check is the strong one.)
+   exactly per form. **Honesty — this is the WEAKEST guard in the file.** The worker and public
+   numbers are *hand-entered identical literals* (I typed the same value into both dicts), so the
+   build assertion passes *by construction* and only proves I entered them consistently, NOT that
+   either matches ICRP. There is no differing second column to triangulate against (unlike the
+   5µm/1µm particulate check, which compares two genuinely different numbers). The reads *were*
+   taken from two independently typeset tables (Annex B p.59 vs Annex H p.121), so a one-sided
+   slip *during reading* would have shown up — but **gas/vapour transcription fidelity ultimately
+   rests on the manual read, not on this check.** The values do match the well-known ICRP-68/72
+   coefficients (HTO 1.8E-11, OBT ~4.1E-11, I-131 elemental 2.0E-08, methyl 1.5E-08).
 
 **Absorption-type coverage differs by batch.** The 5 micro-slice actinides ship all tabulated
 F/M/S; the fission products ship the **ICRP default type only** (Annex E "unspecified compounds"

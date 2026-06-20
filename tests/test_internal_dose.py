@@ -400,6 +400,12 @@ def test_unknown_route_population_type_raise():
         idose.load("astronaut")
     with pytest.raises(idose.InternalDoseError):
         idose.coefficient("Ra-226", "inhalation", "worker", absorption_type="F")  # Ra is M-only
+    # A token outside INHALATION_FORMS entirely (a typo, not just "absent for this nuclide") must
+    # be rejected by the membership check — guards the v2 broadening from accepting garbage.
+    with pytest.raises(idose.InternalDoseError, match="unknown inhalation"):
+        idose.coefficient("Pu-239", "inhalation", "worker", absorption_type="vapour_bogus")
+    with pytest.raises(idose.InternalDoseError):  # bad ingestion form likewise
+        idose.coefficient("H-3", "ingestion", "worker", ingestion_form="ZZZ")
 
 
 def test_missing_activity_series_raises():
