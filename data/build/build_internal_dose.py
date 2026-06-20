@@ -148,6 +148,19 @@ WORKER = {
                    "inhalation": {"default_type": "M", "types": {"M": 5.8e-07, "S": 8.4e-08}}},
         "Pu-242": {"ingestion": {"e_Sv_Bq": 2.4e-07, "f1": 5e-04},
                    "inhalation": {"default_type": "M", "types": {"M": 3.1e-05, "S": 7.7e-06}}},
+        # --- Americium & Curium (printed p.56; Annex A) — worker tabulates Type M ONLY ---
+        "Am-243": {"ingestion": {"e_Sv_Bq": 2.0e-07, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 2.7e-05}}},
+        "Cm-242": {"ingestion": {"e_Sv_Bq": 1.2e-08, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 3.7e-06}}},
+        "Cm-243": {"ingestion": {"e_Sv_Bq": 1.5e-07, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 2.0e-05}}},
+        "Cm-244": {"ingestion": {"e_Sv_Bq": 1.2e-07, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 1.7e-05}}},
+        "Cm-245": {"ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 2.7e-05}}},
+        "Cm-246": {"ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 2.7e-05}}},
     },
 }
 
@@ -229,6 +242,19 @@ PUBLIC_ADULT = {
                    "inhalation": {"default_type": "M", "types": {"M": 9.0e-07, "S": 1.7e-07}}},
         "Pu-242": {"ingestion": {"e_Sv_Bq": 2.4e-07, "f1": 5e-04},
                    "inhalation": {"default_type": "M", "types": {"M": 4.8e-05, "S": 1.5e-05}}},
+        # --- Americium & Curium (Annex F ingest + Annex G inhal Adult) — ship M only ---
+        "Am-243": {"ingestion": {"e_Sv_Bq": 2.0e-07, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 4.1e-05}}},
+        "Cm-242": {"ingestion": {"e_Sv_Bq": 1.2e-08, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 5.2e-06}}},
+        "Cm-243": {"ingestion": {"e_Sv_Bq": 1.5e-07, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 3.1e-05}}},
+        "Cm-244": {"ingestion": {"e_Sv_Bq": 1.2e-07, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 2.7e-05}}},
+        "Cm-245": {"ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 4.2e-05}}},
+        "Cm-246": {"ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 4.2e-05}}},
     },
 }
 
@@ -261,6 +287,12 @@ _WORKER_1UM = {
     "Pu-240": {"M": 4.7e-05, "S": 1.5e-05},
     "Pu-241": {"M": 8.5e-07, "S": 1.6e-07},
     "Pu-242": {"M": 4.4e-05, "S": 1.4e-05},
+    "Am-243": {"M": 3.9e-05},
+    "Cm-242": {"M": 4.8e-06},
+    "Cm-243": {"M": 2.9e-05},
+    "Cm-244": {"M": 2.5e-05},
+    "Cm-245": {"M": 4.0e-05},
+    "Cm-246": {"M": 4.0e-05},
 }
 
 #: Nuclides whose worker (Annex A) and public-adult (Annex F) ingestion **f1 differ**, so the

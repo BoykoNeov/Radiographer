@@ -90,11 +90,13 @@ A **curated slice** (21 nuclides), extensible like spent-fuel's `GRID_POINTS`:
 - **Fission/activation products** (default type only): Co-60, Se-79, Sr-90, Tc-99, Ru-106,
   Cs-134, Cs-137, Ce-144.
 - **Actinide expansion** (all *cross-checkable* tabulated types; 300-DPI crop-verified, in
-  progress): U-234/235/236, Np-237, Pu-238/240/241/242. Per-element the worker (Annex A,
-  ICRP-68) tabulates fewer absorption types than the public Annex G (ICRP-72): worker **Np = M
-  only**, worker **Pu = M & S (no F)**. A public type without a worker-1µm counterpart cannot be
-  cross-checked, so it is **not shipped** — the shipped set is "all types tabulated for *both*
-  populations", which the build's per-type worker-1µm↔public guard enforces.
+  progress): U-234/235/236, Np-237, Pu-238/240/241/242, Am-243, Cm-242/243/244/245/246. Per
+  element the worker (Annex A, ICRP-68) tabulates fewer absorption types than the public Annex G
+  (ICRP-72): worker **Np/Am/Cm = M only**, worker **Pu = M & S (no F)**. A public type without a
+  worker-1µm counterpart cannot be cross-checked, so it is **not shipped** — the shipped set is
+  "all types tabulated for *both* populations", which the build's per-type worker-1µm↔public
+  guard enforces. Still to do: **Th-228/230/232, Pa-231**, and the non-actinide expansion
+  (Pb-210, Sb-125, Sn-126, Pm-147, Eu-154/155).
 
 A tracked nuclide absent from the shipped set makes a committed-dose estimate a **LOWER BOUND**,
 surfaced loudly by the engine (§11). Still uncovered (future batches): the remaining must-cover
