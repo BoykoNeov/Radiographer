@@ -45,7 +45,10 @@ ACTINIDE_EXPANSION = ("U-234", "U-235", "U-236",
 # M13 non-actinide expansion (default-type only, like the fission products). The shipped worker
 # 5 µm value was 300-DPI crop-read twice (the one column the build never cross-checks).
 NON_ACTINIDE = ("Pb-210", "Sb-125", "Sn-126", "Pm-147", "Eu-154", "Eu-155")
-CURATED = MICRO_SLICE + FISSION_PRODUCTS + ACTINIDE_EXPANSION + NON_ACTINIDE
+# M13 gas/vapour batch (schema v2): chemical-form tokens, not F/M/S particulate types — H-3
+# (HTO/OBT) and iodine (elemental/methyl vapour, vapour-only). Worker==public by construction.
+GAS_VAPOUR = ("H-3", "I-129", "I-131")
+CURATED = MICRO_SLICE + FISSION_PRODUCTS + ACTINIDE_EXPANSION + NON_ACTINIDE + GAS_VAPOUR
 
 # ICRP default absorption type per element (ICRP-119 Annex E "unspecified compounds" catch-all)
 # — what the engine folds, so the anchor below is this type's value. NOT chosen by value/memory.
@@ -61,7 +64,14 @@ DEFAULT_TYPE = {
     "Am-243": "M", "Cm-242": "M", "Cm-243": "M", "Cm-244": "M", "Cm-245": "M", "Cm-246": "M",
     # Non-actinides (Annex E: Pb F, Sb F, Sn F, Pm M, Eu M):
     "Pb-210": "F", "Sb-125": "F", "Sn-126": "F", "Pm-147": "M", "Eu-154": "M", "Eu-155": "M",
+    # Gas/vapour (schema v2): default is a chemical FORM, not an Annex-E particulate type —
+    # H-3 -> HTO (tritiated water), iodine -> elemental (I2) vapour. (NOT from Annex E; that table
+    # classifies particulate absorption types only. Iodine ships vapour-only, so the Annex-E
+    # iodine-particulate-F entry does not bind the default — see test_gas_vapour_default_forms.)
+    "H-3": "HTO", "I-129": "vapour_elemental", "I-131": "vapour_elemental",
 }
+# Gas/vapour nuclides whose inhalation "default_type" is a chemical form, NOT an Annex-E type.
+GAS_VAPOUR_FORMS = {"H-3", "I-129", "I-131"}
 
 # Validated ICRP-119 anchors (Sv/Bq). ingestion = e; inhalation = DEFAULT-type e.
 # worker = ICRP-68 Annex A (5 µm); public_adult = ICRP-72 Annexes F/G (1 µm, Adult).
@@ -101,6 +111,10 @@ ANCHORS = {
         "Pm-147": {"ingestion": 2.6e-10, "inhalation": 3.5e-09},  # M
         "Eu-154": {"ingestion": 2.0e-09, "inhalation": 3.5e-08},  # M
         "Eu-155": {"ingestion": 3.2e-10, "inhalation": 4.7e-09},  # M
+        # Gas/vapour (default form): H-3 ingestion=HTO, inhalation=HTO; iodine inhalation=elemental.
+        "H-3":   {"ingestion": 1.8e-11, "inhalation": 1.8e-11},  # HTO (OBT ingestion 4.2e-11)
+        "I-129": {"ingestion": 1.1e-07, "inhalation": 9.6e-08},  # elemental vapour (methyl 7.4e-08)
+        "I-131": {"ingestion": 2.2e-08, "inhalation": 2.0e-08},  # elemental vapour (methyl 1.5e-08)
     },
     "public_adult": {
         "Po-210": {"ingestion": 1.2e-06, "inhalation": 6.0e-07},  # F (corrected from M; Annex E)
@@ -137,6 +151,10 @@ ANCHORS = {
         "Pm-147": {"ingestion": 2.6e-10, "inhalation": 5.0e-09},  # M
         "Eu-154": {"ingestion": 2.0e-09, "inhalation": 5.3e-08},  # M
         "Eu-155": {"ingestion": 3.2e-10, "inhalation": 6.9e-09},  # M
+        # Gas/vapour — IDENTICAL to worker (age-independent reference-adult values):
+        "H-3":   {"ingestion": 1.8e-11, "inhalation": 1.8e-11},  # HTO
+        "I-129": {"ingestion": 1.1e-07, "inhalation": 9.6e-08},  # elemental vapour
+        "I-131": {"ingestion": 2.2e-08, "inhalation": 2.0e-08},  # elemental vapour
     },
 }
 
@@ -159,17 +177,22 @@ def test_structural_invariants(population):
     assert d["units"] == "Sv_per_Bq"
     assert d["progeny_convention"] == "parent_only_in_vivo_ingrowth"
     for nuc, rec in d["coefficients"].items():
-        for route in ("ingestion", "inhalation"):
-            if route not in rec:
-                continue
-            vals = ([rec[route]["e_Sv_Bq"]] if route == "ingestion"
-                    else list(rec[route]["types"].values()))
-            for v in vals:
-                assert 1e-13 < v < 1e-3, f"{population}/{nuc}/{route}: {v} out of range"
+        if "ingestion" in rec:
+            ing = rec["ingestion"]
+            if "forms" in ing:  # H-3: per-chemical-form ingestion (HTO/OBT)
+                assert ing["default_form"] in ing["forms"], f"{nuc}: ingestion default_form drift"
+                ing_vals = [f["e_Sv_Bq"] for f in ing["forms"].values()]
+            else:
+                ing_vals = [ing["e_Sv_Bq"]]
+            for v in ing_vals:
+                assert 1e-13 < v < 1e-3, f"{population}/{nuc}/ingestion: {v} out of range"
         if "inhalation" in rec:
             inh = rec["inhalation"]
+            for v in inh["types"].values():
+                assert 1e-13 < v < 1e-3, f"{population}/{nuc}/inhalation: {v} out of range"
             assert inh["default_type"] in inh["types"], f"{nuc}: default_type not tabulated"
-            assert all(t in idose.ABSORPTION_TYPES for t in inh["types"])
+            # Every inhalation token is a known F/M/S type OR a v2 gas/vapour form — never a typo.
+            assert all(t in idose.INHALATION_FORMS for t in inh["types"]), f"{nuc}: bad inh token"
 
 
 @pytest.mark.parametrize("population", idose.POPULATIONS)
@@ -194,13 +217,47 @@ def test_anchor_values(population, nuclide):
 def test_default_type_matches_annex_e_catchall():
     # default_type = ICRP-119 Annex E "unspecified compounds" catch-all per element (NOT a
     # value/memory pick) — it is what the engine folds, so the shipped default-type inhalation
-    # value must equal that type's tabulated value.
+    # value must equal that type's tabulated value. Particulates only (gas/vapour forms below).
     for population in idose.POPULATIONS:
         d = _load_raw(population)
         for nuc in CURATED:
+            if nuc in GAS_VAPOUR_FORMS:
+                continue
             inh = d["coefficients"][nuc]["inhalation"]
+            assert inh["default_type"] in idose.ABSORPTION_TYPES, f"{nuc}: not an F/M/S type"
             assert inh["default_type"] == DEFAULT_TYPE[nuc], f"{nuc}: default_type drift"
             assert idose.coefficient(nuc, "inhalation", population) == inh["types"][DEFAULT_TYPE[nuc]]
+
+
+def test_gas_vapour_default_forms():
+    # Gas/vapour default is a chemical FORM (not an Annex-E particulate type): H-3 -> HTO,
+    # iodine -> elemental vapour. The Annex-E iodine-particulate-F entry does NOT bind it because
+    # iodine ships vapour-only (no particulate in scope) — guards against a future "fix" to F.
+    for population in idose.POPULATIONS:
+        d = _load_raw(population)
+        for nuc in GAS_VAPOUR_FORMS:
+            inh = d["coefficients"][nuc]["inhalation"]
+            assert inh["default_type"] == DEFAULT_TYPE[nuc], f"{nuc}: gas/vapour default drift"
+            assert inh["default_type"] in idose.VAPOUR_INHALATION_FORMS, f"{nuc}: not a vapour form"
+            assert idose.coefficient(nuc, "inhalation", population) == inh["types"][DEFAULT_TYPE[nuc]]
+    # H-3 ingestion likewise defaults to a form (HTO); OBT is the higher alternative.
+    for population in idose.POPULATIONS:
+        ing = _load_raw(population)["coefficients"]["H-3"]["ingestion"]
+        assert ing["default_form"] == "HTO"
+        assert idose.coefficient("H-3", "ingestion", population) == ing["forms"]["HTO"]["e_Sv_Bq"]
+        # OBT ingestion is ~2.3× HTO (the honesty-block caveat), and selectable explicitly.
+        obt = idose.coefficient("H-3", "ingestion", population, ingestion_form="OBT")
+        assert obt == 4.2e-11 and obt > idose.coefficient("H-3", "ingestion", population)
+
+
+def test_iodine_vapour_forms_and_override():
+    # Iodine ships elemental (I2, default) + methyl (CH3I) vapour; methyl is the lower value.
+    el = idose.coefficient("I-131", "inhalation", "worker")                          # default elemental
+    me = idose.coefficient("I-131", "inhalation", "worker", absorption_type="vapour_methyl")
+    assert el == 2.0e-08 and me == 1.5e-08 and me < el
+    # An F/M/S particulate type is NOT tabulated for iodine (vapour-only scope) → loud raise.
+    with pytest.raises(idose.InternalDoseError):
+        idose.coefficient("I-131", "inhalation", "worker", absorption_type="F")
 
 
 # -- Pillar 3: cross-table consistency (transcription fidelity) -------------
@@ -211,13 +268,20 @@ def test_ingestion_equal_f1_implies_equal_e():
     # 2-sig-fig rounding). Holds for every curated nuclide except the differing-f1 exceptions.
     w = _load_raw("worker")["coefficients"]
     p = _load_raw("public_adult")["coefficients"]
+
+    def _e_f1(ing):  # H-3 carries per-form ingestion (HTO/OBT); compare the default form
+        if "forms" in ing:
+            f = ing["forms"][ing["default_form"]]
+            return f["e_Sv_Bq"], f["f1"]
+        return ing["e_Sv_Bq"], ing["f1"]
+
     checked = 0
     for nuc in CURATED:
-        wf, pf = w[nuc]["ingestion"]["f1"], p[nuc]["ingestion"]["f1"]
+        we, wf = _e_f1(w[nuc]["ingestion"])
+        pe, pf = _e_f1(p[nuc]["ingestion"])
         if wf != pf:
             assert nuc in DIFFERING_F1_INGESTION, f"{nuc}: undocumented differing f1"
             continue
-        we, pe = w[nuc]["ingestion"]["e_Sv_Bq"], p[nuc]["ingestion"]["e_Sv_Bq"]
         assert pe == pytest.approx(we, rel=0.10), f"{nuc}: equal-f1 but e differs ({pe} vs {we})"
         checked += 1
     assert checked >= len(CURATED) - len(DIFFERING_F1_INGESTION)
@@ -265,14 +329,16 @@ def _evaluate_stub(series: dict[str, list[float]], times=(0.0, 1.0)) -> dict:
 
 
 def test_three_coverage_states():
-    # covered (actinides) + noble-gas N/A (Kr-85) + uncovered (I-131, not in the curated set —
-    # iodine is deferred to the gas/vapour batch, so it is a genuine coverage gap here).
+    # covered (actinides) + noble-gas N/A (Kr-85) + uncovered (Zr-95, not in the curated set — a
+    # common fission product that is genuinely outside the internal-dose coverage roadmap, so it
+    # stays a real coverage gap even as future batches land. NB: I-131 is now COVERED (gas/vapour
+    # batch), so it can no longer serve as the uncovered example.)
     model = idose.InternalDoseModel(
-        ["Pu-239", "Am-241", "Kr-85", "I-131"], "inhalation", "worker"
+        ["Pu-239", "Am-241", "Kr-85", "Zr-95"], "inhalation", "worker"
     )
     assert set(model.covered) == {"Pu-239", "Am-241"}
     assert model.noble_gas_na == ["Kr-85"]
-    assert model.uncovered == ["I-131"]
+    assert model.uncovered == ["Zr-95"]
 
 
 def test_lower_bound_only_from_uncovered_not_noble_gas():
@@ -284,8 +350,8 @@ def test_lower_bound_only_from_uncovered_not_noble_gas():
     assert out["noble_gas_na"] == ["Kr-85"]
     assert any(w["reason"] == "noble_gas_no_intake_pathway" for w in out["warnings"])
 
-    series2 = _evaluate_stub({"Pu-239": [1e6, 1e6], "I-131": [1e9, 1e9]})
-    out2 = idose.InternalDoseModel(["Pu-239", "I-131"], "inhalation", "worker") \
+    series2 = _evaluate_stub({"Pu-239": [1e6, 1e6], "Zr-95": [1e9, 1e9]})
+    out2 = idose.InternalDoseModel(["Pu-239", "Zr-95"], "inhalation", "worker") \
         .committed_dose_series(series2)
     assert out2["lower_bound"] is True
     assert any(w["reason"] == "uncovered_nuclides" for w in out2["warnings"])

@@ -15,8 +15,9 @@ Committed **effective** dose coefficients **e(50)** (Sv/Bq) for intake by **inge
 
 | Population | ICRP source | Annex (table) | AMAD | Notes |
 |---|---|---|---|---|
-| `worker` | ICRP-68 | Annex A (Table A.1) | 5 µm | ingestion + inhalation types F/M/S; table also lists 1 µm |
+| `worker` | ICRP-68 | Annex A (Table A.1) | 5 µm | particulates: ingestion + inhalation types F/M/S; table also lists 1 µm |
 | `public_adult` | ICRP-72 | Annex F (ingestion) + Annex G (inhalation) | 1 µm | "Adult" column; inhalation types F/M/S |
+| **gas/vapour** (schema v2) | ICRP-68 / ICRP-72 | **Annex B** (worker inhalation) + **Annex H** (public inhalation) + Annex A/F (H-3 ingestion) | n/a | H-3 (HTO/OBT), iodine (elemental I₂ / methyl CH₃I vapour). **No AMAD** — chemical forms, not F/M/S. Reference-adult, age-independent → worker == public. |
 
 Coefficients are **parent-only with in-vivo progeny ingrowth** (ICRP-119 base per-nuclide rows,
 NOT the "+"-bundled equilibrium entries) — so summing over the full tracked inventory is correct
@@ -51,6 +52,14 @@ time in `data/build/build_internal_dose.py` — a value that fails refuses to bu
 2. **Inhalation worker-1µm ↔ public-adult-1µm**, for **every shipped absorption type**. Annex A's
    1 µm column must agree with Annex G's public-adult 1 µm value to ~40 % (same HRTM lung model,
    ~same reference person). A public type with **no** worker counterpart is REFUSED by the build.
+3. **Gas/vapour worker ↔ public, per form (schema v2 — `_validate_gas_vapour`).** H-3 (HTO/OBT)
+   and iodine (elemental/methyl vapour) have **no AMAD**: the coefficient is reference-adult and
+   age-independent, so the worker (Annex B) and public (Annex H) values are **identical**, asserted
+   exactly per form. This is **WEAKER** than check 2 — it cannot catch a value misread the *same*
+   way in both annexes — but it is still a real transcription check between two **independently
+   typeset** tables (Annex B p.59 vs Annex H p.121, different pages, different layouts), so a
+   one-sided slip is caught. (Honesty: stated weaker on purpose; the differing 5µm/1µm particulate
+   check is the strong one.)
 
 **Absorption-type coverage differs by batch.** The 5 micro-slice actinides ship all tabulated
 F/M/S; the fission products ship the **ICRP default type only** (Annex E "unspecified compounds"
@@ -91,11 +100,15 @@ of Po-210 S, Ra-226 F/S, Am-241 F/S, suspect Pu-239 F still stands.)
 **Trust boundary (honesty):** these checks prove **transcription fidelity**, not methodology —
 ICRP-119 is the sole methodology source, so true methodological independence is not on the
 table (the once-considered ANL/Argonne fact sheets publish *lifetime cancer-risk* coefficients,
-a different quantity, not e(50), so they cannot validate the dose values).
+a different quantity, not e(50), so they cannot validate the dose values). The gas/vapour batch
+considered **EPA FGR-13** as an external anchor for H-3/iodine but did **not** use it: FGR-13
+("Cancer Risk Coefficients…") publishes *risk per Bq*, not Sv/Bq — the same wrong-quantity problem
+as the Argonne sheets — so it cannot validate a dose coefficient. The real gas/vapour guard is the
+two-annex worker↔public form-matched check (Annex B vs Annex H), as for every other nuclide.
 
 ## Coverage
 
-A **curated slice** (33 nuclides), extensible like spent-fuel's `GRID_POINTS`:
+A **curated slice** (36 nuclides), extensible like spent-fuel's `GRID_POINTS`:
 - **Actinide micro-slice** (all F/M/S): Po-210, Ra-226, U-238, Pu-239, Am-241.
 - **Fission/activation products** (default type only): Co-60, Se-79, Sr-90, Tc-99, Ru-106,
   Cs-134, Cs-137, Ce-144.
@@ -112,10 +125,17 @@ A **curated slice** (33 nuclides), extensible like spent-fuel's `GRID_POINTS`:
   Annex F footnote, NOT the 0.4 child column). This batch also re-verified the existing 8
   fission-product + Po-210 worker 5 µm defaults (all correct) and corrected the Po-210 default
   type (see "Errors caught").
+- **Gas/vapour** (schema v2 — chemical forms, NOT F/M/S): **H-3** (HTO / OBT), **I-129**, **I-131**
+  (elemental I₂ / methyl CH₃I vapour, vapour-only). Inhalation from Annex B (worker) / Annex H
+  (public); H-3 ingestion from Annex A/F per form; iodine ingestion is a single value. Defaults
+  (representative unspecified-exposure form): H-3 → HTO, iodine → elemental. **Iodine ships
+  vapour-only** (the locked scope) — the Annex A particulate-F form is out of scope, which is why
+  the Annex-E particulate catch-all does NOT bind the vapour default choice (Annex E classifies
+  aerosol absorption types only). H-3 OBT ingestion is ~2.3× HTO; methyl iodide vapour is lower
+  than elemental — both surfaced as honesty caveats, not folded by default.
 
 A tracked nuclide absent from the shipped set makes a committed-dose estimate a **LOWER BOUND**,
 surfaced loudly by the engine (§11). Still uncovered (future batches): **Th-228/230/232, Pa-231**
-(actinide expansion remainder), and the **gas/vapour special cases** (H-3 HTO/OBT, I-129/I-131
-elemental & methyl-iodide vapour) which need a chemical-form schema bump, not F/M/S types.
-Noble gases (Kr/Xe/Rn/…) have **no intake coefficient** (Annex C is submersion dose *rate*, a
-different quantity) — the engine treats them as a distinct "N/A" state, not a gap.
+(actinide expansion remainder). Noble gases (Kr/Xe/Rn/…) have **no intake coefficient** (Annex C
+is submersion dose *rate*, a different quantity) — the engine treats them as a distinct "N/A"
+state, not a gap.

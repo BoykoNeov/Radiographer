@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "population": "public_adult",
   "icrp_publication": "ICRP-72 (via ICRP-119 Annexes F & G)",
   "age": "adult",
@@ -415,6 +415,54 @@
         "default_type": "M",
         "types": {
           "M": 6.9e-09
+        }
+      }
+    },
+    "H-3": {
+      "ingestion": {
+        "default_form": "HTO",
+        "forms": {
+          "HTO": {
+            "e_Sv_Bq": 1.8e-11,
+            "f1": 1.0
+          },
+          "OBT": {
+            "e_Sv_Bq": 4.2e-11,
+            "f1": 1.0
+          }
+        }
+      },
+      "inhalation": {
+        "default_type": "HTO",
+        "types": {
+          "HTO": 1.8e-11,
+          "OBT": 4.1e-11
+        }
+      }
+    },
+    "I-129": {
+      "ingestion": {
+        "e_Sv_Bq": 1.1e-07,
+        "f1": 1.0
+      },
+      "inhalation": {
+        "default_type": "vapour_elemental",
+        "types": {
+          "vapour_elemental": 9.6e-08,
+          "vapour_methyl": 7.4e-08
+        }
+      }
+    },
+    "I-131": {
+      "ingestion": {
+        "e_Sv_Bq": 2.2e-08,
+        "f1": 1.0
+      },
+      "inhalation": {
+        "default_type": "vapour_elemental",
+        "types": {
+          "vapour_elemental": 2e-08,
+          "vapour_methyl": 1.5e-08
         }
       }
     }

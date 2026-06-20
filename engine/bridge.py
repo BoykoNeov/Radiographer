@@ -587,11 +587,13 @@ def internal_dose(handle: str, request_json: str) -> str:
 
     Inhalation uses each nuclide's ICRP-recommended ``default_type`` (the model's
     ``absorption_type=None`` path — the v1 scope: non-default types are an explicit extension).
-    A *global* absorption type is intentionally NOT a request parameter: F/M/S is a per-compound
-    chemical-form property, not an inventory-wide one, so forcing one type across a chain is
-    physically incoherent (and would raise for a covered nuclide that lacks it, e.g. Ra-226 in a
-    U-238 chain is M-only). When the UI wants a toggle, the correct shape is a per-nuclide
-    ``{nuclide: type}`` map surfaced in the breakdown — not a global scalar here.
+    For schema-v2 gas/vapour nuclides this default is a chemical FORM not an F/M/S particulate type
+    (H-3 -> HTO, iodine -> elemental vapour); H-3 ingestion likewise folds its default form (HTO)
+    via ``ingestion_form=None``. A *global* absorption type/form is intentionally NOT a request
+    parameter: it is a per-compound property, not an inventory-wide one, so forcing one across a
+    chain is physically incoherent (and would raise for a covered nuclide that lacks it, e.g.
+    Ra-226 in a U-238 chain is M-only). When the UI wants a toggle, the correct shape is a
+    per-nuclide ``{nuclide: type}`` map surfaced in the breakdown — not a global scalar here.
 
     ``per_nuclide_coeff`` (Sv/Bq) + the activity series let the client build the cursor
     breakdown live with no re-fetch (mirrors :func:`dose_lines`); ``f1_used`` / ``types_used``

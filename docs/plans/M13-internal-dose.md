@@ -1,19 +1,20 @@
 # M13 — Internal / committed dose (ICRP dose coefficients, Sv/Bq)
 
-**Status:** in progress 🚧 — **data layer + engine + bridge + fission-product batch landed**;
-UI + actinide expansion + gas/vapour pending. Done so far: ICRP-119 vendored + PROVENANCE;
+**Status:** in progress 🚧 — **data layer + engine + bridge + all particulate batches + gas/vapour
+(schema v2) landed; UI pending.** Done so far: ICRP-119 vendored + PROVENANCE;
 `build_internal_dose.py` (both populations) with the cross-table transcription checks enforced at
 build time (ingestion **equal-f1⇒equal-e** + `DIFFERING_F1_INGESTION` exceptions; inhalation
-worker-1µm↔public-1µm per shipped type); `engine/internal_dose.py` (loader + `InternalDoseModel`,
-three coverage states, f1/per-nuclide-coeff provenance); **bridge `internal_dose()`**;
-`tests/test_internal_dose.py` + bridge tests, green; `DATA_DIRS` + data README registered.
-**Coverage = 33 nuclides:** 5 micro-slice actinides (all F/M/S) + 8 fission/activation products
-(default type only) + **actinide-expansion core: U-234/235/236, Np-237, Pu-238/240/241/242,
-Am-243, Cm-242/243/244/245/246** (all cross-checkable tabulated types) + **non-actinide expansion:
-Pb-210, Sb-125, Sn-126, Pm-147, Eu-154/155** (default type only). A pre-existing U-238 worker-5µm-S
-transcription error was found and fixed; the non-actinide batch corrected the **Po-210 default type
-M → F** (Annex E catch-all). **Still open:** Th/Pa (actinide remainder), then the schema-v2
-gas/vapour batch (H-3, I-129/I-131).
+worker-1µm↔public-1µm per shipped type; gas/vapour `_validate_gas_vapour`); `engine/internal_dose.py`
+(loader + `InternalDoseModel`, three coverage states, f1/form/per-nuclide-coeff provenance);
+**bridge `internal_dose()`**; `tests/test_internal_dose.py` + bridge tests, green; `DATA_DIRS` +
+data README registered.
+**Coverage = 36 nuclides (schema v2):** 5 micro-slice actinides (all F/M/S) + 8 fission/activation
+products (default type only) + **actinide-expansion core: U-234/235/236, Np-237, Pu-238/240/241/242,
+Am-243, Cm-242/243/244/245/246** (all cross-checkable types) + **non-actinide expansion: Pb-210,
+Sb-125, Sn-126, Pm-147, Eu-154/155** (default type only) + **gas/vapour: H-3 (HTO/OBT), I-129,
+I-131 (elemental/methyl vapour)**. A pre-existing U-238 worker-5µm-S transcription error was found
+and fixed; the non-actinide batch corrected the **Po-210 default type M → F** (Annex E catch-all).
+**Still open:** Th/Pa (actinide remainder), then the **UI panel** (step 8).
 **Milestone:** post-v1 extension — the single biggest unbuilt capability listed *Future* in
 HANDOFF_PLAN §2 ("Internal / committed dose (ICRP dose coefficients in Sv/Bq)") and §11. The
 tool has been **external-dose only**; this adds the **intake** pathway. User-chosen next batch
@@ -260,18 +261,36 @@ as `dose()` minus `distance_m`, so the JS cursor/stacked-bar plumbing reuses cle
        rule — folds 7.1E-07 worker / 6.0E-07 public now, ~3× lower; user decision 2026-06-20).
 6. ✅ Bridge `internal_dose()` + bridge tests (route/population; default-type fold; no global
    absorption_type — F/M/S is per-compound, out of v1 scope).
-7. **Gases/vapours (deferred special-casing — needs a `schema_version` bump):** H-3 (OBT/HTO),
-   I-129/I-131 (elemental/methyl-iodide vapour). These are **chemical forms, not F/M/S lung
-   types** — they don't map onto the `types:{F/M/S}` schema; design the form dimension as its own
-   decision. NOT in the particulate batches.
-8. UI panel + honesty block (state: hypothetical intake; default absorption type — e.g. Co-60
-   oxide is Type S, ~2–3× the default-M value; lower bound when uncovered; never summed with
-   external H*(10)); dev + built gate green.
+7. ✅ **Gases/vapours DONE (schema v2 → 36 nuclides):** H-3 (HTO/OBT), I-129, I-131
+   (elemental I₂ / methyl CH₃I vapour). **Chemical forms, not F/M/S** — engine inhalation
+   validation widened from the global `ABSORPTION_TYPES` tuple to `INHALATION_FORMS`
+   (`= F/M/S + HTO/OBT/vapour_elemental/vapour_methyl`); a localized `forms` map added to H-3
+   ingestion (HTO vs OBT differ on ingestion too) selected by `ingestion_form`. Inhalation from
+   Annex B (worker) / Annex H (public); H-3 ingestion Annex A/F. **Iodine ships vapour-only**
+   (locked scope — particulate-F out of scope, so the Annex-E particulate catch-all does not bind
+   the vapour default). Defaults: H-3 → HTO, iodine → elemental. New build cross-check
+   `_validate_gas_vapour` (worker==public per form, two independently typeset annexes — weaker than
+   the differing-AMAD particulate check, stated so). FGR-13 NOT used as external anchor (it
+   publishes risk/Bq, not Sv/Bq). Coverage-state tests swapped I-131 → **Zr-95** as the uncovered
+   example (I-131 is now covered; Zr-95 is off the roadmap so it stays a real gap). Bridge folds
+   the default form unchanged (no new param). All tests green (dev gate). **Scope advisory:** this
+   nearly re-ran the Po-210 trap — an earlier draft added iodine particulate-F and would have
+   defaulted to vapour while Annex E says iodine-particulate = F; pulling back to vapour-only (the
+   locked scope) removed the conflict.
+8. UI panel + honesty block (state: hypothetical intake; default absorption type/form — e.g. Co-60
+   oxide is Type S ~2–3× default-M; H-3 OBT ingestion ~2.3× HTO; lower bound when uncovered; never
+   summed with external H*(10)); dev + built gate green. **Note:** the schema bump to v2 means the
+   web runtime bundle must be regenerated at the UI step (build-archive picks up the new JSON;
+   pytest is the gate now).
 9. Serializer bump only if the panel state is persisted (decide at UI step).
 
 ## Open / deferred
 
-- Public age groups (infant→15 y), non-default absorption types & f1 values — extensions.
+- Public age groups (infant→15 y), non-default absorption types/forms & f1 values — extensions.
+  (The schema-v2 data already carries OBT and methyl-vapour alternatives + actinide F/M/S, so a
+  future per-nuclide type/form toggle has the values; the bridge just folds the default for now.)
 - Full ~800-nuclide ICRP-119 coverage (machine-readable via ORNL Radiological Toolbox DB) —
   deferred; curated set + loud coverage gaps is the v1 contract.
-- Inhalation of **gases/vapours** (special ICRP treatment) — out of v1.
+- **Th-228/230/232, Pa-231** — the remaining actinide-expansion particulates (resume per step 5
+  notes / earlier git history); needs Annex E default type + thorium dual-f1 care.
+- **DONE:** inhalation of gases/vapours (H-3, iodine) — landed in schema v2 (step 7).

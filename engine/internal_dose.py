@@ -43,15 +43,26 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional, Sequence
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 UNITS = "Sv_per_Bq"
 
 #: Supported intake routes.
 ROUTES: tuple[str, ...] = ("ingestion", "inhalation")
 #: Supported exposed populations (both shipped, user-selectable — §M13).
 POPULATIONS: tuple[str, ...] = ("public_adult", "worker")
-#: Inhalation lung-absorption types (ICRP-66/68 HRTM): Fast / Moderate / Slow.
+#: Inhalation lung-absorption types (ICRP-66/68 HRTM): Fast / Moderate / Slow — PARTICULATES.
 ABSORPTION_TYPES: tuple[str, ...] = ("F", "M", "S")
+#: Non-particulate inhalation chemical-form tokens (schema v2 gas/vapour, ICRP-119 Annexes B/H):
+#: HTO/OBT = tritiated water / organically-bound tritium; vapour_elemental/vapour_methyl = I2 / CH3I
+#: iodine vapour. These have NO AMAD (not particulates) → a single e per population, not a 1µm/5µm
+#: pair. (Iodine ships vapour-only — the LOCKED scope, §7; particulate F is out of scope, which is
+#: why the Annex-E particulate catch-all does NOT bind the vapour default choice.)
+VAPOUR_INHALATION_FORMS: tuple[str, ...] = ("HTO", "OBT", "vapour_elemental", "vapour_methyl")
+#: Every accepted inhalation token — a value outside this set is a typo and must raise loudly.
+INHALATION_FORMS: tuple[str, ...] = ABSORPTION_TYPES + VAPOUR_INHALATION_FORMS
+#: Ingestion chemical-form tokens that get a PER-FORM coefficient (H-3 only — HTO vs OBT differ on
+#: ingestion too). Every other nuclide ships a single ingestion value (no ``forms`` sub-object).
+INGESTION_FORMS: tuple[str, ...] = ("HTO", "OBT")
 
 #: Elements with NO Sv/Bq intake coefficient — noble gases. A nuclide of one of these is the
 #: distinct "N/A — no intake pathway" state (NOT "uncovered"); folding it would falsely imply a
@@ -135,13 +146,16 @@ def coefficient(
     population: str,
     *,
     absorption_type: Optional[str] = None,
+    ingestion_form: Optional[str] = None,
 ) -> float:
     """Committed effective dose coefficient ``e(50)`` (Sv/Bq) for one nuclide/route/population.
 
     For ``inhalation`` the value is the ``absorption_type`` requested, else the dataset's
-    ``default_type`` (the ICRP-recommended type for unspecified chemical form). Raises if the
-    nuclide, route, or requested type is absent — the caller (model) decides coverage policy;
-    this low-level accessor never substitutes a silent zero.
+    ``default_type`` (the ICRP-recommended type/form for unspecified exposure — an F/M/S
+    particulate type, or a gas/vapour form token, schema v2). For ``ingestion`` it is normally a
+    single value; H-3 alone carries a ``forms`` map (HTO/OBT) selected by ``ingestion_form`` else
+    ``default_form``. Raises if the nuclide, route, or requested type/form is absent — the caller
+    (model) decides coverage policy; this low-level accessor never substitutes a silent zero.
     """
     if route not in ROUTES:
         raise InternalDoseError(f"unknown route {route!r} (expected one of {ROUTES})")
@@ -152,15 +166,25 @@ def coefficient(
         )
     sub = rec[route]
     if route == "ingestion":
+        if "forms" in sub:  # H-3: per-chemical-form ingestion (HTO vs OBT)
+            form = ingestion_form or sub["default_form"]
+            if form not in sub["forms"]:
+                raise InternalDoseError(
+                    f"{nuclide!r} has no {form!r} ingestion form "
+                    f"(tabulated: {sorted(sub['forms'])}); default_form={sub['default_form']!r}"
+                )
+            return float(sub["forms"][form]["e_Sv_Bq"])
         return float(sub["e_Sv_Bq"])
     # inhalation
     types = sub["types"]
     atype = absorption_type or sub["default_type"]
-    if atype not in ABSORPTION_TYPES:
-        raise InternalDoseError(f"unknown absorption type {atype!r} (expected {ABSORPTION_TYPES})")
+    if atype not in INHALATION_FORMS:
+        raise InternalDoseError(
+            f"unknown inhalation type/form {atype!r} (expected one of {INHALATION_FORMS})"
+        )
     if atype not in types:
         raise InternalDoseError(
-            f"{nuclide!r} has no Type-{atype} inhalation coefficient "
+            f"{nuclide!r} has no {atype!r} inhalation coefficient "
             f"(tabulated: {sorted(types)}); default_type={sub['default_type']!r}"
         )
     return float(types[atype])
@@ -181,6 +205,7 @@ class InternalDoseModel:
         population: str,
         *,
         absorption_type: Optional[str] = None,
+        ingestion_form: Optional[str] = None,
     ):
         if route not in ROUTES:
             raise InternalDoseError(f"unknown route {route!r} (expected one of {ROUTES})")
@@ -188,19 +213,25 @@ class InternalDoseModel:
             raise InternalDoseError(
                 f"unknown population {population!r} (expected one of {POPULATIONS})"
             )
-        if absorption_type is not None and absorption_type not in ABSORPTION_TYPES:
+        if absorption_type is not None and absorption_type not in INHALATION_FORMS:
             raise InternalDoseError(
-                f"unknown absorption type {absorption_type!r} (expected {ABSORPTION_TYPES})"
+                f"unknown inhalation type/form {absorption_type!r} (expected {INHALATION_FORMS})"
+            )
+        if ingestion_form is not None and ingestion_form not in INGESTION_FORMS:
+            raise InternalDoseError(
+                f"unknown ingestion form {ingestion_form!r} (expected {INGESTION_FORMS})"
             )
         self.route = route
         self.population = population
         self.absorption_type = absorption_type  # None ⇒ each nuclide's default_type
+        self.ingestion_form = ingestion_form    # None ⇒ each nuclide's default_form (H-3 only)
 
         data = load(population)
         self.amad_um = data.get("amad_um")
         self.icrp_publication = data.get("icrp_publication")
         coeffs: dict[str, float] = {}
-        types_used: dict[str, str] = {}
+        types_used: dict[str, str] = {}    # inhalation: F/M/S or a vapour form token
+        forms_used: dict[str, str] = {}    # ingestion: chemical form, H-3 only (others: single)
         f1_used: dict[str, float] = {}
         covered: list[str] = []
         noble_gas_na: list[str] = []
@@ -208,13 +239,22 @@ class InternalDoseModel:
         for n in nuclides:
             rec = data["coefficients"].get(n)
             if rec is not None and route in rec:
-                coeffs[n] = coefficient(n, route, population, absorption_type=absorption_type)
+                coeffs[n] = coefficient(
+                    n, route, population,
+                    absorption_type=absorption_type, ingestion_form=ingestion_form,
+                )
                 if route == "inhalation":
                     types_used[n] = absorption_type or rec["inhalation"]["default_type"]
                 else:  # ingestion — capture the f1 (gut transfer factor) provenance
-                    f1 = rec["ingestion"].get("f1")
-                    if f1 is not None:
-                        f1_used[n] = float(f1)
+                    ing = rec["ingestion"]
+                    if "forms" in ing:  # H-3: per-form (HTO/OBT) — record which form + its f1
+                        form = ingestion_form or ing["default_form"]
+                        forms_used[n] = form
+                        f1_used[n] = float(ing["forms"][form]["f1"])
+                    else:
+                        f1 = ing.get("f1")
+                        if f1 is not None:
+                            f1_used[n] = float(f1)
                 covered.append(n)
             elif _element(n) in NOBLE_GAS_ELEMENTS:
                 noble_gas_na.append(n)
@@ -222,6 +262,7 @@ class InternalDoseModel:
                 uncovered.append(n)
         self.coeff = coeffs
         self.types_used = types_used
+        self.forms_used = forms_used
         self.f1_used = f1_used
         self.covered = covered
         self.noble_gas_na = noble_gas_na
@@ -296,7 +337,8 @@ class InternalDoseModel:
             "covered": list(self.covered),
             "noble_gas_na": list(self.noble_gas_na),
             "uncovered": list(self.uncovered),
-            "types_used": dict(self.types_used),
+            "types_used": dict(self.types_used),     # inhalation: F/M/S or vapour form per nuclide
+            "forms_used": dict(self.forms_used),     # ingestion: chemical form (H-3 HTO/OBT only)
             "f1_used": dict(self.f1_used),
             # Per-nuclide e_n (Sv/Bq) for the cursor breakdown — the client folds A_n(t) at the
             # cursor (mirrors dose_lines' coeff_si), so the table is live on scrub with no re-fetch.

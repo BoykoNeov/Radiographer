@@ -45,6 +45,17 @@ bridge passes ``absorption_type=None`` and there is no UI type toggle), so a non
 would be a shipped-but-never-folded, unvalidated number — the honesty-register hazard for zero
 v1 benefit. Non-default capture is deferred to the type-toggle extension (see docs/plans). The
 default type per element is read from Annex E, not chosen by value or memory.
+
+**Schema v2 — gas/vapour (H-3, I-129, I-131):** these are inhaled/ingested as gases/vapours, not
+particulate aerosols, so they carry CHEMICAL-FORM tokens instead of F/M/S lung types and have no
+AMAD. H-3: HTO (tritiated water) vs OBT (organically-bound tritium), differing on BOTH routes →
+ingestion gets a per-form ``forms`` map. Iodine: elemental (I2) vs methyl (CH3I) vapour, VAPOUR-
+ONLY per the locked scope (the Annex A particulate-F form is out of scope — which is why the
+Annex-E particulate catch-all does NOT bind the vapour default). Values are from ICRP-119 Annex B
+(worker) / Annex H (public) for inhalation and Annex A/F for H-3 ingestion. Gas/vapour coefficients
+are reference-adult and age-independent → worker==public by construction (a weaker but real
+two-annex transcription cross-check; see ``_validate_gas_vapour``). default form = the
+representative form for unspecified exposure: H-3 -> HTO, iodine -> elemental.
 """
 
 from __future__ import annotations
@@ -52,7 +63,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # v2 adds gas/vapour chemical forms (H-3 HTO/OBT, iodine elemental/methyl vapour)
 UNITS = "Sv_per_Bq"
 PROGENY_CONVENTION = "parent_only_in_vivo_ingrowth"  # NOT the "+"-bundled equilibrium entries
 
@@ -188,6 +199,29 @@ WORKER = {
                    "inhalation": {"default_type": "M", "types": {"M": 3.5e-08}}},
         "Eu-155": {"ingestion": {"e_Sv_Bq": 3.2e-10, "f1": 5e-04},
                    "inhalation": {"default_type": "M", "types": {"M": 4.7e-09}}},
+
+        # ============ M13 GAS/VAPOUR BATCH (schema v2 — chemical forms, NOT F/M/S) ============
+        # H-3 and iodine are inhaled/ingested as gases/vapours, not particulate aerosols, so they
+        # carry chemical-FORM tokens (no AMAD): H-3 inhalation/ingestion HTO vs OBT (ICRP-119 Annex
+        # B worker / Annex H public, + Annex A/F ingestion); iodine inhalation elemental (I2) vs
+        # methyl (CH3I) vapour (Annex B/H). default = the representative form for unspecified
+        # exposure (NO Annex-E particulate catch-all applies — Annex E classifies aerosol absorption
+        # types only): H-3 -> HTO (tritiated water; note OBT is ~2.3x higher), iodine -> elemental.
+        # Iodine ships VAPOUR-ONLY (the LOCKED scope, §7); the Annex A particulate-F is out of scope.
+        # Worker (ICRP-68) and public-adult (ICRP-72) values are IDENTICAL for these forms — the
+        # gas/vapour coefficient is reference-adult and age-independent (ICRP-72 Annex H "Adult"
+        # column == ICRP-68 Annex B/H value); the cross-check below confirms it form-by-form.
+        "H-3": {"ingestion": {"default_form": "HTO",
+                              "forms": {"HTO": {"e_Sv_Bq": 1.8e-11, "f1": 1.0},
+                                        "OBT": {"e_Sv_Bq": 4.2e-11, "f1": 1.0}}},
+                "inhalation": {"default_type": "HTO",
+                               "types": {"HTO": 1.8e-11, "OBT": 4.1e-11}}},
+        "I-129": {"ingestion": {"e_Sv_Bq": 1.1e-07, "f1": 1.0},
+                  "inhalation": {"default_type": "vapour_elemental",
+                                 "types": {"vapour_elemental": 9.6e-08, "vapour_methyl": 7.4e-08}}},
+        "I-131": {"ingestion": {"e_Sv_Bq": 2.2e-08, "f1": 1.0},
+                  "inhalation": {"default_type": "vapour_elemental",
+                                 "types": {"vapour_elemental": 2.0e-08, "vapour_methyl": 1.5e-08}}},
     },
 }
 
@@ -302,6 +336,21 @@ PUBLIC_ADULT = {
                    "inhalation": {"default_type": "M", "types": {"M": 5.3e-08}}},
         "Eu-155": {"ingestion": {"e_Sv_Bq": 3.2e-10, "f1": 5e-04},
                    "inhalation": {"default_type": "M", "types": {"M": 6.9e-09}}},
+
+        # ============ M13 GAS/VAPOUR BATCH (schema v2) ============ (see worker block for rationale)
+        # Public-adult values == worker (gas/vapour is reference-adult, age-independent): ICRP-72
+        # Annex H "Adult" column (inhalation) + Annex F "Adult" column (ingestion) match ICRP-68.
+        "H-3": {"ingestion": {"default_form": "HTO",
+                              "forms": {"HTO": {"e_Sv_Bq": 1.8e-11, "f1": 1.0},
+                                        "OBT": {"e_Sv_Bq": 4.2e-11, "f1": 1.0}}},
+                "inhalation": {"default_type": "HTO",
+                               "types": {"HTO": 1.8e-11, "OBT": 4.1e-11}}},
+        "I-129": {"ingestion": {"e_Sv_Bq": 1.1e-07, "f1": 1.0},
+                  "inhalation": {"default_type": "vapour_elemental",
+                                 "types": {"vapour_elemental": 9.6e-08, "vapour_methyl": 7.4e-08}}},
+        "I-131": {"ingestion": {"e_Sv_Bq": 2.2e-08, "f1": 1.0},
+                  "inhalation": {"default_type": "vapour_elemental",
+                                 "types": {"vapour_elemental": 2.0e-08, "vapour_methyl": 1.5e-08}}},
     },
 }
 
@@ -347,6 +396,15 @@ _WORKER_1UM = {
     "Pm-147": {"M": 4.7e-09},
     "Eu-154": {"M": 5.0e-08},
     "Eu-155": {"M": 6.5e-09},
+    # M13 gas/vapour batch — these are NOT 1 µm particulate values: they are the WORKER side read
+    # (ICRP-68 via ICRP-119 Annex B), kept here only to drive the same per-type cross-check against
+    # the PUBLIC side (Annex H) in PUBLIC_ADULT. Gas/vapour coefficients are reference-adult and
+    # age-independent, so worker==public BY CONSTRUCTION — this check is WEAKER than the differing
+    # 5µm/1µm particulate check (it cannot catch a value that is wrong in both annexes), but it is
+    # still a real cross-check between two independently typeset annexes (B vs H). See PROVENANCE.
+    "H-3": {"HTO": 1.8e-11, "OBT": 4.1e-11},
+    "I-129": {"vapour_elemental": 9.6e-08, "vapour_methyl": 7.4e-08},
+    "I-131": {"vapour_elemental": 2.0e-08, "vapour_methyl": 1.5e-08},
 }
 
 #: Nuclides whose worker (Annex A) and public-adult (Annex F) ingestion **f1 differ**, so the
@@ -367,12 +425,53 @@ class BuildError(Exception):
     """Loud failure — a structural surprise or a failed consistency check. Never swallowed."""
 
 
+def _ingestion_default_e_f1(rec: dict) -> tuple[float, float]:
+    """The (e, f1) the equal-f1 cross-check compares: the per-form default for a gas/vapour
+    nuclide (H-3), else the single scalar. H-3's PER-FORM worker↔public agreement is validated
+    separately (every form, not just the default) in :func:`_validate_gas_vapour`."""
+    ing = rec["ingestion"]
+    if "forms" in ing:
+        f = ing["forms"][ing["default_form"]]
+        return f["e_Sv_Bq"], f["f1"]
+    return ing["e_Sv_Bq"], ing["f1"]
+
+
+def _validate_gas_vapour() -> None:
+    """Schema-v2 gas/vapour (H-3, iodine) cross-checks. Forms are chemical (HTO/OBT, elemental/
+    methyl vapour), not F/M/S — they have no AMAD, so the value is reference-adult and identical
+    worker↔public BY CONSTRUCTION. This asserts that identity per form (catching a one-sided
+    misread between the independently typeset Annex B (worker) and Annex H (public) tables)."""
+    wc, pc = WORKER["coefficients"], PUBLIC_ADULT["coefficients"]
+    for nuc in ("H-3", "I-129", "I-131"):
+        # inhalation: every form present in both, equal value
+        wt, pt = wc[nuc]["inhalation"]["types"], pc[nuc]["inhalation"]["types"]
+        if set(wt) != set(pt):
+            raise BuildError(f"{nuc} gas/vapour inhalation form sets differ: {set(wt)} vs {set(pt)}")
+        for form in wt:
+            if wt[form] != pt[form]:
+                raise BuildError(
+                    f"{nuc} inhalation form {form!r} worker {wt[form]:.3g} != public {pt[form]:.3g} "
+                    "(gas/vapour is age-independent → must be identical; suspected one-sided misread)"
+                )
+    # H-3 ingestion: per-form worker↔public identity (HTO and OBT both)
+    wf, pf = wc["H-3"]["ingestion"]["forms"], pc["H-3"]["ingestion"]["forms"]
+    if set(wf) != set(pf):
+        raise BuildError(f"H-3 ingestion form sets differ: {set(wf)} vs {set(pf)}")
+    for form in wf:
+        if wf[form]["e_Sv_Bq"] != pf[form]["e_Sv_Bq"]:
+            raise BuildError(
+                f"H-3 ingestion form {form!r} worker {wf[form]['e_Sv_Bq']:.3g} != "
+                f"public {pf[form]['e_Sv_Bq']:.3g} (suspected one-sided misread)"
+            )
+
+
 def _validate_consistency() -> None:
     """The two build-time transcription cross-checks (see module docstring)."""
+    _validate_gas_vapour()
     wc, pc = WORKER["coefficients"], PUBLIC_ADULT["coefficients"]
     for nuc in wc:
-        we, wf = wc[nuc]["ingestion"]["e_Sv_Bq"], wc[nuc]["ingestion"]["f1"]
-        pe, pf = pc[nuc]["ingestion"]["e_Sv_Bq"], pc[nuc]["ingestion"]["f1"]
+        we, wf = _ingestion_default_e_f1(wc[nuc])
+        pe, pf = _ingestion_default_e_f1(pc[nuc])
         # (1) ingestion cross-check — equal-f1 ⇒ equal-e (assumption-free); differing-f1 ⇒ must
         # be a documented exception (the ratio e∝f1 is invalid; see DIFFERING_F1_INGESTION).
         if wf == pf:
@@ -429,18 +528,26 @@ def _build_one(spec: dict) -> dict:
     }
     # Structural sanity: every coefficient positive and in a physical range.
     for nuc, rec in spec["coefficients"].items():
-        for route in ("ingestion", "inhalation"):
-            if route not in rec:
-                continue
-            vals = ([rec[route]["e_Sv_Bq"]] if route == "ingestion"
-                    else list(rec[route]["types"].values()))
-            for v in vals:
+        if "ingestion" in rec:
+            ing = rec["ingestion"]
+            if "forms" in ing:  # H-3: per-chemical-form ingestion (HTO/OBT)
+                if ing["default_form"] not in ing["forms"]:
+                    raise BuildError(
+                        f"{nuc}: ingestion default_form {ing['default_form']!r} not among forms"
+                    )
+                ing_vals = [f["e_Sv_Bq"] for f in ing["forms"].values()]
+            else:
+                ing_vals = [ing["e_Sv_Bq"]]
+            for v in ing_vals:
                 if not (1e-13 < v < 1e-3):
-                    raise BuildError(f"{nuc}/{route}: e={v} outside plausible Sv/Bq range")
+                    raise BuildError(f"{nuc}/ingestion: e={v} outside plausible Sv/Bq range")
         if "inhalation" in rec:
-            dt = rec["inhalation"]["default_type"]
-            if dt not in rec["inhalation"]["types"]:
-                raise BuildError(f"{nuc}: default_type {dt!r} not among tabulated types")
+            inh = rec["inhalation"]
+            for v in inh["types"].values():
+                if not (1e-13 < v < 1e-3):
+                    raise BuildError(f"{nuc}/inhalation: e={v} outside plausible Sv/Bq range")
+            if inh["default_type"] not in inh["types"]:
+                raise BuildError(f"{nuc}: default_type {inh['default_type']!r} not among types")
     return out
 
 
