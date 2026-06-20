@@ -85,11 +85,16 @@ a different quantity, not e(50), so they cannot validate the dose values).
 
 ## Coverage
 
-A **curated slice** (16 nuclides), extensible like spent-fuel's `GRID_POINTS`:
+A **curated slice** (21 nuclides), extensible like spent-fuel's `GRID_POINTS`:
 - **Actinide micro-slice** (all F/M/S): Po-210, Ra-226, U-238, Pu-239, Am-241.
 - **Fission/activation products** (default type only): Co-60, Se-79, Sr-90, Tc-99, Ru-106,
   Cs-134, Cs-137, Ce-144.
-- **Actinide expansion** (all F/M/S; 300-DPI crop-verified, in progress): U-234, U-235, U-236.
+- **Actinide expansion** (all *cross-checkable* tabulated types; 300-DPI crop-verified, in
+  progress): U-234/235/236, Np-237, Pu-238/240/241/242. Per-element the worker (Annex A,
+  ICRP-68) tabulates fewer absorption types than the public Annex G (ICRP-72): worker **Np = M
+  only**, worker **Pu = M & S (no F)**. A public type without a worker-1µm counterpart cannot be
+  cross-checked, so it is **not shipped** — the shipped set is "all types tabulated for *both*
+  populations", which the build's per-type worker-1µm↔public guard enforces.
 
 A tracked nuclide absent from the shipped set makes a committed-dose estimate a **LOWER BOUND**,
 surfaced loudly by the engine (§11). Still uncovered (future batches): the remaining must-cover

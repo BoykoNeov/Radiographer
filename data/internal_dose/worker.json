@@ -209,6 +209,70 @@
           "S": 6.3e-06
         }
       }
+    },
+    "Np-237": {
+      "ingestion": {
+        "e_Sv_Bq": 1.1e-07,
+        "f1": 0.0005
+      },
+      "inhalation": {
+        "default_type": "M",
+        "types": {
+          "M": 1.5e-05
+        }
+      }
+    },
+    "Pu-238": {
+      "ingestion": {
+        "e_Sv_Bq": 2.3e-07,
+        "f1": 0.0005
+      },
+      "inhalation": {
+        "default_type": "M",
+        "types": {
+          "M": 3e-05,
+          "S": 1.1e-05
+        }
+      }
+    },
+    "Pu-240": {
+      "ingestion": {
+        "e_Sv_Bq": 2.5e-07,
+        "f1": 0.0005
+      },
+      "inhalation": {
+        "default_type": "M",
+        "types": {
+          "M": 3.2e-05,
+          "S": 8.3e-06
+        }
+      }
+    },
+    "Pu-241": {
+      "ingestion": {
+        "e_Sv_Bq": 4.7e-09,
+        "f1": 0.0005
+      },
+      "inhalation": {
+        "default_type": "M",
+        "types": {
+          "M": 5.8e-07,
+          "S": 8.4e-08
+        }
+      }
+    },
+    "Pu-242": {
+      "ingestion": {
+        "e_Sv_Bq": 2.4e-07,
+        "f1": 0.0005
+      },
+      "inhalation": {
+        "default_type": "M",
+        "types": {
+          "M": 3.1e-05,
+          "S": 7.7e-06
+        }
+      }
     }
   }
 }

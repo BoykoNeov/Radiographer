@@ -37,8 +37,10 @@ CANON = ROOT / "data" / "internal_dose"
 MICRO_SLICE = ("Po-210", "Ra-226", "U-238", "Pu-239", "Am-241")
 # M13 fission/activation-product batch (default-type-only inhalation).
 FISSION_PRODUCTS = ("Co-60", "Se-79", "Sr-90", "Tc-99", "Ru-106", "Cs-134", "Cs-137", "Ce-144")
-# M13 actinide-expansion batch (all tabulated F/M/S; 300-DPI crop-verified). Grows by element.
-ACTINIDE_EXPANSION = ("U-234", "U-235", "U-236")
+# M13 actinide-expansion batch (all cross-checkable tabulated types; 300-DPI crop-verified).
+# Grows by element. Np ships M only (worker tabulates M); Pu ships M & S (worker has no F).
+ACTINIDE_EXPANSION = ("U-234", "U-235", "U-236",
+                      "Np-237", "Pu-238", "Pu-240", "Pu-241", "Pu-242")
 CURATED = MICRO_SLICE + FISSION_PRODUCTS + ACTINIDE_EXPANSION
 
 # ICRP default absorption type per element (ICRP-119 Annex E "unspecified compounds" catch-all)
@@ -48,6 +50,7 @@ DEFAULT_TYPE = {
     "Co-60": "M", "Se-79": "F", "Sr-90": "F", "Tc-99": "F",
     "Ru-106": "F", "Cs-134": "F", "Cs-137": "F", "Ce-144": "M",
     "U-234": "M", "U-235": "M", "U-236": "M",  # uranium catch-all = Type M (same element as U-238)
+    "Np-237": "M", "Pu-238": "M", "Pu-240": "M", "Pu-241": "M", "Pu-242": "M",
 }
 
 # Validated ICRP-119 anchors (Sv/Bq). ingestion = e; inhalation = DEFAULT-type e.
@@ -70,6 +73,11 @@ ANCHORS = {
         "U-234":  {"ingestion": 4.9e-08, "inhalation": 2.1e-06},  # M (5 µm)
         "U-235":  {"ingestion": 4.6e-08, "inhalation": 1.8e-06},  # M (5 µm)
         "U-236":  {"ingestion": 4.6e-08, "inhalation": 1.9e-06},  # M (5 µm)
+        "Np-237": {"ingestion": 1.1e-07, "inhalation": 1.5e-05},  # M (5 µm)
+        "Pu-238": {"ingestion": 2.3e-07, "inhalation": 3.0e-05},  # M (5 µm)
+        "Pu-240": {"ingestion": 2.5e-07, "inhalation": 3.2e-05},  # M (5 µm)
+        "Pu-241": {"ingestion": 4.7e-09, "inhalation": 5.8e-07},  # M (5 µm)
+        "Pu-242": {"ingestion": 2.4e-07, "inhalation": 3.1e-05},  # M (5 µm)
     },
     "public_adult": {
         "Po-210": {"ingestion": 1.2e-06, "inhalation": 3.3e-06},  # M
@@ -88,6 +96,11 @@ ANCHORS = {
         "U-234":  {"ingestion": 4.9e-08, "inhalation": 3.5e-06},  # M (1 µm adult)
         "U-235":  {"ingestion": 4.7e-08, "inhalation": 3.1e-06},  # M (1 µm adult)
         "U-236":  {"ingestion": 4.6e-08, "inhalation": 3.2e-06},  # M (1 µm adult)
+        "Np-237": {"ingestion": 1.1e-07, "inhalation": 2.3e-05},  # M (1 µm adult)
+        "Pu-238": {"ingestion": 2.3e-07, "inhalation": 4.6e-05},  # M (1 µm adult)
+        "Pu-240": {"ingestion": 2.5e-07, "inhalation": 5.0e-05},  # M (1 µm adult)
+        "Pu-241": {"ingestion": 4.8e-09, "inhalation": 9.0e-07},  # M (1 µm adult)
+        "Pu-242": {"ingestion": 2.4e-07, "inhalation": 4.8e-05},  # M (1 µm adult)
     },
 }
 
