@@ -42,13 +42,18 @@ FISSION_PRODUCTS = ("Co-60", "Se-79", "Sr-90", "Tc-99", "Ru-106", "Cs-134", "Cs-
 ACTINIDE_EXPANSION = ("U-234", "U-235", "U-236",
                       "Np-237", "Pu-238", "Pu-240", "Pu-241", "Pu-242",
                       "Am-243", "Cm-242", "Cm-243", "Cm-244", "Cm-245", "Cm-246")
+# M13 actinide remainder — Thorium & Protactinium (worker ships M & S; default M). Worker 5 µm
+# crop-read twice; the dual thorium ingestion f1 (0.0005 default vs 0.0002 oxide) resolves to the
+# Annex E catch-all f1 5E-04, so equal-f1 holds and no DIFFERING_F1 entry is needed.
+ACTINIDE_REMAINDER = ("Th-228", "Th-230", "Th-232", "Pa-231")
 # M13 non-actinide expansion (default-type only, like the fission products). The shipped worker
 # 5 µm value was 300-DPI crop-read twice (the one column the build never cross-checks).
 NON_ACTINIDE = ("Pb-210", "Sb-125", "Sn-126", "Pm-147", "Eu-154", "Eu-155")
 # M13 gas/vapour batch (schema v2): chemical-form tokens, not F/M/S particulate types — H-3
 # (HTO/OBT) and iodine (elemental/methyl vapour, vapour-only). Worker==public by construction.
 GAS_VAPOUR = ("H-3", "I-129", "I-131")
-CURATED = MICRO_SLICE + FISSION_PRODUCTS + ACTINIDE_EXPANSION + NON_ACTINIDE + GAS_VAPOUR
+CURATED = (MICRO_SLICE + FISSION_PRODUCTS + ACTINIDE_EXPANSION + ACTINIDE_REMAINDER
+           + NON_ACTINIDE + GAS_VAPOUR)
 
 # ICRP default absorption type per element (ICRP-119 Annex E "unspecified compounds" catch-all)
 # — what the engine folds, so the anchor below is this type's value. NOT chosen by value/memory.
@@ -62,6 +67,8 @@ DEFAULT_TYPE = {
     "U-234": "M", "U-235": "M", "U-236": "M",  # uranium catch-all = Type M (same element as U-238)
     "Np-237": "M", "Pu-238": "M", "Pu-240": "M", "Pu-241": "M", "Pu-242": "M",
     "Am-243": "M", "Cm-242": "M", "Cm-243": "M", "Cm-244": "M", "Cm-245": "M", "Cm-246": "M",
+    # Thorium & Protactinium catch-all = Type M (Annex E "unspecified compounds", f1 5E-04):
+    "Th-228": "M", "Th-230": "M", "Th-232": "M", "Pa-231": "M",
     # Non-actinides (Annex E: Pb F, Sb F, Sn F, Pm M, Eu M):
     "Pb-210": "F", "Sb-125": "F", "Sn-126": "F", "Pm-147": "M", "Eu-154": "M", "Eu-155": "M",
     # Gas/vapour (schema v2): default is a chemical FORM, not an Annex-E particulate type —
@@ -104,6 +111,11 @@ ANCHORS = {
         "Cm-244": {"ingestion": 1.2e-07, "inhalation": 1.7e-05},  # M (5 µm)
         "Cm-245": {"ingestion": 2.1e-07, "inhalation": 2.7e-05},  # M (5 µm)
         "Cm-246": {"ingestion": 2.1e-07, "inhalation": 2.7e-05},  # M (5 µm)
+        # Actinide remainder — Th/Pa (worker 5 µm, default M):
+        "Th-228": {"ingestion": 7.2e-08, "inhalation": 2.2e-05},  # M (5 µm)
+        "Th-230": {"ingestion": 2.1e-07, "inhalation": 2.8e-05},  # M (5 µm)
+        "Th-232": {"ingestion": 2.2e-07, "inhalation": 2.9e-05},  # M (5 µm)
+        "Pa-231": {"ingestion": 7.1e-07, "inhalation": 8.9e-05},  # M (5 µm)
         # Non-actinide expansion (default type, worker 5 µm):
         "Pb-210": {"ingestion": 6.8e-07, "inhalation": 1.1e-06},  # F
         "Sb-125": {"ingestion": 1.1e-09, "inhalation": 1.7e-09},  # F
@@ -144,6 +156,11 @@ ANCHORS = {
         "Cm-244": {"ingestion": 1.2e-07, "inhalation": 2.7e-05},  # M (1 µm adult)
         "Cm-245": {"ingestion": 2.1e-07, "inhalation": 4.2e-05},  # M (1 µm adult)
         "Cm-246": {"ingestion": 2.1e-07, "inhalation": 4.2e-05},  # M (1 µm adult)
+        # Actinide remainder — Th/Pa (public 1 µm adult, default M):
+        "Th-228": {"ingestion": 7.2e-08, "inhalation": 3.2e-05},  # M (1 µm adult)
+        "Th-230": {"ingestion": 2.1e-07, "inhalation": 4.3e-05},  # M (1 µm adult)
+        "Th-232": {"ingestion": 2.3e-07, "inhalation": 4.5e-05},  # M (1 µm adult)
+        "Pa-231": {"ingestion": 7.1e-07, "inhalation": 1.4e-04},  # M (1 µm adult)
         # Non-actinide expansion (default type, public 1 µm adult):
         "Pb-210": {"ingestion": 6.9e-07, "inhalation": 9.0e-07},  # F
         "Sb-125": {"ingestion": 1.1e-09, "inhalation": 1.4e-09},  # F
@@ -389,6 +406,32 @@ def test_absorption_type_override():
     s = idose.coefficient("U-238", "inhalation", "worker", absorption_type="S")
     m = idose.coefficient("U-238", "inhalation", "worker")
     assert s == 5.7e-06 and m == 1.6e-06
+
+
+def test_thorium_dual_f1_resolves_to_annex_e_default():
+    # ICRP-68/72 list thorium ingestion at TWO f1 values: 0.0005 (Annex E "unspecified compounds",
+    # Type M — the default) and 0.0002 (Type-S oxides/hydroxides). The build folds the f1 5E-04
+    # ingestion value, so worker == public-adult (equal-f1 check holds) and Th-228 is NOT in the
+    # differing-f1 set. The 0.0002-route oxide ingestion value (3.5E-08, never folded) is absent.
+    for nuc, ing in (("Th-228", 7.2e-08), ("Th-230", 2.1e-07), ("Pa-231", 7.1e-07)):
+        assert nuc not in DIFFERING_F1_INGESTION
+        w = _load_raw("worker")["coefficients"][nuc]["ingestion"]
+        assert w["f1"] == 5e-04 and w["e_Sv_Bq"] == ing
+        assert idose.coefficient(nuc, "ingestion", "worker") == ing
+
+
+def test_thorium_protactinium_ship_M_and_S():
+    # Th/Pa ship Type M (default) & S, like the U/Pu actinides — worker tabulates only M & S (no
+    # F). Public Annex G additionally lists Type F, which is dropped (no worker-1µm counterpart to
+    # cross-check). The S type is selectable; M is the folded default.
+    for population in idose.POPULATIONS:
+        for nuc in ACTINIDE_REMAINDER:
+            types = _load_raw(population)["coefficients"][nuc]["inhalation"]["types"]
+            assert set(types) == {"M", "S"}, f"{population}/{nuc}: expected M & S, got {set(types)}"
+    # S override is the higher value for Th-228 (S retained longer in lung) and resolvable:
+    s = idose.coefficient("Th-228", "inhalation", "worker", absorption_type="S")
+    m = idose.coefficient("Th-228", "inhalation", "worker")
+    assert s == 2.5e-05 and m == 2.2e-05 and s > m
 
 
 # -- no silent errors -------------------------------------------------------

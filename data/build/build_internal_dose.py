@@ -178,6 +178,24 @@ WORKER = {
         "Cm-246": {"ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
                    "inhalation": {"default_type": "M", "types": {"M": 2.7e-05}}},
 
+        # ===== M13 ACTINIDE REMAINDER — Thorium & Protactinium (worker Annex A, 5 µm) =====
+        # Th (printed p.53) / Pa (printed p.54). Worker tabulates Type M & S only (no F); default
+        # M per Annex E (Th & Pa "unspecified compounds" = Type M, f1 5E-04). The shipped 5 µm
+        # column was 300-DPI crop-read TWICE (the U-238/Po-210 soft spot — the build's inhalation
+        # check validates 1 µm, never the shipped 5 µm). Thorium dual-f1 resolved: the 0.0002 the
+        # table also lists is the Type-S (oxides/hydroxides) ingestion f1 — NOT the default — so
+        # ingestion ships the f1 5E-04 value (== public Annex F → equal-f1 check holds). A full-page
+        # read of Pa-231 S had miscounted Pa-230's row (5.7E-07/7.1E-07); the crop gives the true
+        # Pa-231 S 5µm 1.7E-05 (1µm 3.2E-05). See PROVENANCE "errors caught".
+        "Th-228": {"ingestion": {"e_Sv_Bq": 7.2e-08, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 2.2e-05, "S": 2.5e-05}}},
+        "Th-230": {"ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 2.8e-05, "S": 7.2e-06}}},
+        "Th-232": {"ingestion": {"e_Sv_Bq": 2.2e-07, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 2.9e-05, "S": 1.2e-05}}},
+        "Pa-231": {"ingestion": {"e_Sv_Bq": 7.1e-07, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 8.9e-05, "S": 1.7e-05}}},
+
         # ============ M13 NON-ACTINIDE EXPANSION (default type only, 5 µm) ============
         # Fission/activation products outside the actinides. Ship the ICRP default type ONLY
         # (Annex E "unspecified compounds" catch-all per element: Pb F, Sb F, Sn F, Pm M, Eu M),
@@ -318,6 +336,20 @@ PUBLIC_ADULT = {
         "Cm-246": {"ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
                    "inhalation": {"default_type": "M", "types": {"M": 4.2e-05}}},
 
+        # ===== M13 ACTINIDE REMAINDER — Thorium & Protactinium =====
+        # Annex F (ingestion, Adult, f1 0.0005 == worker → equal-e check) + Annex G (inhalation,
+        # 1 µm Adult). Ship M & S; public Annex G also lists Type F (dropped — no worker-1µm F
+        # counterpart to cross-check). Every M & S cross-checks vs the worker 1 µm column at
+        # 1.06-1.09×. default_type M (Annex E catch-all).
+        "Th-228": {"ingestion": {"e_Sv_Bq": 7.2e-08, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 3.2e-05, "S": 4.0e-05}}},
+        "Th-230": {"ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 4.3e-05, "S": 1.4e-05}}},
+        "Th-232": {"ingestion": {"e_Sv_Bq": 2.3e-07, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 4.5e-05, "S": 2.5e-05}}},
+        "Pa-231": {"ingestion": {"e_Sv_Bq": 7.1e-07, "f1": 5e-04},
+                   "inhalation": {"default_type": "M", "types": {"M": 1.4e-04, "S": 3.4e-05}}},
+
         # ============ M13 NON-ACTINIDE EXPANSION (default type only, 1 µm adult) ============
         # Annex F (ingestion, Adult column + the adult f1) + Annex G (inhalation, 1 µm Adult column,
         # default type only — crop-read; cross-checked vs the worker 1 µm column in _WORKER_1UM).
@@ -389,6 +421,11 @@ _WORKER_1UM = {
     "Cm-244": {"M": 2.5e-05},
     "Cm-245": {"M": 4.0e-05},
     "Cm-246": {"M": 4.0e-05},
+    # M13 actinide remainder — Th/Pa worker 1 µm, M & S (300-DPI crop-verified, Annex A p.53/54):
+    "Th-228": {"M": 3.0e-05, "S": 3.7e-05},
+    "Th-230": {"M": 4.0e-05, "S": 1.3e-05},
+    "Th-232": {"M": 4.2e-05, "S": 2.3e-05},
+    "Pa-231": {"M": 1.3e-04, "S": 3.2e-05},
     # M13 non-actinide expansion — worker 1 µm, DEFAULT type only (public ships default only):
     "Pb-210": {"F": 8.9e-07},
     "Sb-125": {"F": 1.4e-09},

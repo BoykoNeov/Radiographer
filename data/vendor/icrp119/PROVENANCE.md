@@ -95,6 +95,11 @@ of Po-210 S, Ra-226 F/S, Am-241 F/S, suspect Pu-239 F still stands.)
   Corrected value `5.7E-06`; regression golden in `test_absorption_type_override` updated.
 - **Po-210** worker-1µm default cross-check value first taken from the F row (`6.0E-07`) →
   corrected to the M row **`3.0E-06`** (matches public M `3.3E-06`).
+- **Pa-231** (actinide-remainder batch) worker 5 µm **S** misread `5.7E-07` (1 µm `7.1E-07`) on a
+  first-pass full-page read — those are **Pa-230's** S-row values (the adjacent row above). A
+  300-DPI crop gives the true Pa-231 **S 5 µm `1.7E-05`** (1 µm `3.2E-05`). Like the U-238 S bug,
+  this lived in the 5 µm column (never cross-checked) on a non-default type (never folded), so only
+  the crop catches it; the Pa-231 **M** values (folded) were read correctly throughout.
 - **Co-60** (fission-product batch) public-M adult 1 µm misread as `1.7E-08` from the full-page
   extract (a **15y↔adult column miscount** — adjacent ages differ <40%, so it slipped *inside*
   the inhalation-check tolerance, a silent error). A 300-DPI crop gave the true **`1.0E-08`**
@@ -112,7 +117,7 @@ two-annex worker↔public form-matched check (Annex B vs Annex H), as for every 
 
 ## Coverage
 
-A **curated slice** (36 nuclides), extensible like spent-fuel's `GRID_POINTS`:
+A **curated slice** (40 nuclides), extensible like spent-fuel's `GRID_POINTS`:
 - **Actinide micro-slice** (all F/M/S): Po-210, Ra-226, U-238, Pu-239, Am-241.
 - **Fission/activation products** (default type only): Co-60, Se-79, Sr-90, Tc-99, Ru-106,
   Cs-134, Cs-137, Ce-144.
@@ -122,6 +127,14 @@ A **curated slice** (36 nuclides), extensible like spent-fuel's `GRID_POINTS`:
   worker **Np/Am/Cm = M only**, worker **Pu = M & S (no F)**. A public type without a worker-1µm
   counterpart cannot be cross-checked, so it is **not shipped** — the shipped set is "all types
   tabulated for *both* populations", which the build's per-type worker-1µm↔public guard enforces.
+- **Actinide remainder** (Th-228/230/232, Pa-231) — **Type M & S** (worker tabulates only M & S,
+  no F; public Annex G also lists F, dropped for lack of a worker counterpart). default M (Annex E
+  Th/Pa "unspecified compounds" = Type M, f1 5E-04). Worker Annex A printed p.53 (Th) / p.54 (Pa),
+  5 µm column 300-DPI crop-read **twice**. The **dual thorium ingestion f1** (the table lists both
+  0.0005 and 0.0002 per nuclide) resolves to the Annex E catch-all **f1 5E-04** (Type M); the
+  0.0002 is the Type-S oxide route, not the default — so ingestion ships the f1 5E-04 value and the
+  worker↔public equal-f1 check holds (no `DIFFERING_F1_INGESTION` entry). All M & S cross-check vs
+  the worker 1 µm column at 1.06–1.09×. (Pa-231 S full-page miscount caught — see "Errors caught".)
 - **Non-actinide expansion** (default type only — Annex E: Pb F, Sb F, Sn F, Pm M, Eu M):
   Pb-210, Sb-125, Sn-126, Pm-147, Eu-154/155. Worker 5 µm shipped value 300-DPI crop-read TWICE
   (it is the one column the build never cross-checks — the U-238/Po-210 soft spot). All six share
@@ -139,7 +152,7 @@ A **curated slice** (36 nuclides), extensible like spent-fuel's `GRID_POINTS`:
   than elemental — both surfaced as honesty caveats, not folded by default.
 
 A tracked nuclide absent from the shipped set makes a committed-dose estimate a **LOWER BOUND**,
-surfaced loudly by the engine (§11). Still uncovered (future batches): **Th-228/230/232, Pa-231**
-(actinide expansion remainder). Noble gases (Kr/Xe/Rn/…) have **no intake coefficient** (Annex C
+surfaced loudly by the engine (§11). The actinide expansion is now **complete** (the Th/Pa
+remainder landed this batch). Noble gases (Kr/Xe/Rn/…) have **no intake coefficient** (Annex C
 is submersion dose *rate*, a different quantity) — the engine treats them as a distinct "N/A"
 state, not a gap.

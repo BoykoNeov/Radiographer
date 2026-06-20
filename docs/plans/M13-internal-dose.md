@@ -8,13 +8,15 @@ worker-1µm↔public-1µm per shipped type; gas/vapour `_validate_gas_vapour`); 
 (loader + `InternalDoseModel`, three coverage states, f1/form/per-nuclide-coeff provenance);
 **bridge `internal_dose()`**; `tests/test_internal_dose.py` + bridge tests, green; `DATA_DIRS` +
 data README registered.
-**Coverage = 36 nuclides (schema v2):** 5 micro-slice actinides (all F/M/S) + 8 fission/activation
+**Coverage = 40 nuclides (schema v2):** 5 micro-slice actinides (all F/M/S) + 8 fission/activation
 products (default type only) + **actinide-expansion core: U-234/235/236, Np-237, Pu-238/240/241/242,
-Am-243, Cm-242/243/244/245/246** (all cross-checkable types) + **non-actinide expansion: Pb-210,
-Sb-125, Sn-126, Pm-147, Eu-154/155** (default type only) + **gas/vapour: H-3 (HTO/OBT), I-129,
-I-131 (elemental/methyl vapour)**. A pre-existing U-238 worker-5µm-S transcription error was found
-and fixed; the non-actinide batch corrected the **Po-210 default type M → F** (Annex E catch-all).
-**Still open:** Th/Pa (actinide remainder), then the **UI panel** (step 8).
+Am-243, Cm-242/243/244/245/246** (all cross-checkable types) + **actinide remainder: Th-228/230/232,
+Pa-231** (Type M & S; default M) + **non-actinide expansion: Pb-210, Sb-125, Sn-126, Pm-147,
+Eu-154/155** (default type only) + **gas/vapour: H-3 (HTO/OBT), I-129, I-131 (elemental/methyl
+vapour)**. A pre-existing U-238 worker-5µm-S transcription error was found and fixed; the
+non-actinide batch corrected the **Po-210 default type M → F** (Annex E catch-all); the Th/Pa batch
+caught a Pa-231 worker-5µm-S full-page miscount (Pa-230's row). **The actinide expansion is now
+complete.** **Still open:** the **UI panel** (step 8) — the last M13 piece.
 **Milestone:** post-v1 extension — the single biggest unbuilt capability listed *Future* in
 HANDOFF_PLAN §2 ("Internal / committed dose (ICRP dose coefficients in Sv/Bq)") and §11. The
 tool has been **external-dose only**; this adds the **intake** pathway. User-chosen next batch
@@ -240,17 +242,18 @@ as `dose()` minus `distance_m`, so the JS cursor/stacked-bar plumbing reuses cle
        Pu-238/240/241/242, Am-243, Cm-242/243/244/245/246. Per-element only types tabulated in
        **both** Annex A (worker) and Annex G (public) ship: worker **Np/Am/Cm = M only**, worker
        **Pu = M & S (no F)**. Re-verified existing micro-slice **Ra-226, Pu-239, Am-241** correct.
-     - ⏳ **RESUME HERE — Thorium + Protactinium.** Worker Annex A printed p.53 (Th) / p.54 (Pa)
-       **read full-page** (NOT yet crop-verified → must 300-DPI crop before shipping): Th-228
-       M 2.2E-05/S 2.5E-05, Th-230 M 2.8E-05/S 7.2E-06, Th-232 M 2.9E-05/S 1.2E-05 (5µm; worker
-       1µm: Th-228 M3.0E-05/S3.7E-05, Th-230 M4.0E-05/S1.3E-05, Th-232 M4.2E-05/S2.3E-05);
-       Pa-231 M 8.9E-05/S 5.7E-07 (5µm), 1µm M1.3E-04/S7.1E-07; worker ingestion f1 0.0005 —
-       Th-228 7.2E-08, Th-230 2.1E-07, Th-232 2.2E-07, Pa-231 7.1E-07. **Still needed for Th/Pa:**
-       (a) **Annex E default type** for Th and Pa (do NOT guess — §12); (b) public **Annex F**
-       ingestion (Th/Pa are on the Annex F page *before* uranium, printed ~p.84); (c) public
-       **Annex G** inhalation adult — already on PDF p.117 (full-page read, must crop); (d) note
-       the **thorium dual-f1** (Th-228 lists ingestion f1 0.0005 *and* 0.0002 — pick the one
-       matching public Annex F, add to `DIFFERING_F1_INGESTION` if it differs worker↔public).
+     - ✅ **Thorium + Protactinium DONE (40 nuclides).** Th-228/230/232, Pa-231 — **Type M & S**,
+       default M. **Annex E** catch-all for both Th and Pa = **Type M, f1 5E-04** ("unspecified
+       compounds"; Type-S oxides f1 2E-04). Worker (Annex A printed p.53/54, **5 µm crop-read
+       twice**), public ingestion (Annex F PDF p.86, Adult, f1 0.0005 == worker → equal-f1 holds),
+       public inhalation (Annex G PDF p.116/117, 1 µm Adult — Type F dropped, no worker counterpart).
+       **Dual thorium f1 resolved:** the 0.0002 the table lists per nuclide is the Type-S oxide
+       ingestion route, NOT the default → ship the f1 5E-04 value, no `DIFFERING_F1_INGESTION`
+       entry. **Crop-verification caught a real bug:** the full-page Pa-231 S read (5.7E-07/7.1E-07)
+       was **Pa-230's** S row; the true Pa-231 S 5µm = 1.7E-05 (1µm 3.2E-05). All M & S cross-check
+       vs worker 1 µm at 1.06–1.09×; equal-f1 ingestion ≤4.5%. Shipped worker ing: Th-228 7.2E-08,
+       Th-230 2.1E-07, Th-232 2.2E-07, Pa-231 7.1E-07. Tests: `ACTINIDE_REMAINDER` group +
+       `test_thorium_dual_f1_resolves_to_annex_e_default` + `test_thorium_protactinium_ship_M_and_S`.
      - ✅ **Non-actinide expansion DONE (33 nuclides total):** Pb-210, Sb-125, Sn-126, Pm-147,
        Eu-154/155 — **default type only** (Annex E: Pb F, Sb F, Sn F, Pm M, Eu M), both
        populations, worker 5 µm crop-read **twice**. All build cross-checks pass (every nuclide
@@ -301,6 +304,6 @@ as `dose()` minus `distance_m`, so the JS cursor/stacked-bar plumbing reuses cle
   future per-nuclide type/form toggle has the values; the bridge just folds the default for now.)
 - Full ~800-nuclide ICRP-119 coverage (machine-readable via ORNL Radiological Toolbox DB) —
   deferred; curated set + loud coverage gaps is the v1 contract.
-- **Th-228/230/232, Pa-231** — the remaining actinide-expansion particulates (resume per step 5
-  notes / earlier git history); needs Annex E default type + thorium dual-f1 care.
+- **DONE:** **Th-228/230/232, Pa-231** — the actinide-expansion remainder, landed this batch
+  (step 5; Type M & S, Annex E default M, thorium dual-f1 resolved to f1 5E-04).
 - **DONE:** inhalation of gases/vapours (H-3, iodine) — landed in schema v2 (step 7).
