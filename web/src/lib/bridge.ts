@@ -158,10 +158,19 @@ export interface DoseOk {
    *  Sv total, but is kept distinct from the inventory's decay-γ lines (it is a reaction γ,
    *  not a decay line). */
   source_gamma?: DoseOk | null;
-  /** spent_fuel_neutron_dose responses only (M9): per-time fraction of the SF neutron source
-   *  from emitters without an evaluated ν̄ (chiefly Cm-246 at long cooling) — NOT in the dose.
-   *  The honest lower-bound gap, surfaced for the UI to show (the dangerous under-count). */
+  /** spent_fuel_neutron_dose responses only (M9/M12): per-time fraction of the neutron source
+   *  that is UNMODELED — minor SF emitters without an evaluated ν̄ (chiefly Cm-246 at long
+   *  cooling) PLUS α-emitters absent from the PANDA (α,n) table. NOT in the dose; the honest
+   *  residual gap surfaced for the UI (the under-count direction). `dropped_sf_frac` /
+   *  `dropped_an_frac` are the SF-only / (α,n)-only components. */
+  dropped_frac?: number[];
   dropped_sf_frac?: number[];
+  dropped_an_frac?: number[];
+  /** spent_fuel_neutron_dose responses only (M12): the SF vs (α,n)-on-oxygen split of `rate_si`
+   *  (Sv/s), each summing back to the total. The source is SF + (α,n) — a best estimate for
+   *  clean oxide fuel, no longer an SF-only lower bound. */
+  rate_si_sf?: number[];
+  rate_si_alpha_n?: number[];
   /** neutron dose responses only (M10): the fast-neutron shield transmission T_n = exp(−Σ_R·x)
    *  applied to the dose. 1.0 when unshielded OR when the stack has no hydrogenous layer (then a
    *  `no_hydrogenous_layer` warning is present — the §6.3 "steer to hydrogenous" teaching point). */

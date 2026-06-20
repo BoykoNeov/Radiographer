@@ -371,13 +371,25 @@ export class AppState {
     if (!s) return null;
     return trapzWindow(this.curveX, s.rate_si, this.cursorOffsetS, this.cursorOffsetS + this.exposureS);
   }
-  /** M9: fraction of the spent-fuel SF neutron source UNMODELED at the cursor (no evaluated ν̄,
-   *  chiefly Cm-246 at long cooling) — the honest lower-bound gap. null unless a spent-fuel
+  /** M9/M12: fraction of the spent-fuel neutron source UNMODELED at the cursor — minor SF
+   *  emitters without an evaluated ν̄ (chiefly Cm-246 at long cooling) PLUS α-emitters absent
+   *  from the PANDA (α,n) table. The honest residual (under-count) gap. null unless a spent-fuel
    *  multi-parent source is active (single tabulated sources carry no dropped fraction). */
-  get neutronDroppedSfFracAtCursor(): number | null {
+  get neutronDroppedFracAtCursor(): number | null {
     const s = this.neutronDoseSeries;
-    if (!s || !s.dropped_sf_frac) return null;
-    return interpAt(this.curveX, s.dropped_sf_frac, this.cursorOffsetS);
+    const frac = s?.dropped_frac ?? s?.dropped_sf_frac;
+    if (!s || !frac) return null;
+    return interpAt(this.curveX, frac, this.cursorOffsetS);
+  }
+  /** M12: the (α,n)-on-oxygen SHARE of the modeled spent-fuel neutron dose at the cursor (0..1):
+   *  rate_si_alpha_n / rate_si. null unless the split is present (spent-fuel source). Lets the
+   *  UI show that the source is SF + (α,n), and how the (α,n) share grows as Am-241 ingrows. */
+  get neutronAlphaNFracAtCursor(): number | null {
+    const s = this.neutronDoseSeries;
+    if (!s || !s.rate_si_alpha_n) return null;
+    const tot = interpAt(this.curveX, s.rate_si, this.cursorOffsetS);
+    const an = interpAt(this.curveX, s.rate_si_alpha_n, this.cursorOffsetS);
+    return tot && tot > 0 && an != null ? an / tot : null;
   }
 
   /** M10: the fast-neutron shield transmission T_n = exp(−Σ_R·x) applied to the neutron dose;

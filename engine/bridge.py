@@ -471,20 +471,23 @@ def neutron_dose(handle: str, request_json: str) -> str:
 def spent_fuel_neutron_dose(handle: str, request_json: str) -> str:
     """``{"times_s":[...], "source_id":"pwr-uox-45gwd-4pct", "quantity":"ambient_H10",
         "distance_m":1.0, "geometry":null}`` ->
-    ``{ok, quantity, si_unit:"Sv", per, times_s, distance_m, source:"spent-fuel SF",
-       spectrum_source, spectrum_avg_coeff_pSv_cm2, rate_si, dropped_sf_frac, warnings,
-       source_gamma:null}``.
+    ``{ok, quantity, si_unit:"Sv", per, times_s, distance_m, source:"spent-fuel SF + (α,n)",
+       spectrum_source, spectrum_avg_coeff_pSv_cm2, rate_si, rate_si_sf, rate_si_alpha_n,
+       dropped_frac, dropped_sf_frac, dropped_an_frac, warnings, source_gamma:null}``.
 
-    The §6.3 **spent-fuel** neutron dose — the MULTI-parent path (M9). Unlike :func:`neutron_dose`
-    (one tabulated source key), spent fuel emits from many actinides, so the source strength is
-    intrinsic to the loaded inventory: ``S(t)=Σ yield_n·A_n(t)`` off the handle's one Bateman
-    solve. ``yield_n`` and the representative SF spectrum come from the VALIDATED ``data/spent_fuel``
-    vector's ``neutron`` block (looked up by ``source_id``); the same DoseOk shape as
-    :func:`neutron_dose` so the JS cursor/stacked-bar consumers are reused unchanged.
+    The §6.3 **spent-fuel** neutron dose — the MULTI-parent path (M9 + M12). Unlike
+    :func:`neutron_dose` (one tabulated source key), spent fuel emits from many actinides, so the
+    source strength is intrinsic to the loaded inventory: ``S(t)=Σ yield_n·A_n(t)`` off the
+    handle's one Bateman solve, summed over BOTH the SF and the (α,n)-on-oxygen terms (M12). The
+    yields and the representative SF spectrum come from the VALIDATED ``data/spent_fuel`` vector's
+    ``neutron`` block (``yields_n_per_decay`` SF + ``alpha_n.yields_n_per_decay``), looked up by
+    ``source_id``; the same DoseOk shape as :func:`neutron_dose` so the JS cursor/stacked-bar
+    consumers are reused unchanged, with ``rate_si_sf``/``rate_si_alpha_n`` exposing the split.
 
-    SF only — (α,n) is unmodeled (lower bound), and the unmodeled-Cm-246 fraction at long cooling
-    rides in ``dropped_sf_frac`` + ``warnings`` (§11, never silent). ``source_gamma`` is always
-    null: spent-fuel γ is the ICRP-107 decay lines (scored by the γ path), not reaction γ."""
+    SF + (α,n)-on-O is a best estimate for clean oxide fuel; the residual from minor SF emitters
+    without an evaluated ν̄ and α-emitters absent from PANDA Table 13 rides in ``dropped_frac`` +
+    ``warnings`` (§11, never silent). ``source_gamma`` is always null: spent-fuel γ is the ICRP-107
+    decay lines (scored by the γ path), not reaction γ."""
     try:
         req = json.loads(request_json)
         solved = _get(handle)
@@ -494,6 +497,7 @@ def spent_fuel_neutron_dose(handle: str, request_json: str) -> str:
         if not nb or not nb.get("yields_n_per_decay"):
             raise SpentFuelError(f"{req['source_id']}: no SF neutron block (rebuild the vector)")
         shield = req.get("shield")
+        an = nb.get("alpha_n") or {}
         model = SpentFuelNeutronModel(
             nb["yields_n_per_decay"],
             nb["spectrum_source"],
@@ -501,6 +505,9 @@ def spent_fuel_neutron_dose(handle: str, request_json: str) -> str:
             geometry=req.get("geometry"),
             dropped_sf_branch=nb.get("dropped_sf_branch"),
             dropped_nubar_nominal=nb.get("dropped_nubar_nominal", 3.0),
+            alpha_n_yields=an.get("yields_n_per_decay"),
+            dropped_alpha_branch=an.get("dropped_alpha_branch"),
+            nominal_O_yield_per_alpha=an.get("nominal_O_yield_per_alpha", 5.9e-8),
             shield=shield if shield else None,
         )
         out = model.dose_rate_series(activities, float(req["distance_m"]))

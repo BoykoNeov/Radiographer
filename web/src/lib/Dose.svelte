@@ -97,7 +97,8 @@
   // (residual minor emitters lacking an evaluated ν̄; <0.1% for shipped vectors now that
   // Cm-246/248 are sourced) — surfaced beside the n number, never silent.
   const isSpentFuelN = $derived(appState.spentFuelNeutronId !== null);
-  const nDroppedFrac = $derived(appState.neutronDroppedSfFracAtCursor); // 0..1, null unless spent-fuel n
+  const nDroppedFrac = $derived(appState.neutronDroppedFracAtCursor); // 0..1, combined unmodeled residual
+  const nAlphaNFrac = $derived(appState.neutronAlphaNFracAtCursor); // 0..1, (α,n) share of the n dose
   // M10 neutron shielding: T_n = exp(−Σ_R·x) now folds into the neutron dose. A hydrogenous
   // layer (water) attenuates; a γ-oriented stack (lead) is neutron-transparent (T_n=1) + warned.
   const nTransmission = $derived(appState.neutronTransmission); // 0..1, null when no n series
@@ -607,12 +608,18 @@
                 — same quantity as γ, summed in the total
               </div>
               {#if isSpentFuelN}
-                <div class="sub warn" data-testid="dose-neutron-sf-lowerbound">
-                  ⚠ spontaneous fission only — (α,n) on the fuel's oxygen is unmodeled, so this is a
-                  LOWER BOUND.{#if nDroppedFrac != null && nDroppedFrac > 0.05}
-                    At this cooling ~{Math.round(nDroppedFrac * 100)}% of the SF source is from
-                    minor emitters without an evaluated ν̄ and is also omitted.{/if}
+                <div class="sub muted" data-testid="dose-neutron-sf-split">
+                  spontaneous fission + (α,n)-on-oxygen — a best estimate for clean oxide fuel.{#if nAlphaNFrac != null}
+                    (α,n) is ~{Math.round(nAlphaNFrac * 100)}% of the source here (it grows as Am-241
+                    ingrows).{/if}
                 </div>
+                {#if nDroppedFrac != null && nDroppedFrac > 0.05}
+                  <div class="sub warn" data-testid="dose-neutron-sf-lowerbound">
+                    ⚠ at this cooling ~{Math.round(nDroppedFrac * 100)}% of the source is from minor
+                    emitters without an evaluated ν̄ / (α,n) yield and is omitted — a lower bound by
+                    that amount.
+                  </div>
+                {/if}
               {/if}
             {/if}
           </div>

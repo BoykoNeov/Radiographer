@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "id": "pwr-uox-45gwd-4pct",
   "label": "PWR spent fuel — 45 GWd/tHM, 4.0% (reference)",
   "reactor": "PWR UOX (Serpent2 pin-cell)",
@@ -284,7 +284,7 @@
     }
   ],
   "neutron": {
-    "model": "spontaneous-fission (SF) only — (α,n) on oxygen is NOT in the SCK-CEN dataset, so the modeled neutron output is a LOWER BOUND (the dangerous direction)",
+    "model": "spontaneous fission (SF) + (α,n)-on-oxygen — a BEST ESTIMATE of the intrinsic neutron source for clean oxide fuel (SF + (α,n)-on-O is essentially complete). Residual caveats: thick-target (α,n) yield carries ±factor; minor α-emitters absent from PANDA Table 13 are bounded as a dropped-(α,n) fraction (never silent).",
     "spectrum_source": "Cf-252",
     "nubar_source": "ν_p from IAEA NDS SF_n-Yield_20150313 Table 1 (JEFF-3.1 / Holden 1985) for the 18 safeguards isotopes, plus Cm-246/248 derived (Σ_k k·P(k)) from the Holden & Zucker BNL-36467 distributions (LLNL UCRL-AR-228518 Table 4); yield_per_decay = (_SF/_A)·ν_p. See data/vendor/*/PROVENANCE.md.",
     "yields_n_per_decay": {
@@ -322,6 +322,67 @@
       "Cm244_iaea_n_per_decay": 3.6735934382296785e-06,
       "rel": 0.021782010216552673,
       "note": "branching-ratio check; ν̄ cancels (not a yield validation)"
+    },
+    "alpha_n": {
+      "source": "PANDA/NUREG-CR-5550 Ch.11 Table 13 'Oxide (n/s-g)' / specific activity (per gram of isotope); see data/vendor/panda_alpha_n/PROVENANCE.md",
+      "yields_n_per_decay": {
+        "Th-232": 5.4222126765175464e-09,
+        "U-232": 1.800865801686403e-08,
+        "U-233": 1.3462707805154686e-08,
+        "U-234": 1.3031155676774389e-08,
+        "U-235": 8.881746499785706e-09,
+        "U-236": 1.0030262722036312e-08,
+        "U-238": 6.67389250671241e-09,
+        "Np-237": 1.3063472551940084e-08,
+        "Pu-238": 2.114901282541061e-08,
+        "Pu-239": 1.6600959507111963e-08,
+        "Pu-240": 1.6796338578896478e-08,
+        "Pu-241": 3.3996410058520776e-13,
+        "Pu-242": 1.3724621067320644e-08,
+        "Am-241": 2.118726057983947e-08,
+        "Cm-242": 3.066906682635023e-08,
+        "Cm-244": 2.5815342979559467e-08,
+        "Bk-249": 3.0623437123345883e-13
+      },
+      "dropped_alpha_branch": {
+        "Nd-144": 1.0,
+        "Sm-146": 1.0,
+        "Sm-147": 1.0,
+        "Sm-148": 1.0,
+        "Ac-227": 0.013799995842,
+        "Th-228": 0.9999997535101,
+        "Th-229": 0.99999966238,
+        "Th-230": 1.000000183825,
+        "Pa-231": 1.0000012747,
+        "Pu-244": 0.99879,
+        "Am-242m": 0.004499999408,
+        "Am-243": 1.0000001343340001,
+        "Cm-243": 0.9976002027699999,
+        "Cm-245": 1.0000001524,
+        "Cm-246": 0.999737,
+        "Cm-247": 1.0,
+        "Cm-248": 0.9160997204,
+        "Cm-250": 0.18,
+        "Cf-249": 1.000000059143,
+        "Cf-250": 0.999230303,
+        "Cf-251": 1.00000001
+      },
+      "nominal_O_yield_per_alpha": 5.9e-08,
+      "basis_check": {
+        "n_isotopes": 17,
+        "worst_rel": 0.040881815830835916,
+        "worst_nuclide": "Pu-242",
+        "tol": 0.08
+      },
+      "pu238_alpha_n_n_s_g": 13400.0
+    },
+    "crosscheck_Pu238_oxide_total": {
+      "sf_n_s_g": 2604.4665318243497,
+      "alpha_n_n_s_g": 13400.0,
+      "total_n_s_g": 16004.46653182435,
+      "canonical_n_s_g": 16000.0,
+      "rel": 0.0002791582390218537,
+      "note": "cross-pipeline sanity (dataset-SF ↔ PANDA-SF); NOT an independent (α,n) magnitude validation — canonical ≈ PANDA's own column sum"
     }
   },
   "dropped": {
@@ -335,7 +396,7 @@
     "activity_frac": 2.296957780556627e-19
   },
   "source_ref": "SCK-CEN UOX PWR Serpent2 discharge library, Mendeley Data DOI 10.17632/shv89y2zzd (UOX file, version 4), CC BY 4.0. Discharge (zero cooling); cooling = the §9 reference-time control.",
-  "neutron_caveat": "Neutron output is SPONTANEOUS-FISSION only, folded against a representative SF spectrum: Cm-242 dominates at short cooling, Cm-244 through ~1 century, and the now-modeled Cm-246/248 (ν_p from Holden & Zucker BNL-36467) carry the source at multi-century cooling and beyond. (α,n) on the oxygen in UO₂ is NOT in this dataset and is unmodeled, so the neutron dose is a LOWER BOUND. Any residual SF rate from minor emitters still lacking an evaluated ν̄ is surfaced as a dropped-fraction warning at the evaluated cooling time, never silently.",
+  "neutron_caveat": "Neutron output = spontaneous fission + (α,n)-on-oxygen, a BEST ESTIMATE folded against a representative SF spectrum. SF: Cm-242 dominates at short cooling, Cm-244 through ~1 century, Cm-246/248 (ν_p from Holden & Zucker BNL-36467) beyond. (α,n) (PANDA Table 13 oxide yields): Cm-242 at short cooling, then Am-241/Cm-244/Pu-238. For clean oxide fuel SF + (α,n)-on-O is essentially the complete intrinsic source. Residual caveats, surfaced never silent: the thick-target (α,n) yield carries a ±factor; the (α,n) spectrum is softer than SF (folded on the same h̄, flat over 0.5–6 MeV); minor SF emitters without an evaluated ν̄ and α-emitters absent from Table 13 are bounded as a dropped-fraction warning at the evaluated cooling time.",
   "selfcheck": {
     "cs137_Bq_per_tHM": 5202667748379671.0,
     "cs137_fission_yield_estimate_Bq_per_tHM": 5493146964949956.0,
@@ -344,10 +405,27 @@
       "t10yr": 1656.730098744508,
       "t100yr": 440.2342641558258
     },
-    "sf_neutron_n_per_s_per_tHM": {
-      "t0": 1361225930.3955226,
-      "t10yr": 612341602.2068595,
-      "t100yr": 28681745.626443062
+    "neutron_n_per_s_per_tHM": {
+      "total": {
+        "t0": 1464829319.497699,
+        "t10yr": 623274357.5677168,
+        "t100yr": 35929586.66522462
+      },
+      "sf": {
+        "t0": 1361225930.3955226,
+        "t10yr": 612341602.2068595,
+        "t100yr": 28681745.626443062
+      },
+      "alpha_n": {
+        "t0": 103603389.10217641,
+        "t10yr": 10932755.360857312,
+        "t100yr": 7247841.038781556
+      },
+      "alpha_n_frac": {
+        "t0": 0.070727277043924,
+        "t10yr": 0.017540839323988235,
+        "t100yr": 0.20172347392452936
+      }
     }
   }
 }

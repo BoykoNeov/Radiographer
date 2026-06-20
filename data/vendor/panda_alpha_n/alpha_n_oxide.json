@@ -1,0 +1,34 @@
+{
+  "_comment": "Thick-target (alpha,n) neutron yields in OXIDE for actinides, for the spent-fuel (alpha,n)-on-oxygen neutron source (M12). Closes the M9 'SF-only lower bound' gap: per-nuclide (alpha,n) neutrons-per-decay = oxide_n_s_g / specific_activity(Bq/g), summed as S_an(t)=sum yield_an*A_n(t) off the same Bateman solve, ADDED to the SF source. Values are transcribed VERBATIM from PANDA (Reilly/Ensslin/Smith, 'Passive Nondestructive Assay of Nuclear Materials', NUREG/CR-5550, 1991) Chapter 11 'The Origin of Neutron Radiation' (N. Ensslin), the 'Useful Nuclear Data' tables reproduced in the 2007 PANDA Addendum: Table 13 '(alpha,n) Neutron Yields' (the 'Oxide (n/s-g)' column) and Table 14 'Thick-Target Yields from (alpha,n) Reactions' (the oxygen row). The numbers were read from the RENDERED table image (pdftotext -layout scrambled the row/column alignment -- it mispaired e.g. Pu-238 oxide as 8.3e-5; the image gives the correct 1.34e4); every Total-Half-Life entry was checked against the known isotope half-life to confirm the row pairing, and the 'Yield (alpha/s-g)' column was checked against the isotope specific activity (Pu-238 6.4e11 ~= SA 6.34e11) to CONFIRM the oxide column is per gram of ISOTOPE, not per gram of oxide -- so the per-decay denominator must be the isotope specific activity (lambda*N_A/M). See PROVENANCE.md.",
+  "schema_version": 1,
+  "source": "PANDA / NUREG-CR-5550 (Reilly, Ensslin, Smith, LANL, 1991), Ch.11 'The Origin of Neutron Radiation' (N. Ensslin); Useful Nuclear Data Tables 13 & 14 as reproduced in the 2007 PANDA Addendum (T.D. Reilly), pp. 11-16, 11-17.",
+  "basis": "per gram of ISOTOPE (confirmed: the table's 'Yield (alpha/s-g)' column equals the isotope specific activity). oxide matrix = MO2 (UO2/PuO2); the (alpha,n) target is the oxygen, ~11.8% by mass identical in UO2 and PuO2 with near-identical U/Pu alpha-stopping, so the per-gram-of-emitter oxide yield transfers from PuO2 to spent UOX fuel.",
+  "thick_target_O_yield": {
+    "n_per_alpha": 5.9e-8,
+    "uncertainty_n_per_alpha": 0.2e-8,
+    "at_alpha_MeV": 5.2,
+    "table14_value": "0.059 +/- 0.002 neutrons per 1e6 alpha at 5.2 MeV (Pu energies); at 4.7 MeV (U-234) it is 0.040 +/- 0.001",
+    "note_pure_O_upper_bound": "This is the PURE-oxygen thick-target yield. In an OXIDE the alpha mostly stops in the heavy metal (high (alpha,n) threshold, no neutrons), so pure-O OVERESTIMATES the oxide (alpha,n) yield by ~2-3x (cf. Pu-238 Table-13 oxide 1.34e4 vs a pure-O reconstruction 6.4e11*5.9e-8 ~ 3.8e4). That is the SAFE (over-count) direction for a residual warning.",
+    "use": "ONLY to BOUND (upper) the (alpha,n) of inventory alpha-emitters ABSENT from the Table-13 oxide list (Am-243, Cm-243/245/246/247/248, ...): nominal yield_per_decay = alpha_branch * n_per_alpha. Never enters the modeled dose; sizes the residual dropped-(alpha,n) warning only (an over-estimate, so the true unmodeled fraction is smaller)."
+  },
+  "oxide_an_yield": {
+    "Th-232": {"oxide_n_s_g": 2.2e-5, "alpha_s_g": 4.1e3,  "total_half_life": "1.41e10 y", "alpha_mean_MeV": 4.00},
+    "U-232":  {"oxide_n_s_g": 1.49e4, "alpha_s_g": 8.0e11, "total_half_life": "71.7 y",    "alpha_mean_MeV": 5.30},
+    "U-233":  {"oxide_n_s_g": 4.8,    "alpha_s_g": 3.5e8,  "total_half_life": "1.59e5 y",  "alpha_mean_MeV": 4.82},
+    "U-234":  {"oxide_n_s_g": 3.0,    "alpha_s_g": 2.3e8,  "total_half_life": "2.45e5 y",  "alpha_mean_MeV": 4.76},
+    "U-235":  {"oxide_n_s_g": 7.1e-4, "alpha_s_g": 7.9e4,  "total_half_life": "7.04e8 y",  "alpha_mean_MeV": 4.40},
+    "U-236":  {"oxide_n_s_g": 2.4e-2, "alpha_s_g": 2.3e6,  "total_half_life": "2.34e7 y",  "alpha_mean_MeV": 4.48},
+    "U-238":  {"oxide_n_s_g": 8.3e-5, "alpha_s_g": 1.2e4,  "total_half_life": "4.47e9 y",  "alpha_mean_MeV": 4.19},
+    "Np-237": {"oxide_n_s_g": 3.4e-1, "alpha_s_g": 2.6e7,  "total_half_life": "2.14e6 y",  "alpha_mean_MeV": 4.77},
+    "Pu-238": {"oxide_n_s_g": 1.34e4, "alpha_s_g": 6.4e11, "total_half_life": "87.74 y",   "alpha_mean_MeV": 5.49},
+    "Pu-239": {"oxide_n_s_g": 3.81e1, "alpha_s_g": 2.3e9,  "total_half_life": "2.41e4 y",  "alpha_mean_MeV": 5.15},
+    "Pu-240": {"oxide_n_s_g": 1.41e2, "alpha_s_g": 8.4e9,  "total_half_life": "6.56e3 y",  "alpha_mean_MeV": 5.15},
+    "Pu-241": {"oxide_n_s_g": 1.3,    "alpha_s_g": 9.4e7,  "total_half_life": "14.35 y",   "alpha_mean_MeV": 4.89},
+    "Pu-242": {"oxide_n_s_g": 2.0,    "alpha_s_g": 1.4e8,  "total_half_life": "3.76e5 y",  "alpha_mean_MeV": 4.90},
+    "Am-241": {"oxide_n_s_g": 2.69e3, "alpha_s_g": 1.3e11, "total_half_life": "433.6 y",   "alpha_mean_MeV": 5.48},
+    "Cm-242": {"oxide_n_s_g": 3.76e6, "alpha_s_g": 1.2e14, "total_half_life": "163 d",     "alpha_mean_MeV": 6.10},
+    "Cm-244": {"oxide_n_s_g": 7.73e4, "alpha_s_g": 3.0e12, "total_half_life": "18.1 y",    "alpha_mean_MeV": 5.80},
+    "Bk-249": {"oxide_n_s_g": 1.8e1,  "alpha_s_g": 8.8e8,  "total_half_life": "320 d",     "alpha_mean_MeV": 5.40},
+    "Cf-252": {"oxide_n_s_g": 6.0e5,  "alpha_s_g": 1.9e13, "total_half_life": "2.464 y",   "alpha_mean_MeV": 6.11}
+  }
+}

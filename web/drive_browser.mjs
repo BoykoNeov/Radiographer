@@ -2107,8 +2107,8 @@ async function runM7(page) {
   //    inventory + the live decay-heat readout light up; cooling to 10 yr drops decay heat into
   //    the published PWR band (~1.7 kW/tHM). M9: the neutron path now LIGHTS for spent fuel —
   //    a MULTI-parent spontaneous-fission source (S(t)=Σ yield_n·A_n(t), Cm-244-dominated at
-  //    10 yr) via `spentFuelNeutronId` (NOT the single-key `neutronSource`), carrying the loud
-  //    SF-only lower-bound caveat ((α,n) unmodeled).
+  //    10 yr) via `spentFuelNeutronId` (NOT the single-key `neutronSource`). M12: the source is
+  //    SF + (α,n)-on-oxygen — a BEST ESTIMATE; the card shows the (α,n) share of the dose.
   const SF45 = '[data-testid="source-pwr-uox-45gwd-4pct"]';
   const sfCat = await page.evaluate(() => ({
     n: window.__APP__.spentFuelSources.length,
@@ -2135,6 +2135,7 @@ async function runM7(page) {
     const valEl = document.querySelector(".decayheat .value");
     const card = document.querySelector('[data-testid="dose-neutron"]');
     const lb = document.querySelector('[data-testid="dose-neutron-sf-lowerbound"]');
+    const split = document.querySelector('[data-testid="dose-neutron-sf-split"]');
     return {
       nEntries: app.entries.length,
       hasCs137: app.closure.includes("Cs-137"),
@@ -2148,6 +2149,8 @@ async function runM7(page) {
       grayed: card ? card.className.includes("grayed") : null,
       hbar: app.neutronDoseSeries ? app.neutronDoseSeries.spectrum_avg_coeff_pSv_cm2 : null,
       lowerBound: lb ? lb.textContent.replace(/\s+/g, " ").trim() : null,
+      splitText: split ? split.textContent.replace(/\s+/g, " ").trim() : null,
+      anFrac: app.neutronAlphaNFracAtCursor,
       registry: app.handle ? 1 : 0,
     };
   });
@@ -2163,7 +2166,7 @@ async function runM7(page) {
     `n=${sf.nEntries}, Cs137=${sf.hasCs137}, heat=${heatKw.toFixed(3)} kW/tHM, text=${JSON.stringify(sf.heatText)}, err=${JSON.stringify(sf.err)}`,
   );
   record(
-    "M9: spent fuel lights the MULTI-parent SF neutron path (spentFuelNeutronId set, neutronSource null), live card + SF-only lower-bound caveat",
+    "M9/M12: spent fuel lights the MULTI-parent neutron path (spentFuelNeutronId set, neutronSource null), live card + SF+(α,n) best-estimate split caveat with a positive (α,n) share",
     sf.spentFuelNeutronId === "pwr-uox-45gwd-4pct" &&
       sf.neutronSource === null &&
       sf.grayed === false &&
@@ -2171,8 +2174,12 @@ async function runM7(page) {
       Number.isFinite(sf.nRate) &&
       sf.nRate > 0 &&
       Math.abs(sf.hbar - 383) / 383 < 0.05 &&
-      /lower bound/i.test(sf.lowerBound || ""),
-    `sfNId=${sf.spentFuelNeutronId}, neutronSource=${sf.neutronSource}, grayed=${sf.grayed}, nRate=${sf.nRate}, hbar=${sf.hbar}, lb=${JSON.stringify(sf.lowerBound)}`,
+      /best estimate/i.test(sf.splitText || "") &&
+      /α,n/.test(sf.splitText || "") &&
+      Number.isFinite(sf.anFrac) &&
+      sf.anFrac > 0 &&
+      sf.anFrac < 0.5,
+    `sfNId=${sf.spentFuelNeutronId}, neutronSource=${sf.neutronSource}, grayed=${sf.grayed}, nRate=${sf.nRate}, hbar=${sf.hbar}, anFrac=${sf.anFrac}, split=${JSON.stringify(sf.splitText)}`,
   );
 
   // 5b) PERSIST v5 round-trip (M9): the saved file is v5 carrying spent_fuel_neutron_id; clear →

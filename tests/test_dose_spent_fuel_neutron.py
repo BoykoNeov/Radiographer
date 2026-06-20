@@ -39,9 +39,13 @@ def solved(vector) -> SolvedInventory:
 
 def _model(vector, quantity="ambient_H10", geometry=None) -> SpentFuelNeutronModel:
     n = vector["neutron"]
+    an = n.get("alpha_n") or {}
     return SpentFuelNeutronModel(
         n["yields_n_per_decay"], n["spectrum_source"], quantity, geometry=geometry,
         dropped_sf_branch=n["dropped_sf_branch"], dropped_nubar_nominal=n["dropped_nubar_nominal"],
+        alpha_n_yields=an.get("yields_n_per_decay"),
+        dropped_alpha_branch=an.get("dropped_alpha_branch"),
+        nominal_O_yield_per_alpha=an.get("nominal_O_yield_per_alpha", 5.9e-8),
     )
 
 
@@ -62,11 +66,37 @@ def test_dose_equals_independent_hand_calc(vector, solved):
     act = solved.evaluate(ts, axis="activity", unit="Bq")
     out = m.dose_rate_series(act, d)
     yields = vector["neutron"]["yields_n_per_decay"]
+    an_yields = vector["neutron"]["alpha_n"]["yields_n_per_decay"]
     for i in range(len(ts)):
-        s = math.fsum(y * act["series"][n][i] for n, y in yields.items())   # n/s
-        expected = (m.hbar_pSv_cm2 * PSV_CM2_TO_SV_M2) / (4.0 * math.pi * d * d) * s
-        assert out["rate_si"][i] == pytest.approx(expected, rel=1e-12)
+        s_sf = math.fsum(y * act["series"][n][i] for n, y in yields.items())          # n/s
+        s_an = math.fsum(y * act["series"][n][i] for n, y in an_yields.items())        # n/s
+        k = (m.hbar_pSv_cm2 * PSV_CM2_TO_SV_M2) / (4.0 * math.pi * d * d)
+        assert out["rate_si"][i] == pytest.approx(k * (s_sf + s_an), rel=1e-12)
+        # The reported SF/(α,n) split must add back to the total and match each term.
+        assert out["rate_si_sf"][i] == pytest.approx(k * s_sf, rel=1e-12)
+        assert out["rate_si_alpha_n"][i] == pytest.approx(k * s_an, rel=1e-12)
+        assert out["rate_si"][i] == pytest.approx(out["rate_si_sf"][i] + out["rate_si_alpha_n"][i], rel=1e-12)
     assert out["si_unit"] == "Sv" and out["per"] == "second"
+
+
+def test_alpha_n_strictly_adds_and_grows_at_century(vector, solved):
+    # M12: (α,n) is a strictly positive addition to the SF source (best estimate > SF-only lower
+    # bound), and its SHARE grows from ~10 yr to ~100 yr as Am-241 (no SF, strong (α,n)) ingrows
+    # from Pu-241 — the physical signature that makes (α,n) worth modeling at decade+ cooling.
+    n = vector["neutron"]
+    sf_only = SpentFuelNeutronModel(n["yields_n_per_decay"], n["spectrum_source"], "ambient_H10")
+    full = _model(vector)
+    ts = [10.0 * _YEAR_S, 100.0 * _YEAR_S]
+    act = solved.evaluate(ts, axis="activity", unit="Bq")
+    o_sf = sf_only.dose_rate_series(act, 1.0)
+    o = full.dose_rate_series(act, 1.0)
+    for i in range(len(ts)):
+        assert o["rate_si"][i] > o_sf["rate_si"][i]      # (α,n) strictly adds to the dose
+        assert o["rate_si_alpha_n"][i] > 0.0
+    frac10 = o["rate_si_alpha_n"][0] / o["rate_si"][0]
+    frac100 = o["rate_si_alpha_n"][1] / o["rate_si"][1]
+    assert frac100 > frac10                              # Am-241 ingrowth raises the (α,n) share
+    assert frac100 > 0.1                                 # ~20% at a century — a real correction
 
 
 def test_source_cools_through_the_regime(vector, solved):
@@ -110,7 +140,8 @@ def test_dropped_sf_warning_mechanism_still_fires_for_a_large_unmodeled_branch(v
     )
     out = m.dose_rate_series(solved.evaluate([10.0 * _YEAR_S], axis="activity", unit="Bq"), 1.0)
     assert out["dropped_sf_frac"][0] > 0.05
-    assert any(w.get("reason") == "dropped_sf_unmodeled" for w in out["warnings"])
+    assert out["dropped_frac"][0] > 0.05
+    assert any(w.get("reason") == "dropped_unmodeled_neutron" for w in out["warnings"])
 
 
 def test_effective_requires_geometry(vector):
@@ -140,9 +171,12 @@ def test_water_shield_attenuates_spent_fuel_neutron_dose(vector, solved):
     n = vector["neutron"]
     act = solved.evaluate([10.0 * _YEAR_S], axis="activity", unit="Bq")
     bare = _model(vector).dose_rate_series(act, 1.0)["rate_si"][0]
+    an = n["alpha_n"]
     shielded_model = SpentFuelNeutronModel(
         n["yields_n_per_decay"], n["spectrum_source"], "ambient_H10",
         dropped_sf_branch=n["dropped_sf_branch"], dropped_nubar_nominal=n["dropped_nubar_nominal"],
+        alpha_n_yields=an["yields_n_per_decay"], dropped_alpha_branch=an["dropped_alpha_branch"],
+        nominal_O_yield_per_alpha=an["nominal_O_yield_per_alpha"],
         shield=[("water", 20.0)],
     )
     out = shielded_model.dose_rate_series(act, 1.0)

@@ -81,18 +81,26 @@
             "±factor, the dose is order-of-magnitude grade.",
         },
         {
-          title: "Spent-fuel neutrons — spontaneous fission only (a LOWER BOUND)",
+          title: "Spent-fuel neutrons — spontaneous fission + (α,n)-on-oxygen (a best estimate)",
           body:
-            "Spent fuel DOES light the neutron view: a multi-parent spontaneous-fission source " +
-            "S(t)=Σ yield_n·A_n(t) off the one decay solve, with per-nuclide yields = (SF rate " +
-            "from the SCK-CEN library)·(prompt ν̄). The ν̄ come from the IAEA safeguards table for " +
-            "the dominant emitters (Cm-242 short cooling, Cm-244 through ~1 century), plus Cm-246/248 " +
-            "for multi-century-and-beyond cooling (derived from the Holden & Zucker BNL-36467 " +
-            "distributions); folded against the validated Cf-252 SF spectrum. BUT (α,n) on the fuel's " +
-            "oxygen is NOT in the dataset and is unmodeled (typically tens-of-% of the source), so " +
-            "the neutron dose is a lower bound — it UNDER-counts, the dangerous direction. Any " +
-            "residual SF rate from minor emitters still lacking an evaluated ν̄ (<0.1% out to 1 Myr " +
-            "for the shipped vectors) is shown on the neutron card, never silently.",
+            "Spent fuel lights the neutron view as a multi-parent source S(t)=Σ yield_n·A_n(t) off " +
+            "the one decay solve, summing TWO terms. (1) Spontaneous fission: per-nuclide yields = " +
+            "(SF rate from the SCK-CEN library)·(prompt ν̄), the ν̄ from the IAEA safeguards table " +
+            "(Cm-242 short cooling, Cm-244 through ~1 century) plus Cm-246/248 beyond (derived from " +
+            "the Holden & Zucker BNL-36467 distributions). (2) (α,n)-on-oxygen (the α particles from " +
+            "Pu/Am/Cm hitting the fuel's oxygen): per-nuclide yields = PANDA (NUREG/CR-5550) Table-13 " +
+            "oxide neutron yield ÷ specific activity. Both fold against the validated Cf-252 SF " +
+            "spectrum. For clean oxide fuel SF + (α,n)-on-O is essentially the COMPLETE intrinsic " +
+            "source, so this is a best estimate. What is independently validated is the per-gram-of-" +
+            "isotope BASIS (PANDA's α/s·g column vs ICRP-107 α-branch × specific activity — two " +
+            "independent data sources — agree to ≤4%); the (α,n) absolute magnitude rests on PANDA " +
+            "(the Pu-238 oxide total ≈ 1.6×10⁴ n/s·g is a cross-pipeline SF sanity check, not an " +
+            "independent (α,n) confirmation). The (α,n) share is shown on the card — it grows at " +
+            "decade-to-century cooling as Am-241 (no SF, strong (α,n)) ingrows. Residual caveats, all " +
+            "surfaced: the thick-target (α,n) yield carries a ±factor; the (α,n) spectrum is softer " +
+            "than SF (folded on the same flat-over-0.5–6-MeV h̄); and minor SF emitters without an " +
+            "evaluated ν̄ plus α-emitters absent from PANDA Table 13 are shown as a dropped-fraction " +
+            "(under-count) warning at the evaluated cooling, never silently (<0.1% out to 1 Myr here).",
         },
         {
           title: "Neutron shielding — hydrogenous removal cross-section (energy-lumped)",

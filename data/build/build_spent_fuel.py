@@ -52,11 +52,12 @@ from engine import emissions as emissions  # noqa: E402
 from engine.decay_heat import MEV_TO_J, DecayHeatModel, recoverable_energy_MeV  # noqa: E402
 from engine.inventory import SolvedInventory  # noqa: E402
 
-SCHEMA_VERSION = 2  # v2: adds the per-nuclide SF neutron-yield block (M9)
+SCHEMA_VERSION = 3  # v3: adds the (α,n)-on-oxygen neutron term to the neutron block (M12)
 DATA_DIR = Path(__file__).resolve().parents[1]                 # .../data
 OUT_DIR = DATA_DIR / "spent_fuel"
 CSV_PATH = DATA_DIR / "vendor" / "sckcen_sf" / "SCKCEN_UOX_PWR.csv"
 NUBAR_PATH = DATA_DIR / "vendor" / "iaea_sf_nu" / "sf_nubar.json"
+ALPHA_N_PATH = DATA_DIR / "vendor" / "panda_alpha_n" / "alpha_n_oxide.json"
 
 N_AVOGADRO = 6.02214076e23
 
@@ -77,6 +78,27 @@ DROPPED_NUBAR_NOMINAL = 3.3
 #: ν̄ (a no-silent-drop guard at t=0; long-cooling Cm-246 dominance is surfaced by the engine
 #: at evaluate time, not here — see PROVENANCE + the §11 honesty note).
 _MAX_DROPPED_SF_FRAC_DISCHARGE = 0.01
+
+#: (α,n) magnitude SANITY anchor (M12), NOT an independent validation: Pu-238 oxide total = SF +
+#: (α,n) = 2.59e3 + 1.34e4 ≈ 1.60e4 n/s·g (the canonical PuO₂ value). This anchor ≈ PANDA's OWN
+#: column sum, so it does not independently confirm the (α,n) magnitude nor catch a per-gram-basis
+#: slip (the (α,n) term echoes PANDA regardless of basis); the basis is checked separately
+#: (_ALPHA_SG_BASIS_REL_TOL). What this DOES exercise is the dataset-SF ↔ PANDA-SF agreement.
+_PU238_OXIDE_TOTAL_N_S_G = 1.60e4
+_PU238_TOTAL_REL_TOL = 0.12
+
+#: An inventory nuclide counts as an α-emitter for the dropped-(α,n) bound only if its α branch
+#: (Σ alpha yields per decay) exceeds this — keeps trace α tails out of the warning.
+_MIN_ALPHA_BRANCH_FOR_DROPPED = 1.0e-3
+
+#: (α,n) BASIS check tolerance (M12). PANDA Table-13's "Yield (α/s-g)" column must equal the
+#: isotope α-emission rate computed from INDEPENDENT nuclear data — ICRP-107 α branch × rd
+#: specific activity (λ·N_A/M, per gram of isotope). Agreement (empirically ≤4.1% across the 18
+#: isotopes, PANDA being 2 sig figs) PROVES the table's per-gram column is per gram of ISOTOPE,
+#: so dividing the Oxide column by λ·N_A/M gives neutrons/decay on a consistent basis. A wrong
+#: basis (÷ oxide molar mass ~270 instead of isotope ~238) is a +13.4% slip → caught at 8%. This
+#: is the NON-tautological basis check; ``yield = oxide/SA`` then ``yield·SA`` would just echo oxide.
+_ALPHA_SG_BASIS_REL_TOL = 0.08
 
 #: Curated (burnup GWd/tHM, enrichment %) grid points to ship (§13 #4). A modern PWR
 #: reference plus a low-burnup contrast — both legible IE/BU and on the dataset grid
@@ -303,8 +325,107 @@ def _specific_activity_bq_per_g(rd_name: str) -> float:
     return lam * N_AVOGADRO / mass
 
 
+def _load_alpha_n() -> dict:
+    """Load the vendored PANDA (α,n)-in-oxide yield table (data/vendor/panda_alpha_n)."""
+    if not ALPHA_N_PATH.is_file():
+        raise BuildError(f"missing PANDA (α,n) table {ALPHA_N_PATH} — see its PROVENANCE.md")
+    rec = json.loads(ALPHA_N_PATH.read_text(encoding="utf-8"))
+    if not rec.get("oxide_an_yield") or not rec.get("thick_target_O_yield"):
+        raise BuildError(f"{ALPHA_N_PATH}: missing oxide_an_yield / thick_target_O_yield")
+    return rec
+
+
+def _alpha_branch(rd_name: str) -> float:
+    """Σ alpha yields per decay (α/decay) from the ICRP-107 emission file — 0 if no α channel."""
+    if not emissions.has_emissions(rd_name):
+        return 0.0
+    return math.fsum(float(a["yield"]) for a in emissions.alphas(rd_name))
+
+
+def build_alpha_n_block(idx: dict[str, int], nuclides: list[str], row: list[str],
+                        entry_names: set[str], alpha_n: dict) -> dict:
+    """The M12 (α,n)-on-oxygen neutron term: neutrons-per-decay = oxide(n/s·g)/specific_activity.
+
+    Closes the M9 "SF-only lower bound" gap. PANDA Table 13's "Oxide (n/s-g)" column is PER GRAM
+    OF ISOTOPE, so dividing by λ_total·N_A/M gives neutrons per decay; the engine adds
+    S_an(t)=Σ yield·A_n(t) to the SF source off the same Bateman solve. The per-gram-of-isotope
+    BASIS is validated NON-tautologically here: PANDA's α/s·g column must equal the INDEPENDENT
+    ICRP-107 α-branch × rd specific activity (≤8 %); a ÷ oxide-mass slip is +13.4 % → caught. The
+    (α,n) absolute MAGNITUDE is NOT independently validated — it rests on PANDA (parallel to M9's
+    ν̄-rests-on-IAEA/Holden; no second source fabricated). Inventory α-emitters absent from Table 13
+    (Am-243, Cm-243/245/246, …) carry no tabulated oxide yield: their α branch is recorded in
+    ``dropped_alpha_branch`` and bounded by the Table-14 PURE-oxygen yield (5.9e-8 n/α, an
+    over-estimate in oxide → safe direction) ONLY to size the residual-(α,n) warning — never in the dose.
+    """
+    oxide = alpha_n["oxide_an_yield"]
+    o_yield_per_alpha = float(alpha_n["thick_target_O_yield"]["n_per_alpha"])
+
+    yields: dict[str, float] = {}
+    dropped: dict[str, float] = {}
+    basis_checked = 0
+    worst_basis = (0.0, "")
+    present = {n for n in nuclides if _cell(row, idx, n) > 0.0}
+    for n in nuclides:
+        rd_name = _to_rd_name(n)
+        if rd_name in oxide:
+            ox = float(oxide[rd_name]["oxide_n_s_g"])
+            if ox <= 0.0:
+                continue
+            # Orphan guard (symmetric with the SF block): a Table-13 (α,n) emitter present in the
+            # inventory must be in the solve closure, or its A_n(t) is unavailable and the source
+            # would be silently incomplete (§11). Loud, never silent.
+            if n in present and rd_name not in entry_names:
+                raise BuildError(
+                    f"{rd_name}: has a PANDA (α,n) oxide yield and is present in the vector but "
+                    "not in the solve closure — (α,n) source would silently drop it"
+                )
+            if rd_name in entry_names:
+                sa = _specific_activity_bq_per_g(rd_name)
+                yields[rd_name] = ox / sa
+                # NON-tautological per-gram-of-isotope BASIS check: PANDA's tabulated α-emission
+                # rate (α/s·g) must equal the INDEPENDENT ICRP-107 α-branch × rd specific activity.
+                # Agreement proves both PANDA columns are per gram of isotope (so ÷sa is right);
+                # a ÷ oxide-mass slip would show as a ~13% disagreement here (caught at 8%).
+                br = _alpha_branch(rd_name)
+                if br > 0.0:
+                    rel = abs(br * sa - float(oxide[rd_name]["alpha_s_g"])) / float(oxide[rd_name]["alpha_s_g"])
+                    if rel > _ALPHA_SG_BASIS_REL_TOL:
+                        raise BuildError(
+                            f"{rd_name}: PANDA α/s·g {oxide[rd_name]['alpha_s_g']:.3e} ≠ ICRP-107 "
+                            f"α-branch×SA {br * sa:.3e} ({rel:.1%}) — the (α,n) Oxide column is not "
+                            "on the per-gram-of-isotope basis ÷sa assumes (or a half-life/mass slip)"
+                        )
+                    basis_checked += 1
+                    if rel > worst_basis[0]:
+                        worst_basis = (rel, rd_name)
+        elif rd_name in entry_names and n in present:
+            # No tabulated oxide yield: bound its (α,n) via the Table-14 O yield, for the warning.
+            br = _alpha_branch(rd_name)
+            if br > _MIN_ALPHA_BRANCH_FOR_DROPPED:
+                dropped[rd_name] = br
+
+    if not yields:
+        raise BuildError("no modeled (α,n) emitter found — the (α,n) block would be empty")
+    if basis_checked < 8:
+        raise BuildError(f"too few (α,n) per-gram-of-isotope basis checks ({basis_checked})")
+
+    return {
+        "source": "PANDA/NUREG-CR-5550 Ch.11 Table 13 'Oxide (n/s-g)' / specific activity "
+                  "(per gram of isotope); see data/vendor/panda_alpha_n/PROVENANCE.md",
+        "yields_n_per_decay": yields,
+        "dropped_alpha_branch": dropped,
+        "nominal_O_yield_per_alpha": o_yield_per_alpha,
+        # The (α,n) magnitude rests on PANDA (not independently confirmed); what IS independently
+        # validated is the per-gram-of-isotope BASIS (α/s·g vs ICRP-107 α-branch×SA, worst below).
+        "basis_check": {"n_isotopes": basis_checked, "worst_rel": worst_basis[0],
+                        "worst_nuclide": worst_basis[1], "tol": _ALPHA_SG_BASIS_REL_TOL},
+        "pu238_alpha_n_n_s_g": float(oxide["Pu-238"]["oxide_n_s_g"]) if "Pu-238" in yields else None,
+    }
+
+
 def build_neutron_block(idx: dict[str, int], nuclides: list[str], row: list[str],
-                        entry_names: set[str], nubar: dict[str, dict]) -> dict:
+                        entry_names: set[str], nubar: dict[str, dict],
+                        alpha_n: dict) -> dict:
     """The M9 SF neutron source: per-nuclide neutrons-per-decay = (``_SF``/``_A``)·ν̄.
 
     ``_SF`` is the spontaneous-fission RATE (fissions/s) — ``_SF``/``_A`` reproduces the SF
@@ -367,9 +488,39 @@ def build_neutron_block(idx: dict[str, int], nuclides: list[str], row: list[str]
         cross = {"Cm244_n_per_decay": yields["Cm-244"], "Cm244_iaea_n_per_decay": iaea_y,
                  "rel": rel, "note": "branching-ratio check; ν̄ cancels (not a yield validation)"}
 
+    # M12: the (α,n)-on-oxygen term, modeled in parallel and ADDED to the SF source by the engine.
+    # Its per-gram-of-isotope BASIS is independently validated INSIDE build_alpha_n_block (PANDA
+    # α/s·g vs ICRP-107 α-branch×SA); the (α,n) absolute magnitude rests on PANDA, like M9's
+    # neutron magnitude rests on the cited IAEA/Holden ν̄ — no second (α,n) source, no fabrication.
+    an = build_alpha_n_block(idx, nuclides, row, entry_names, alpha_n)
+
+    # Magnitude SANITY anchor (NOT an independent (α,n) validation): the Pu-238 oxide total =
+    # dataset SF (this block) + PANDA (α,n) should land at the canonical ~1.60e4 n/s·g. This is
+    # weak by construction — the published value ≈ PANDA's OWN SF+(α,n) column sum, and the (α,n)
+    # term echoes PANDA regardless of basis — so what it actually exercises is the dataset-SF ↔
+    # PANDA-SF agreement (Serpent2 ~2604 vs PANDA 2590, the already-M9-validated SF pipeline). The
+    # honest (α,n) checks are the basis_check above + the no-independent-magnitude caveat. Kept as a
+    # cross-pipeline sanity gate; tolerance is loose accordingly.
+    pu238_total = None
+    if "Pu-238" in yields and an["pu238_alpha_n_n_s_g"]:
+        sf_pu238 = yields["Pu-238"] * _specific_activity_bq_per_g("Pu-238")
+        total = sf_pu238 + an["pu238_alpha_n_n_s_g"]
+        rel = abs(total - _PU238_OXIDE_TOTAL_N_S_G) / _PU238_OXIDE_TOTAL_N_S_G
+        if rel > _PU238_TOTAL_REL_TOL:
+            raise BuildError(
+                f"Pu-238 oxide total SF+(α,n) {total:.3e} n/s·g vs canonical {_PU238_OXIDE_TOTAL_N_S_G:.2e} "
+                f"off by {rel:.1%} — dataset SF-yield vs PANDA SF mismatch (weak anchor; see comment)"
+            )
+        pu238_total = {"sf_n_s_g": sf_pu238, "alpha_n_n_s_g": an["pu238_alpha_n_n_s_g"],
+                       "total_n_s_g": total, "canonical_n_s_g": _PU238_OXIDE_TOTAL_N_S_G, "rel": rel,
+                       "note": "cross-pipeline sanity (dataset-SF ↔ PANDA-SF); NOT an independent "
+                               "(α,n) magnitude validation — canonical ≈ PANDA's own column sum"}
+
     return {
-        "model": "spontaneous-fission (SF) only — (α,n) on oxygen is NOT in the SCK-CEN dataset, "
-                 "so the modeled neutron output is a LOWER BOUND (the dangerous direction)",
+        "model": "spontaneous fission (SF) + (α,n)-on-oxygen — a BEST ESTIMATE of the intrinsic "
+                 "neutron source for clean oxide fuel (SF + (α,n)-on-O is essentially complete). "
+                 "Residual caveats: thick-target (α,n) yield carries ±factor; minor α-emitters "
+                 "absent from PANDA Table 13 are bounded as a dropped-(α,n) fraction (never silent).",
         "spectrum_source": SF_SPECTRUM_SOURCE,
         "nubar_source": "ν_p from IAEA NDS SF_n-Yield_20150313 Table 1 (JEFF-3.1 / Holden 1985) for "
                         "the 18 safeguards isotopes, plus Cm-246/248 derived (Σ_k k·P(k)) from the "
@@ -380,11 +531,14 @@ def build_neutron_block(idx: dict[str, int], nuclides: list[str], row: list[str]
         "dropped_nubar_nominal": DROPPED_NUBAR_NOMINAL,
         "dropped_sf_frac_at_discharge": dropped_frac,
         "crosscheck_Cm244": cross,
+        "alpha_n": an,
+        "crosscheck_Pu238_oxide_total": pu238_total,
     }
 
 
 def build_grid_point(gp: dict, idx: dict[str, int], nuclides: list[str], row: list[str],
-                     fresh_row: list[str], a_factor: float, nubar: dict[str, dict]) -> dict:
+                     fresh_row: list[str], a_factor: float, nubar: dict[str, dict],
+                     alpha_n: dict) -> dict:
     """Extract one discharge vector as **grams per tonne initial HM**, with diagnostics.
 
     Activity/heat come from the engine's λN at load time, so the vector is stored as the
@@ -434,7 +588,7 @@ def build_grid_point(gp: dict, idx: dict[str, int], nuclides: list[str], row: li
             f"nuclides {dropped_nuclides}"
         )
 
-    neutron = build_neutron_block(idx, nuclides, row, {e["name"] for e in entries}, nubar)
+    neutron = build_neutron_block(idx, nuclides, row, {e["name"] for e in entries}, nubar, alpha_n)
 
     return {
         "schema_version": SCHEMA_VERSION,
@@ -465,13 +619,15 @@ def build_grid_point(gp: dict, idx: dict[str, int], nuclides: list[str], row: li
             "Discharge (zero cooling); cooling = the §9 reference-time control."
         ),
         "neutron_caveat": (
-            "Neutron output is SPONTANEOUS-FISSION only, folded against a representative SF "
-            "spectrum: Cm-242 dominates at short cooling, Cm-244 through ~1 century, and the "
-            "now-modeled Cm-246/248 (ν_p from Holden & Zucker BNL-36467) carry the source at "
-            "multi-century cooling and beyond. (α,n) on the oxygen in UO₂ is NOT in this dataset "
-            "and is unmodeled, so the neutron dose is a LOWER BOUND. Any residual SF rate from "
-            "minor emitters still lacking an evaluated ν̄ is surfaced as a dropped-fraction "
-            "warning at the evaluated cooling time, never silently."
+            "Neutron output = spontaneous fission + (α,n)-on-oxygen, a BEST ESTIMATE folded "
+            "against a representative SF spectrum. SF: Cm-242 dominates at short cooling, Cm-244 "
+            "through ~1 century, Cm-246/248 (ν_p from Holden & Zucker BNL-36467) beyond. (α,n) "
+            "(PANDA Table 13 oxide yields): Cm-242 at short cooling, then Am-241/Cm-244/Pu-238. "
+            "For clean oxide fuel SF + (α,n)-on-O is essentially the complete intrinsic source. "
+            "Residual caveats, surfaced never silent: the thick-target (α,n) yield carries a "
+            "±factor; the (α,n) spectrum is softer than SF (folded on the same h̄, flat over "
+            "0.5–6 MeV); minor SF emitters without an evaluated ν̄ and α-emitters absent from "
+            "Table 13 are bounded as a dropped-fraction warning at the evaluated cooling time."
         ),
     }
 
@@ -496,20 +652,31 @@ def _selfcheck_solve(record: dict) -> None:
         )
     heat = DecayHeatModel(inv.names).heat_series(act)["total_W"]
 
-    # M9 SF neutron source S(t)=Σ yield_n·A_n(t) (n/s/tHM), modeled emitters only, at the same
-    # sample times. Records the discharge + cooled source strength so the magnitude is auditable
-    # (a lower bound — (α,n) unmodeled). Cm-244 should dominate by 10 yr (Cm-242 gone).
-    yields = record["neutron"]["yields_n_per_decay"]
+    # M9/M12 neutron source S(t)=Σ yield_n·A_n(t) (n/s/tHM), modeled emitters only, at the same
+    # sample times — now BOTH terms: SF + (α,n)-on-oxygen. Records the discharge + cooled source
+    # strength (and the split) so the magnitude is auditable. Cm-244 should dominate SF by 10 yr.
     series = act["series"]
-    s_neutron = [
-        math.fsum(y * series.get(name, [0.0, 0.0, 0.0])[i] for name, y in yields.items())
-        for i in range(3)
-    ]
+
+    def _source(yields: dict) -> list[float]:
+        return [
+            math.fsum(y * series.get(name, [0.0, 0.0, 0.0])[i] for name, y in yields.items())
+            for i in range(3)
+        ]
+
+    s_sf = _source(record["neutron"]["yields_n_per_decay"])
+    s_an = _source(record["neutron"]["alpha_n"]["yields_n_per_decay"])
+    s_tot = [s_sf[i] + s_an[i] for i in range(3)]
+    keys = ("t0", "t10yr", "t100yr")
     record["selfcheck"] = {
         "cs137_Bq_per_tHM": cs137,
         "cs137_fission_yield_estimate_Bq_per_tHM": expected_cs137,
         "decay_heat_W_per_tHM": {"t0": heat[0], "t10yr": heat[1], "t100yr": heat[2]},
-        "sf_neutron_n_per_s_per_tHM": {"t0": s_neutron[0], "t10yr": s_neutron[1], "t100yr": s_neutron[2]},
+        "neutron_n_per_s_per_tHM": {
+            "total": dict(zip(keys, s_tot)),
+            "sf": dict(zip(keys, s_sf)),
+            "alpha_n": dict(zip(keys, s_an)),
+            "alpha_n_frac": dict(zip(keys, [s_an[i] / s_tot[i] if s_tot[i] > 0 else 0.0 for i in range(3)])),
+        },
     }
 
 
@@ -523,6 +690,7 @@ def build() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     _, idx, nuclides = _read_header(CSV_PATH)
     nubar = _load_nubar()
+    alpha_n = _load_alpha_n()
 
     wanted = [(gp["burnup"], gp["enrichment"]) for gp in GRID_POINTS]
     # The fresh-fuel (BU=0) row at each enrichment gives that point's initial HM density.
@@ -534,7 +702,7 @@ def build() -> int:
         row = rows[(gp["burnup"], gp["enrichment"])]
         fresh = rows[(0.0, gp["enrichment"])]
         a_factor = _verify_energy_and_basis(row, idx, nuclides)
-        record = build_grid_point(gp, idx, nuclides, row, fresh, a_factor, nubar)
+        record = build_grid_point(gp, idx, nuclides, row, fresh, a_factor, nubar, alpha_n)
         _selfcheck_solve(record)
         (OUT_DIR / f"{gp['id']}.json").write_text(
             json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"

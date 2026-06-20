@@ -18,14 +18,18 @@ Cm-244 is a near-identical Watt spectrum).
 
 **Honesty (§11), surfaced never silent:**
 
-* SF only — (α,n) on the oxygen in UO₂ is NOT in the dataset, so the result is a LOWER BOUND.
-* The dominant SF emitters are modeled across the cooling range: Cm-242 at short cooling,
-  Cm-244 through ~1 century, and Cm-246/248 beyond (the curium ν̄ now sourced — see
-  ``data/build/build_spent_fuel.py``). Any residual SF rate from minor emitters that still
-  lack an evaluated ν̄ is reported as the **dropped SF-rate fraction** at the evaluated cooling
-  time (estimated with a nominal ν̄) and warned when non-negligible — so the user sees *how
-  much*, if any, of the source is unmodeled, in the dangerous (under-count) direction. For the
-  shipped vectors this stays well under 0.1 % out to 1 Myr.
+* The source is SF + **(α,n)-on-oxygen** (M12) — a BEST ESTIMATE: for clean oxide fuel these two
+  terms are essentially the complete intrinsic neutron source. The (α,n) yields are PANDA Table-13
+  oxide values (``data/vendor/panda_alpha_n``), per gram of isotope → neutrons/decay; the same
+  representative Cf-252 SF spectrum and shield T_n apply to both (the (α,n) spectrum is softer than
+  SF, but h̄ is flat over 0.5–6 MeV — a real but small approximation). Residual ±factor on the
+  thick-target (α,n) yield.
+* The dominant emitters are modeled across the cooling range: SF — Cm-242 (short), Cm-244 (~1
+  century), Cm-246/248 beyond (curium ν̄ sourced); (α,n) — Cm-242, then Am-241/Cm-244/Pu-238.
+  Any residual from minor SF emitters without an evaluated ν̄ AND α-emitters absent from PANDA
+  Table 13 is reported as the **dropped fraction** at the evaluated cooling (SF sized with a
+  nominal ν̄; (α,n) with the Table-14 oxygen yield) and warned when non-negligible — so the user
+  sees *how much*, if any, of the source is unmodeled (the under-count direction).
 """
 
 from __future__ import annotations
@@ -66,6 +70,9 @@ class SpentFuelNeutronModel:
         geometry: Optional[str] = None,
         dropped_sf_branch: Optional[dict[str, float]] = None,
         dropped_nubar_nominal: float = 3.0,
+        alpha_n_yields: Optional[dict[str, float]] = None,
+        dropped_alpha_branch: Optional[dict[str, float]] = None,
+        nominal_O_yield_per_alpha: float = 5.9e-8,
         shield=None,
     ):
         if quantity not in QUANTITIES:
@@ -85,6 +92,15 @@ class SpentFuelNeutronModel:
             raise NeutronDoseError(f"representative SF spectrum {spectrum_source!r} not available")
         self.dropped_branch = {k: float(v) for k, v in (dropped_sf_branch or {}).items() if float(v) > 0.0}
         self.dropped_nubar = float(dropped_nubar_nominal)
+        #: (α,n)-on-oxygen yields (M12), added to the SF source. Same representative spectrum and
+        #: shield T_n (the (α,n) spectrum is softer than SF but h̄ is flat over 0.5–6 MeV — §11).
+        self.alpha_n_yields = {k: float(v) for k, v in (alpha_n_yields or {}).items() if float(v) > 0.0}
+        #: α-emitters absent from PANDA Table 13: branch (α/decay) × this nominal O-yield bounds
+        #: their unmodeled (α,n) for the residual warning (never enters the dose).
+        self.dropped_alpha_branch = {
+            k: float(v) for k, v in (dropped_alpha_branch or {}).items() if float(v) > 0.0
+        }
+        self.nominal_O_yield = float(nominal_O_yield_per_alpha)
 
         self.quantity = quantity
         self.geometry = geometry
@@ -108,47 +124,66 @@ class SpentFuelNeutronModel:
         return 1.0 / (_FOUR_PI * distance_m * distance_m)
 
     def dose_rate_series(self, evaluate_result: dict, distance_m: float) -> dict:
-        """SF neutron dose-rate series (Sv/s) from a ``SolvedInventory.evaluate`` activity result.
+        """Spent-fuel neutron dose-rate series (Sv/s) from a ``SolvedInventory.evaluate`` result.
 
-        Sums S(t)=Σ yield_n·A_n(t) over the modeled emitters, scales by h̄/4πd², and reports the
-        per-time dropped SF-rate fraction (the unmodeled lower-bound gap). A modeled emitter
-        missing from the activity series is a loud error (never a silent zero)."""
+        Sums BOTH terms — S(t) = S_sf(t) + S_an(t), each Σ yield_n·A_n(t) over the modeled
+        emitters (SF from ν̄; (α,n)-on-oxygen from PANDA, M12) — scales by h̄·T_n/4πd², and
+        returns the SF/(α,n) split plus the per-time **dropped fraction**: the unmodeled residual
+        from minor SF emitters without an evaluated ν̄ AND α-emitters absent from PANDA Table 13.
+        A modeled emitter missing from the activity series is a loud error (never a silent zero)."""
         if evaluate_result.get("axis") != "activity" or evaluate_result.get("unit") != "Bq":
             raise NeutronDoseError(
                 "dose_rate_series needs an activity-in-Bq evaluate() result "
                 f"(got axis={evaluate_result.get('axis')!r}, unit={evaluate_result.get('unit')!r})"
             )
         series = evaluate_result["series"]
-        missing = [n for n in self.yields if n not in series]
+        missing = [n for n in (self.yields | self.alpha_n_yields) if n not in series]
         if missing:
             raise NeutronDoseError(
-                f"SF emitter(s) {missing} absent from the activity series — the spent-fuel neutron "
-                "source would be silently incomplete"
+                f"neutron emitter(s) {missing} absent from the activity series — the spent-fuel "
+                "neutron source would be silently incomplete"
             )
         times = evaluate_result["times_s"]
         n_t = len(times)
         geom = self._geometric_factor(distance_m)
+        k = geom * self.coeff_si
 
         rates: list[float] = []
-        dropped_frac: list[float] = []
+        rates_sf: list[float] = []
+        rates_an: list[float] = []
+        dropped_frac: list[float] = []       # combined unmodeled residual (SF ν̄ + (α,n))
+        dropped_sf_frac: list[float] = []    # SF-ν̄-only residual
+        dropped_an_frac: list[float] = []    # (α,n)-only residual
         for i in range(n_t):
-            s = math.fsum(y * float(series[n][i]) for n, y in self.yields.items())
-            rates.append(geom * self.coeff_si * s)
-            s_drop = self.dropped_nubar * math.fsum(
+            s_sf = math.fsum(y * float(series[n][i]) for n, y in self.yields.items())
+            s_an = math.fsum(y * float(series[n][i]) for n, y in self.alpha_n_yields.items())
+            s = s_sf + s_an
+            rates.append(k * s)
+            rates_sf.append(k * s_sf)
+            rates_an.append(k * s_an)
+            s_drop_sf = self.dropped_nubar * math.fsum(
                 b * float(series[n][i]) for n, b in self.dropped_branch.items() if n in series
             )
-            dropped_frac.append(s_drop / (s + s_drop) if (s + s_drop) > 0.0 else 0.0)
+            s_drop_an = self.nominal_O_yield * math.fsum(
+                b * float(series[n][i]) for n, b in self.dropped_alpha_branch.items() if n in series
+            )
+            s_drop = s_drop_sf + s_drop_an
+            denom = s + s_drop
+            dropped_frac.append(s_drop / denom if denom > 0.0 else 0.0)
+            dropped_sf_frac.append(s_drop_sf / denom if denom > 0.0 else 0.0)
+            dropped_an_frac.append(s_drop_an / denom if denom > 0.0 else 0.0)
 
         max_drop = max(dropped_frac) if dropped_frac else 0.0
         if max_drop > _DROPPED_WARN_FRAC:
             self.warnings.append(
                 {
-                    "reason": "dropped_sf_unmodeled",
+                    "reason": "dropped_unmodeled_neutron",
                     "max_dropped_frac": max_drop,
                     "message": (
-                        f"up to {max_drop:.0%} of the SF neutron source at this cooling comes from "
-                        "minor emitters without an evaluated ν̄ and is NOT in the dose — "
-                        "the modeled neutron output is a lower bound (under-count)"
+                        f"up to {max_drop:.0%} of the neutron source at this cooling comes from "
+                        "minor SF emitters without an evaluated ν̄ and/or α-emitters absent from "
+                        "the PANDA (α,n) table, and is NOT in the dose — the modeled output is a "
+                        "lower bound here (under-count) by that amount"
                     ),
                 }
             )
@@ -159,11 +194,15 @@ class SpentFuelNeutronModel:
             "per": "second",
             "times_s": list(times),
             "distance_m": distance_m,
-            "source": "spent-fuel SF",
+            "source": "spent-fuel SF + (α,n)",
             "spectrum_source": self.spectrum_source,
             "spectrum_avg_coeff_pSv_cm2": self.hbar_pSv_cm2,
             "neutron_transmission": self.T_n,
             "rate_si": rates,
-            "dropped_sf_frac": dropped_frac,
+            "rate_si_sf": rates_sf,
+            "rate_si_alpha_n": rates_an,
+            "dropped_frac": dropped_frac,
+            "dropped_sf_frac": dropped_sf_frac,
+            "dropped_an_frac": dropped_an_frac,
             "warnings": list(self.warnings),
         }

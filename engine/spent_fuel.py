@@ -17,7 +17,7 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
-SCHEMA_VERSION = 2  # v2: discharge vector + per-nuclide SF neutron-yield block (M9)
+SCHEMA_VERSION = 3  # v3: + (α,n)-on-oxygen neutron term in the neutron block (M12)
 
 _DEFAULT_ROOT = Path(__file__).resolve().parents[1] / "data" / "spent_fuel"
 _data_root = _DEFAULT_ROOT

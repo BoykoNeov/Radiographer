@@ -67,7 +67,7 @@ def test_all_grid_points_present():
 @pytest.mark.parametrize("point_id", POINTS)
 def test_structural(points, point_id):
     d = points[point_id]
-    assert d["schema_version"] == 2  # v2: + SF neutron-yield block (M9)
+    assert d["schema_version"] == 3  # v3: + (α,n)-on-oxygen neutron term (M12)
     assert d["cooling_time_s"] == 0.0  # a DISCHARGE vector; cooling = the §9 time control
     assert d["entries"] and all(e["mass_g_per_tHM"] > 0.0 for e in d["entries"])
     assert "tonne initial heavy metal" in d["basis"]
@@ -149,14 +149,86 @@ def test_neutron_block_structural(points, point_id):
     assert n["spectrum_source"] == "Cf-252"
     assert n["yields_n_per_decay"] and "Cm-244" in n["yields_n_per_decay"]
     assert all(v > 0.0 for v in n["yields_n_per_decay"].values())
-    # SF-only is a documented LOWER BOUND ((α,n) absent from the dataset) — must say so.
-    assert "lower bound" in n["model"].lower()
+    # M12: the source is now SF + (α,n)-on-oxygen — a documented BEST ESTIMATE, not a lower bound.
+    assert "best estimate" in n["model"].lower() and "(α,n)" in n["model"]
     # Discharge drop (emitters without an evaluated ν̄) must be negligible at t=0.
     assert n["dropped_sf_frac_at_discharge"] < 0.01
     # Cm-246/248 ν̄ are now SOURCED (Holden & Zucker BNL-36467), so the dominant long-cooling SF
     # emitter Cm-246 is MODELED (in yields), not dropped — this is what extends the valid regime.
     assert "Cm-246" in n["yields_n_per_decay"] and "Cm-248" in n["yields_n_per_decay"]
     assert "Cm-246" not in n["dropped_sf_branch"] and "Cm-248" not in n["dropped_sf_branch"]
+
+
+# --- M12: (α,n)-on-oxygen neutron term -----------------------------------------------------
+# yield_an_per_decay = PANDA Table-13 Oxide(n/s-g) / specific activity (per gram of isotope).
+# What is independently validated is the per-gram-of-isotope BASIS (PANDA α/s·g vs ICRP-107
+# α-branch×rd-SA — two independent data sources); the (α,n) absolute MAGNITUDE rests on PANDA,
+# un-independently-confirmed (parallel to M9's ν̄-rests-on-IAEA/Holden framing). The Pu-238 oxide
+# total is only a cross-pipeline SF-sanity gate (the canonical value ≈ PANDA's own column sum).
+_PANDA_PATH = _VENDOR_DIR / "panda_alpha_n" / "alpha_n_oxide.json"
+
+
+@pytest.mark.parametrize("point_id", POINTS)
+def test_alpha_n_block_structural(points, point_id):
+    an = points[point_id]["neutron"]["alpha_n"]
+    y = an["yields_n_per_decay"]
+    # The dominant spent-fuel (α,n) emitters must be modeled (all in PANDA Table 13).
+    for nuc in ("Cm-242", "Cm-244", "Am-241", "Pu-238", "Pu-240"):
+        assert nuc in y and y[nuc] > 0.0, nuc
+    assert an["nominal_O_yield_per_alpha"] == pytest.approx(5.9e-8, rel=1e-9)
+    # α-emitters absent from Table 13 (e.g. Cm-246, Am-243) are tracked for the residual warning,
+    # NOT in the modeled (α,n) yields — the honest, surfaced gap.
+    assert "Cm-246" in an["dropped_alpha_branch"] and "Cm-246" not in y
+
+
+def test_panda_alpha_sg_is_per_gram_of_isotope():
+    # The NON-tautological per-gram basis check (the §12 trap): PANDA Table-13's "Yield (α/s·g)"
+    # column must equal the isotope α-emission rate from INDEPENDENT nuclear data — ICRP-107 α
+    # branch × rd specific activity (λ·N_A/M, per gram of isotope). Agreement proves the PANDA
+    # per-gram columns are per gram of ISOTOPE, so dividing the Oxide column by λN_A/M (what the
+    # build does) is on a consistent basis. A ÷ oxide-mass (~270 vs ~238) slip is +13.4% → would
+    # fail here. NOTE: a `yield = oxide/SA` then `yield·SA ≈ oxide` round-trip would be tautological
+    # (it just echoes the build's own arithmetic); this compares two independent data sources.
+    import radioactivedecay as rd
+    from engine import emissions
+    nd = rd.DEFAULTDATA.nuclide_dict
+    sd = rd.DEFAULTDATA.scipy_data
+    oxide = json.loads(_PANDA_PATH.read_text(encoding="utf-8"))["oxide_an_yield"]
+    checked = 0
+    for nuc, rec in oxide.items():
+        if not emissions.has_emissions(nuc):
+            continue
+        br = math.fsum(float(a["yield"]) for a in emissions.alphas(nuc))   # α/decay, ICRP-107
+        if br <= 0.0:
+            continue
+        lam = math.log(2.0) / float(rd.Nuclide(nuc).half_life("s"))
+        sa = lam * 6.02214076e23 / float(sd.atomic_masses[nd[nuc]])        # Bq/g, per gram isotope
+        assert br * sa == pytest.approx(rec["alpha_s_g"], rel=0.08), nuc
+        checked += 1
+    assert checked >= 12   # the bulk of the table (β-dominated Pu-241 etc. included)
+
+
+@pytest.mark.parametrize("point_id", POINTS)
+def test_pu238_oxide_total_is_a_cross_pipeline_sanity_not_an_alpha_n_validation(points, point_id):
+    # The Pu-238 oxide total (dataset-SF + PANDA-(α,n)) lands at the canonical ~1.60e4 n/s·g — but
+    # this is a WEAK anchor by construction: the canonical value ≈ PANDA's own SF+(α,n) column sum,
+    # and the (α,n) term echoes PANDA regardless of basis. What it genuinely exercises is the
+    # dataset-SF ↔ PANDA-SF agreement (Serpent2 ~2604 vs PANDA 2590 n/s·g) — the already-M9-
+    # validated SF pipeline. The honest (α,n) checks are the per-gram basis test above + the
+    # build's basis_check; the (α,n) absolute magnitude rests on PANDA, un-independently-confirmed.
+    chk = points[point_id]["neutron"]["crosscheck_Pu238_oxide_total"]
+    assert chk["total_n_s_g"] == pytest.approx(1.60e4, rel=0.12)
+    assert "NOT an independent" in chk["note"]
+    # The dataset SF for Pu-238 must agree with PANDA's tabulated SF yield (2.59e3) to a few %.
+    assert chk["sf_n_s_g"] == pytest.approx(2.59e3, rel=0.05)
+
+
+@pytest.mark.parametrize("point_id", POINTS)
+def test_alpha_n_basis_check_ran_in_build(points, point_id):
+    # The build's per-gram-of-isotope basis gate must have actually run over the table and passed
+    # well inside tolerance (it is the real safeguard against the §12 basis slip).
+    bc = points[point_id]["neutron"]["alpha_n"]["basis_check"]
+    assert bc["n_isotopes"] >= 12 and bc["worst_rel"] < bc["tol"]
 
 
 @pytest.mark.parametrize("point_id", POINTS)
