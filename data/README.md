@@ -14,12 +14,14 @@
 | `buildup/<material>.json` | **Canonical** per-material G-P (exposure) buildup coefficients (this project's schema). Generated; committed. |
 | `conversion/{hstar10,effective_<geom>}{,_neutron}.json` | **Canonical** fluence-to-dose coefficients — H\*(10) + effective dose per geometry, for **photon** (M2) and **neutron** (M5). Generated; committed. |
 | `neutron_sources/<source>.json` | **Canonical** tabulated neutron source terms — neutrons/decay + normalized spectrum + source-γ (this project's schema; M5). Generated; committed. |
+| `internal_dose/{worker,public_adult}.json` | **Canonical** committed-effective-dose coefficients e(50) (Sv/Bq), per nuclide, for ingestion + inhalation (ICRP-68 worker / ICRP-72 public-adult; M13). Generated; committed. |
 | `vendor/icrp107/` | Raw upstream ICRP-107 JSON, vendored verbatim. See `vendor/PROVENANCE.md`. |
 | `vendor/nist_xraymac/` | Raw upstream NIST H&S pages, vendored verbatim. See `vendor/nist_xraymac/PROVENANCE.md`. |
 | `vendor/ans643/` | NUREG/CR-5740 PDF (public-domain ANS-6.4.3 buildup source) + hand-keyed transcription + B-value spot-checks. See `vendor/ans643/PROVENANCE.md`. |
 | `vendor/openmc_dose/` | OpenMC dose tables: ICRP-116 effective dose (photon+neutron, verbatim) + ICRP-74 H\*(10) (photon+neutron, unmerged PR). See `vendor/openmc_dose/PROVENANCE.md`. |
+| `vendor/icrp119/` | ICRP-119 PDF (free) — source of the internal-dose e(50) coefficients (ICRP-68/72), visually transcribed. See `vendor/icrp119/PROVENANCE.md`. |
 | `vendor/MANIFEST.sha256`, `vendor/nist_xraymac/MANIFEST.sha256`, `vendor/openmc_dose/MANIFEST.sha256` | Per-file hashes of each vendored source (drift guard). |
-| `build/build_emissions.py`, `build/build_attenuation.py`, `build/build_buildup.py`, `build/build_conversion.py`, `build/build_neutron_sources.py` | Transforms: `vendor/…` (or analytic reconstruction) → `emissions/` / `attenuation/` / `buildup/` / `conversion/` / `neutron_sources/`. Dev-time only. |
+| `build/build_emissions.py`, `build/build_attenuation.py`, `build/build_buildup.py`, `build/build_conversion.py`, `build/build_neutron_sources.py`, `build/build_internal_dose.py` | Transforms: `vendor/…` (or analytic reconstruction) → `emissions/` / `attenuation/` / `buildup/` / `conversion/` / `neutron_sources/` / `internal_dose/`. Dev-time only. |
 | `build/fetch_nist_xraymac.py` | One-time acquisition of the NIST pages (verbatim). Dev-time only. |
 | `LICENSE.ICRP-07` | The license governing the emission data (see below). |
 

@@ -1,6 +1,10 @@
 # M13 — Internal / committed dose (ICRP dose coefficients, Sv/Bq)
 
-**Status:** in progress 🚧
+**Status:** in progress 🚧 — **data layer + engine landed** (micro-slice green); bridge + bulk
+nuclides + UI pending. Done so far: ICRP-119 vendored + PROVENANCE; `build_internal_dose.py`
+(both populations, 5 clean-particulate actinides) with the two cross-table transcription checks
+enforced at build time; `engine/internal_dose.py` (loader + `InternalDoseModel`, three coverage
+states); `tests/test_internal_dose.py` (26 tests, green); `DATA_DIRS` + data README registered.
 **Milestone:** post-v1 extension — the single biggest unbuilt capability listed *Future* in
 HANDOFF_PLAN §2 ("Internal / committed dose (ICRP dose coefficients in Sv/Bq)") and §11. The
 tool has been **external-dose only**; this adds the **intake** pathway. User-chosen next batch
@@ -56,8 +60,17 @@ bundled ones.
 - **Routes:** ingestion **and** inhalation.
 - **Populations:** **both, selectable** — **public adult (ICRP-72**, 1 µm AMAD ingestion/inhalation)
   and **worker (ICRP-68**, 5 µm AMAD). User toggles. (User decision, 2026-06-20.)
-- **Inhalation absorption type:** ship the **ICRP-recommended default type** (F/M/S) per nuclide
-  and **record which** in the data + surface it in the UI. (Other types are an extension.)
+- **Inhalation absorption type:** capture **all tabulated F/M/S** values per nuclide (≈0 marginal
+  cost while reading the page) plus a **`default_type`**. The fold uses `default_type`; the UI can
+  toggle. **`default_type` = the ICRP-recommended / commonly-cited type, fixed by which value
+  matches the independent validation source** — NOT a max()/"most restrictive" pick (that would
+  disagree with every reference *and* make the validation triangle meaningless) and NOT picked from
+  memory. (Advisor, 2026-06-20.)
+- **Noble gases (Kr-85, Kr-81, Xe, Rn, Ar):** there is **no Sv/Bq intake coefficient** — ICRP-119
+  Annex C gives *submersion effective-dose **rates*** for inert gases, a different quantity. These
+  get a **third coverage state `intake_pathway: "none_noble_gas"`**, DISTINCT from "covered" and
+  from "uncovered/undercount", so they never inflate the lower-bound flag (folding them as
+  "uncovered" would falsely imply a missing intake dose that physically doesn't exist).
 - **Ingestion f1:** ship ICRP's default/recommended f1 per nuclide; record it.
 - **Nuclide set:** a **curated MVP set** (not all ~800), aligned to the radiologically dominant
   internal-dose contributors in the prebuilt sources + standard teaching nuclides. Extensible
@@ -116,16 +129,19 @@ files):
   "coefficients": {
     "Cs-137": {
       "ingestion":  { "e_Sv_Bq": 1.3e-08, "f1": 1.0 },
-      "inhalation": { "e_Sv_Bq": 4.6e-09, "absorption_type": "F" }
-    }
-    // ...
+      "inhalation": { "default_type": "F",
+                      "types": { "F": 4.6e-09, "M": 9.7e-09 } }   // f1 per type in Annex E (deferred)
+    },
+    // noble gases carry NO entry — the engine recognizes them by element set (see below)
   }
 }
 ```
 
-A route may be absent for a nuclide (e.g. a noble gas has no committed *intake* dose by the usual
-convention) — represented by omitting that route's sub-object, and handled explicitly (logged),
-never a silent zero.
+**Three coverage states, all explicit (no silent zero):** (a) **covered** — has the route's
+sub-object; (b) **noble-gas N/A** — physically has no intake coefficient; *the engine detects these
+by element set* (He/Ne/Ar/Kr/Xe/Rn) rather than a data-file entry, so noble gases simply carry no
+coefficient and are excluded WITHOUT counting toward the lower-bound flag; (c) **uncovered** — a
+tracked nuclide simply absent from the curated set, which DOES make the result a lower bound (loud).
 
 ## Engine — `engine/internal_dose.py`
 
@@ -178,14 +194,23 @@ as `dose()` minus `distance_m`, so the JS cursor/stacked-bar plumbing reuses cle
 ## Build / validation order (datasets-first, TDD)
 
 1. `docs/plans/M13-internal-dose.md` (this file). ✅
-2. `data/vendor/icrp119/PROVENANCE.md` + acquire curated coefficients (both populations, both
-   routes), cross-validated against the independent source. **Tests assert anchor values.**
-3. `data/build/build_internal_dose.py` → `data/internal_dose/{public_adult,worker}.json`.
-4. `engine/internal_dose.py` + `tests/test_internal_dose.py` (schema, anchors, parent-only
-   progeny assertion, coverage-gap loudness, fold reconciliation Σ==series).
-5. Bridge `internal_dose()` + bridge test.
-6. UI panel + honesty block; dev + built gate green.
-7. Serializer bump only if the panel state is persisted (decide at UI step).
+2. **Micro-slice (green the whole pipeline first, advisor):** ~4 **clean-particulate** nuclides —
+   the **actinide cluster** Pu-239, Am-241, U-238, Po-210, Ra-226 (worker Annex A pp.54–58, public
+   ingestion Annex F pp.86–87, public inhalation Annex G pp.115–119). Visual-read each page once,
+   transcribing every target nuclide on it. Build schema→build→loader→fold→tests green on these.
+3. `data/vendor/icrp119/PROVENANCE.md` (read-time integrity notes) + **validate anchors against a
+   DIFFERENT-units source** (Argonne/EPA fact sheet, mrem/pCi → Sv/Bq) to catch transcription slips;
+   this fixes each nuclide's `default_type` (the type whose value matches). The triangle checks
+   **transcription fidelity, not methodology** — ICRP is the sole methodology source.
+4. `engine/internal_dose.py` + `tests/test_internal_dose.py` (schema, anchors, parent-only progeny
+   assertion, three coverage states incl. noble-gas N/A, fold reconciliation Σ==series).
+5. **Bulk transcribe** the rest of the curated set into the now-test-guarded schema: the other
+   fission products (Cs-137, Sr-90, Co-60, Tc-99, Ru-106, Ce-144, …) and remaining actinides.
+6. Bridge `internal_dose()` + bridge test.
+7. **Gases/vapours (deferred special-casing):** H-3 (OBT/HTO, Annex B inhalation), I-131
+   (elemental/methyl-iodide vapour, Annexes B/H), as a labeled refinement — NOT in the first slices.
+8. UI panel + honesty block; dev + built gate green.
+9. Serializer bump only if the panel state is persisted (decide at UI step).
 
 ## Open / deferred
 

@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "population": "public_adult",
+  "icrp_publication": "ICRP-72 (via ICRP-119 Annexes F & G)",
+  "age": "adult",
+  "amad_um": 1.0,
+  "units": "Sv_per_Bq",
+  "progeny_convention": "parent_only_in_vivo_ingrowth",
+  "source_ref": "ICRP Publication 119 (2012), Compendium of Dose Coefficients based on ICRP Publication 60; e(50) committed effective dose, Sv/Bq.",
+  "coefficients": {
+    "Po-210": {
+      "ingestion": {
+        "e_Sv_Bq": 1.2e-06,
+        "f1": 0.5
+      },
+      "inhalation": {
+        "default_type": "M",
+        "types": {
+          "F": 6e-07,
+          "M": 3.3e-06
+        }
+      }
+    },
+    "Ra-226": {
+      "ingestion": {
+        "e_Sv_Bq": 2.8e-07,
+        "f1": 0.2
+      },
+      "inhalation": {
+        "default_type": "M",
+        "types": {
+          "M": 3.5e-06
+        }
+      }
+    },
+    "U-238": {
+      "ingestion": {
+        "e_Sv_Bq": 4.5e-08,
+        "f1": 0.02
+      },
+      "inhalation": {
+        "default_type": "M",
+        "types": {
+          "F": 5e-07,
+          "M": 2.9e-06,
+          "S": 8e-06
+        }
+      }
+    },
+    "Pu-239": {
+      "ingestion": {
+        "e_Sv_Bq": 2.5e-07,
+        "f1": 0.0005
+      },
+      "inhalation": {
+        "default_type": "M",
+        "types": {
+          "M": 5e-05,
+          "S": 1.6e-05
+        }
+      }
+    },
+    "Am-241": {
+      "ingestion": {
+        "e_Sv_Bq": 2e-07,
+        "f1": 0.0005
+      },
+      "inhalation": {
+        "default_type": "M",
+        "types": {
+          "M": 4.2e-05
+        }
+      }
+    }
+  }
+}
