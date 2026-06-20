@@ -167,6 +167,48 @@
           "M": 3.6e-08
         }
       }
+    },
+    "U-234": {
+      "ingestion": {
+        "e_Sv_Bq": 4.9e-08,
+        "f1": 0.02
+      },
+      "inhalation": {
+        "default_type": "M",
+        "types": {
+          "F": 5.6e-07,
+          "M": 3.5e-06,
+          "S": 9.4e-06
+        }
+      }
+    },
+    "U-235": {
+      "ingestion": {
+        "e_Sv_Bq": 4.7e-08,
+        "f1": 0.02
+      },
+      "inhalation": {
+        "default_type": "M",
+        "types": {
+          "F": 5.2e-07,
+          "M": 3.1e-06,
+          "S": 8.5e-06
+        }
+      }
+    },
+    "U-236": {
+      "ingestion": {
+        "e_Sv_Bq": 4.6e-08,
+        "f1": 0.02
+      },
+      "inhalation": {
+        "default_type": "M",
+        "types": {
+          "F": 5.3e-07,
+          "M": 3.2e-06,
+          "S": 8.7e-06
+        }
+      }
     }
   }
 }

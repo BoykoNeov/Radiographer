@@ -78,9 +78,14 @@ WORKER = {
         "Ra-226": {"ingestion": {"e_Sv_Bq": 2.8e-07, "f1": 0.2},
                    "inhalation": {"default_type": "M", "types": {"M": 2.2e-06}}},
         # U-238   (printed p.54): ingestion f1 0.02; inhalation 5µm F/M/S
+        # NOTE (M13 actinide-expansion batch): worker 5µm S CORRECTED 6.3E-06 -> 5.7E-06. The
+        # 6.3E-06 was U-236's 5µm S (adjacent row); a 300-DPI crop of printed p.54 gives U-238
+        # 5µm S = 5.7E-06 (1µm S = 7.3E-06). This shipped value was never cross-checked because
+        # the build's inhalation check validates the 1µm column, not the shipped worker 5µm, and
+        # S is a non-default type (never folded in v1). See PROVENANCE.md.
         "U-238": {"ingestion": {"e_Sv_Bq": 4.4e-08, "f1": 0.02},
                   "inhalation": {"default_type": "M",
-                                 "types": {"F": 5.8e-07, "M": 1.6e-06, "S": 6.3e-06}}},
+                                 "types": {"F": 5.8e-07, "M": 1.6e-06, "S": 5.7e-06}}},
         # Pu-239  (printed p.55): ingestion f1 0.0005; inhalation 5µm M/S
         "Pu-239": {"ingestion": {"e_Sv_Bq": 2.5e-07, "f1": 5e-04},
                    "inhalation": {"default_type": "M", "types": {"M": 3.2e-05, "S": 8.3e-06}}},
@@ -114,6 +119,23 @@ WORKER = {
         # Ce-144 (printed p.41): ingestion f1 0.0005; inhalation 5µm M (Annex E: Ce M)
         "Ce-144": {"ingestion": {"e_Sv_Bq": 5.2e-09, "f1": 5e-04},
                    "inhalation": {"default_type": "M", "types": {"M": 2.3e-08}}},
+
+        # ============ M13 ACTINIDE-EXPANSION BATCH (all tabulated F/M/S) ============
+        # User chose full F/M/S capture (extension-ready for the per-nuclide type toggle), so
+        # every tabulated type ships and gets a worker-1µm counterpart in _WORKER_1UM. Worker
+        # Annex A (Table A.1), 5 µm AMAD shipped; ingestion = the f1-matched public row. All
+        # values 300-DPI crop-verified (the full-page Annex G adult column miscounts — see
+        # PROVENANCE). default_type per element from Annex E (U: M).
+        # --- Uranium (printed p.54; Annex A) ---
+        "U-234": {"ingestion": {"e_Sv_Bq": 4.9e-08, "f1": 0.02},
+                  "inhalation": {"default_type": "M",
+                                 "types": {"F": 6.4e-07, "M": 2.1e-06, "S": 6.8e-06}}},
+        "U-235": {"ingestion": {"e_Sv_Bq": 4.6e-08, "f1": 0.02},
+                  "inhalation": {"default_type": "M",
+                                 "types": {"F": 6.0e-07, "M": 1.8e-06, "S": 6.1e-06}}},
+        "U-236": {"ingestion": {"e_Sv_Bq": 4.6e-08, "f1": 0.02},
+                  "inhalation": {"default_type": "M",
+                                 "types": {"F": 6.1e-07, "M": 1.9e-06, "S": 6.3e-06}}},
     },
 }
 
@@ -168,6 +190,21 @@ PUBLIC_ADULT = {
                    "inhalation": {"default_type": "F", "types": {"F": 4.6e-09}}},
         "Ce-144": {"ingestion": {"e_Sv_Bq": 5.2e-09, "f1": 5e-04},
                    "inhalation": {"default_type": "M", "types": {"M": 3.6e-08}}},
+
+        # ============ M13 ACTINIDE-EXPANSION BATCH (all tabulated F/M/S) ============
+        # Public adult: Annex F (ingestion, "Adult" column) + Annex G (inhalation, 1 µm "Adult"
+        # column). Inhalation adult values are 300-DPI crop-verified (full-page reads miscount the
+        # adult vs 15y column). Each type cross-checked vs the worker 1 µm column (_WORKER_1UM).
+        # --- Uranium (ingestion f1 0.02 == worker f1 → equal-e check; default M) ---
+        "U-234": {"ingestion": {"e_Sv_Bq": 4.9e-08, "f1": 0.02},
+                  "inhalation": {"default_type": "M",
+                                 "types": {"F": 5.6e-07, "M": 3.5e-06, "S": 9.4e-06}}},
+        "U-235": {"ingestion": {"e_Sv_Bq": 4.7e-08, "f1": 0.02},
+                  "inhalation": {"default_type": "M",
+                                 "types": {"F": 5.2e-07, "M": 3.1e-06, "S": 8.5e-06}}},
+        "U-236": {"ingestion": {"e_Sv_Bq": 4.6e-08, "f1": 0.02},
+                  "inhalation": {"default_type": "M",
+                                 "types": {"F": 5.3e-07, "M": 3.2e-06, "S": 8.7e-06}}},
     },
 }
 
@@ -191,6 +228,10 @@ _WORKER_1UM = {
     "Cs-134": {"F": 6.8e-09},
     "Cs-137": {"F": 4.8e-09},
     "Ce-144": {"M": 3.4e-08},
+    # M13 actinide-expansion batch — worker 1 µm, ALL F/M/S (300-DPI crop-verified, Annex A):
+    "U-234": {"F": 5.5e-07, "M": 3.1e-06, "S": 8.5e-06},
+    "U-235": {"F": 5.1e-07, "M": 2.8e-06, "S": 7.7e-06},
+    "U-236": {"F": 5.2e-07, "M": 2.9e-06, "S": 7.9e-06},
 }
 
 #: Nuclides whose worker (Annex A) and public-adult (Annex F) ingestion **f1 differ**, so the

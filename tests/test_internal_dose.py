@@ -37,7 +37,9 @@ CANON = ROOT / "data" / "internal_dose"
 MICRO_SLICE = ("Po-210", "Ra-226", "U-238", "Pu-239", "Am-241")
 # M13 fission/activation-product batch (default-type-only inhalation).
 FISSION_PRODUCTS = ("Co-60", "Se-79", "Sr-90", "Tc-99", "Ru-106", "Cs-134", "Cs-137", "Ce-144")
-CURATED = MICRO_SLICE + FISSION_PRODUCTS
+# M13 actinide-expansion batch (all tabulated F/M/S; 300-DPI crop-verified). Grows by element.
+ACTINIDE_EXPANSION = ("U-234", "U-235", "U-236")
+CURATED = MICRO_SLICE + FISSION_PRODUCTS + ACTINIDE_EXPANSION
 
 # ICRP default absorption type per element (ICRP-119 Annex E "unspecified compounds" catch-all)
 # — what the engine folds, so the anchor below is this type's value. NOT chosen by value/memory.
@@ -45,6 +47,7 @@ DEFAULT_TYPE = {
     "Po-210": "M", "Ra-226": "M", "U-238": "M", "Pu-239": "M", "Am-241": "M",
     "Co-60": "M", "Se-79": "F", "Sr-90": "F", "Tc-99": "F",
     "Ru-106": "F", "Cs-134": "F", "Cs-137": "F", "Ce-144": "M",
+    "U-234": "M", "U-235": "M", "U-236": "M",  # uranium catch-all = Type M (same element as U-238)
 }
 
 # Validated ICRP-119 anchors (Sv/Bq). ingestion = e; inhalation = DEFAULT-type e.
@@ -64,6 +67,9 @@ ANCHORS = {
         "Cs-134": {"ingestion": 1.9e-08, "inhalation": 9.6e-09},  # F
         "Cs-137": {"ingestion": 1.3e-08, "inhalation": 6.7e-09},  # F
         "Ce-144": {"ingestion": 5.2e-09, "inhalation": 2.3e-08},  # M
+        "U-234":  {"ingestion": 4.9e-08, "inhalation": 2.1e-06},  # M (5 µm)
+        "U-235":  {"ingestion": 4.6e-08, "inhalation": 1.8e-06},  # M (5 µm)
+        "U-236":  {"ingestion": 4.6e-08, "inhalation": 1.9e-06},  # M (5 µm)
     },
     "public_adult": {
         "Po-210": {"ingestion": 1.2e-06, "inhalation": 3.3e-06},  # M
@@ -79,6 +85,9 @@ ANCHORS = {
         "Cs-134": {"ingestion": 1.9e-08, "inhalation": 6.6e-09},  # F
         "Cs-137": {"ingestion": 1.3e-08, "inhalation": 4.6e-09},  # F
         "Ce-144": {"ingestion": 5.2e-09, "inhalation": 3.6e-08},  # M
+        "U-234":  {"ingestion": 4.9e-08, "inhalation": 3.5e-06},  # M (1 µm adult)
+        "U-235":  {"ingestion": 4.7e-08, "inhalation": 3.1e-06},  # M (1 µm adult)
+        "U-236":  {"ingestion": 4.6e-08, "inhalation": 3.2e-06},  # M (1 µm adult)
     },
 }
 
@@ -257,9 +266,14 @@ def test_ingestion_vs_inhalation_differ():
 
 def test_absorption_type_override():
     # U-238 has F/M/S; an explicit type overrides the default (M).
+    # NOTE: the S golden was 6.3E-06 — a transcription error (U-236's 5µm S value pulled into the
+    # adjacent U-238 row). Corrected to 5.7E-06 against a 300-DPI crop of ICRP-119 Annex A printed
+    # p.54 (U-238 5µm S = 5.7E-06, 1µm S = 7.3E-06) in the M13 actinide-expansion batch. The
+    # error escaped the build's inhalation check (which validates the 1µm column, not the shipped
+    # worker 5µm) and the v1 fold (S is a non-default type, never folded). See PROVENANCE.md.
     s = idose.coefficient("U-238", "inhalation", "worker", absorption_type="S")
     m = idose.coefficient("U-238", "inhalation", "worker")
-    assert s == 6.3e-06 and m == 1.6e-06
+    assert s == 5.7e-06 and m == 1.6e-06
 
 
 # -- no silent errors -------------------------------------------------------

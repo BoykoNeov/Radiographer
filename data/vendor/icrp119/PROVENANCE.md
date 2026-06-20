@@ -63,8 +63,13 @@ of Po-210 S, Ra-226 F/S, Am-241 F/S, suspect Pu-239 F still stands.)
 **Errors these checks actually caught** (recorded for honesty):
 - **Am-241** public-adult Type-M adult misread as `9.6E-05` (the *F*-row value) → corrected to
   **`4.2E-05`** via a 300-DPI crop (worker M 1 µm = 3.9E-05 confirms).
-- **U-238** worker 5 µm M/S first captured from the **1 µm** column (`2.6E-06`/`5.7E-06`) →
-  corrected to the 5 µm values **`1.6E-06`/`6.3E-06`** (adjacent columns — easy to cross).
+- **U-238** worker 5 µm M corrected from a first-pass **1 µm** read (`2.6E-06`) to the 5 µm
+  value **`1.6E-06`**. ⚠️ **U-238 worker 5 µm S was itself wrong as shipped** (`6.3E-06`) until
+  the M13 actinide-expansion batch: `6.3E-06` is **U-236's** 5 µm S (the adjacent row); a
+  300-DPI crop of printed p.54 gives U-238 **5 µm S = `5.7E-06`** (1 µm S = `7.3E-06`).
+  This slipped because the build's inhalation check validates the **1 µm** column (`7.3E-06`),
+  never the shipped worker **5 µm** value, and S is a non-default type (never folded in v1).
+  Corrected value `5.7E-06`; regression golden in `test_absorption_type_override` updated.
 - **Po-210** worker-1µm default cross-check value first taken from the F row (`6.0E-07`) →
   corrected to the M row **`3.0E-06`** (matches public M `3.3E-06`).
 - **Co-60** (fission-product batch) public-M adult 1 µm misread as `1.7E-08` from the full-page
@@ -80,10 +85,11 @@ a different quantity, not e(50), so they cannot validate the dose values).
 
 ## Coverage
 
-A **curated slice** (13 nuclides), extensible like spent-fuel's `GRID_POINTS`:
+A **curated slice** (16 nuclides), extensible like spent-fuel's `GRID_POINTS`:
 - **Actinide micro-slice** (all F/M/S): Po-210, Ra-226, U-238, Pu-239, Am-241.
 - **Fission/activation products** (default type only): Co-60, Se-79, Sr-90, Tc-99, Ru-106,
   Cs-134, Cs-137, Ce-144.
+- **Actinide expansion** (all F/M/S; 300-DPI crop-verified, in progress): U-234, U-235, U-236.
 
 A tracked nuclide absent from the shipped set makes a committed-dose estimate a **LOWER BOUND**,
 surfaced loudly by the engine (§11). Still uncovered (future batches): the remaining must-cover
