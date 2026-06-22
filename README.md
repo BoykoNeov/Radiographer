@@ -25,7 +25,15 @@ Double-click **`start.cmd`** in this folder. It installs dependencies the first
 time, starts the local server, and opens the app in your browser. Leave the
 window open while you use the app; close it to stop.
 
-### macOS / Linux — one command
+### macOS / Linux
+
+From a terminal in this folder:
+
+```sh
+./start.sh       # installs deps the first time, then starts + opens the app
+```
+
+Or run the steps explicitly (the canonical path — `./start.sh` just wraps these):
 
 ```sh
 cd web

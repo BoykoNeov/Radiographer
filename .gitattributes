@@ -1,6 +1,10 @@
 # Normalize line endings: store LF in the repo, check out native on each OS.
 * text=auto
 
+# Shell scripts must stay LF on every platform — a CRLF checkout corrupts the
+# shebang (`#!/usr/bin/env bash\r`) and the script won't run on macOS/Linux.
+*.sh text eol=lf
+
 # Vendored upstream is hash-pinned (MANIFEST.sha256 + a build-time drift guard) and
 # must stay byte-exact on every platform. Treat it as binary so git never converts
 # line endings — otherwise a CRLF checkout would break the pinned manifest hash.
