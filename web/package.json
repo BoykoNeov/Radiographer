@@ -7,6 +7,7 @@
   "scripts": {
     "build:archive": "node scripts/build-archive.mjs",
     "dev": "node scripts/build-archive.mjs && vite",
+    "start": "node scripts/build-archive.mjs && vite --open",
     "build": "node scripts/build-archive.mjs && svelte-check --tsconfig ./tsconfig.json && vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
