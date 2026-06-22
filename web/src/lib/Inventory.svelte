@@ -73,6 +73,7 @@
   <div class="addrow">
     <input
       class="name"
+      aria-label="Nuclide"
       list="nuclide-list"
       placeholder="nuclide (e.g. Co-60)"
       bind:value={draftName}
@@ -86,6 +87,7 @@
     </datalist>
     <input
       class="qty"
+      aria-label="Quantity"
       type="number"
       min="0"
       step="any"
@@ -94,7 +96,7 @@
       onkeydown={onAddKeydown}
       disabled={!appState.ready}
     />
-    <select class="unit" bind:value={draftUnit} disabled={!appState.ready}>
+    <select class="unit" aria-label="Unit" bind:value={draftUnit} disabled={!appState.ready}>
       {#each UNIT_OPTIONS as u (u.value)}
         <option value={u.value}>{u.label}</option>
       {/each}
@@ -124,6 +126,7 @@
             <td>
               <input
                 class="qty"
+                aria-label={`Quantity for ${e.name}`}
                 type="number"
                 min="0"
                 step="any"
@@ -133,6 +136,7 @@
             </td>
             <td>
               <select
+                aria-label={`Unit for ${e.name}`}
                 value={e.unit}
                 onchange={(ev) => appState.updateEntry(i, { unit: (ev.target as HTMLSelectElement).value })}
               >

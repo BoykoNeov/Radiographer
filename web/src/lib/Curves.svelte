@@ -178,6 +178,7 @@
     {#if unitOptions.length > 0}
       <select
         class="unit"
+        aria-label="Curve unit"
         data-testid="curve-unit"
         value={currentUnit}
         onchange={(e) => onUnit((e.target as HTMLSelectElement).value)}

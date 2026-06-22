@@ -234,6 +234,7 @@
         {#each layers as layer, i (i)}
           <div class="layer" data-testid="shield-layer">
             <select
+              aria-label="Shield material"
               data-testid={i === 0 ? "shield-material" : null}
               value={layer.material}
               onchange={(e) => appState.setShieldLayerMaterial(i, (e.target as HTMLSelectElement).value)}
@@ -244,6 +245,7 @@
             </select>
             <input
               type="number"
+              aria-label="Layer thickness in cm"
               min="0"
               step="any"
               data-testid={i === 0 ? "shield-thickness" : null}
