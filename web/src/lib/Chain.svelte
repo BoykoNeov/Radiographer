@@ -181,11 +181,19 @@
         "target-arrow-shape": "triangle",
         "curve-style": "bezier",
         label: "data(label)",
-        "font-size": 9,
-        color: "#888",
-        "text-background-color": "#7f7f7f",
-        "text-background-opacity": 0.18,
-        "text-background-padding": "1px",
+        "font-size": 10,
+        // An opaque rounded chip with dark text: the edge line ran THROUGH the old
+        // translucent gray-on-gray label, obscuring the mode + branching %. A fully
+        // opaque background hides the line behind the text; the border keeps the chip
+        // legible where it overlaps a light node.
+        color: "#202124",
+        "text-background-color": "#ffffff",
+        "text-background-opacity": 1,
+        "text-background-shape": "roundrectangle",
+        "text-background-padding": "3px",
+        "text-border-color": "#9aa0a6",
+        "text-border-width": 0.6,
+        "text-border-opacity": 0.8,
       },
     },
   ];
