@@ -31,6 +31,7 @@ from __future__ import annotations
 import math
 from typing import Optional, Sequence
 
+import mpmath as mp
 import numpy as np
 import radioactivedecay as rd
 
@@ -55,6 +56,21 @@ VALIDITY_FLOOR_REL = NOISE_SAFETY * _EPS
 #: exceeds this — the regime where double precision suffers catastrophic
 #: cancellation and ``InventoryHP`` (arbitrary precision) is warranted (§5).
 HP_HALFLIFE_SPAN = 1e12
+
+#: Working precision (decimal digits) for the HP evaluate. The HP path exists to
+#: defeat the catastrophic cancellation double precision (≈16 digits) suffers when
+#: half-lives span many decades. The cancellation depth is set by the Bateman
+#: coefficient magnitude ratio (≈ the half-life span): the worst real chains span
+#: ~1e24 (and a stable end-product's near-zero early buildup can demand more still),
+#: so we need span-digits + the guard depth (the ``peak·1e-25`` negative-atom bound,
+#: 25 digits) + the float64 output margin (16). ~96 digits covers spans to ~1e55 —
+#: far beyond any physical chain — with headroom, while staying far cheaper than
+#: radioactivedecay's own ``sig_fig`` default of 320 (decisive under Pyodide/WASM,
+#: where mpmath is pure-Python big-int, no gmpy2). The float64 downcast makes the
+#: *output* identical to the 320-digit result for every meaningful nuclide; the
+#: deepest sub-floor daughters are physical zero either way (parity regression:
+#: ``tests/test_inventory_hp.py``).
+HP_DPS = 96
 
 AXES = ("atoms", "activity", "mass")
 
@@ -153,8 +169,17 @@ class SolvedInventory:
         c_inv = np.asarray(sd.matrix_c_inv[idxs][:, idxs].todense(), dtype=float)
         self.b = c_inv @ np.asarray(n0_full[idxs], dtype=float).ravel()
 
-        # On-demand arbitrary-precision path (slow, exact) — built only if asked.
-        self._hp_inv = rd.InventoryHP(self.contents_atoms, "num") if precision == "hp" else None
+        # Arbitrary-precision path: SOLVE the high-precision Bateman closure ONCE
+        # (§3), so a multi-time evaluate is a cheap mpmath matvec — never the per-
+        # point ``InventoryHP.decay`` (a full-dataset sympy matmul, ~0.7 s/call).
+        # ``_hp_lams`` / ``_hp_terms`` are the closure coefficient form; ``_hp_cache``
+        # is the 1-deep evaluate cache that collapses the panel fan-out (curves +
+        # γ/β + neutron + heat + internal all evaluate the SAME grid) to one solve.
+        self._hp_lams: list = []
+        self._hp_terms: list = []
+        self._hp_cache: Optional[tuple] = None
+        if precision == "hp":
+            self._build_hp_closure()
 
     # -- construction -----------------------------------------------------
 
@@ -211,14 +236,99 @@ class SolvedInventory:
         noise = NOISE_SAFETY * _EPS * (np.abs(P) @ np.abs(self.C).T)  # (T, k)
         return N, noise
 
+    def _build_hp_closure(self) -> None:
+        """Solve the closure's Bateman coefficients ONCE in high precision (§3).
+
+        radioactivedecay's ``InventoryHP.decay(t)`` re-runs a full-dataset sympy
+        matmul (plus an ``nsimplify`` of the time) on EVERY call — ~0.7 s regardless
+        of chain size — so a 60-point grid froze the (synchronous, main-thread) UI for
+        minutes, multiplied by the ~5 panels that each evaluate the grid. Instead we
+        pull rd's sympy decay matrices ONCE, restrict them to the descendant closure,
+        and precompute the cancellation-free coefficient form
+        ``N_i(t) = Σ_k coef[i,k]·exp(-λ_k·t)`` — the SAME closed form the double path
+        uses (``C @ (exp⊙b)``), but with ``C``/``b`` carried at :data:`HP_DPS` digits so
+        the per-row sum cannot cancel. Evaluating is then a cheap mpmath matvec.
+
+        Parity with rd's own HP (to the float64 downcast) is asserted in
+        ``tests/test_inventory_hp.py``. A nuclide surfaced by the HP closure but absent
+        from the double-precision closure is a decay-data inconsistency and raises — a
+        loud failure, never a silent drop (§11).
+        """
+        from sympy import Rational  # local: only the HP path needs sympy directly
+
+        hp_inv = rd.InventoryHP(self.contents_atoms, "num")
+        dm = hp_inv.decay_matrices
+        dd = hp_inv.decay_data
+        matrix_c_sp = dd.scipy_data.matrix_c  # sparsity → closure indices (as double path)
+
+        idxset: set[int] = set()
+        # The loaded N0 must enter as an EXACT sympy Rational. A Python float here would
+        # make ``c_inv[k,j]·val`` a 53-bit sympy Float — silently capping every downstream
+        # coefficient at double precision (the deep-cancellation bug). Rational(float) is
+        # the exact dyadic value of the float64 input, so b[k] stays exact until evalf.
+        loaded: list[tuple[int, object]] = []
+        for nuc, val in hp_inv.contents.items():
+            idx = dd.nuclide_dict[nuc]
+            loaded.append((idx, Rational(float(val))))
+            idxset.update(matrix_c_sp[:, idx].nonzero()[0])
+        idxs = sorted(idxset)
+
+        C = dm.matrix_c  # sympy (arbitrary-precision) decay matrices
+        c_inv = dm.matrix_c_inv
+
+        # b[k] = (C_inv @ N0)[k] = Σ_loaded C_inv[k, j]·N0_j  (sympy exact → mpf).
+        b = {k: sum((c_inv[k, j] * val for j, val in loaded), 0) for k in idxs}
+
+        pos = {k: p for p, k in enumerate(idxs)}  # closure global idx → local position
+        col_of = {n: i for i, n in enumerate(self.names)}
+        # CRITICAL: create every mpf at HP precision. ``mp.mpf(str(...))`` parses at the
+        # AMBIENT mpmath dps (15 by default) — truncating 96-digit coefficients to ~15
+        # digits, which then cannot cancel (a deep daughter would surface as a spurious
+        # ~peak·1e-15 value and trip the negative-atom guard). So build inside workdps.
+        self._hp_terms = []
+        with mp.workdps(HP_DPS + 10):
+            self._hp_lams = [mp.mpf(str(dm.decay_consts[k].evalf(HP_DPS + 10))) for k in idxs]
+            # Per output nuclide i: (its column in self.names, [(local k, coef=C[i,k]·b[k])]).
+            for i in idxs:
+                name_i = str(dd.nuclides[i])
+                if name_i not in col_of:
+                    raise EngineError(
+                        f"HP closure produced {name_i!r}, absent from the double-precision "
+                        f"closure — decay-data inconsistency, refusing to guess."
+                    )
+                terms: list[tuple[int, mp.mpf]] = []
+                for k in idxs:
+                    cik = C[i, k]
+                    bk = b[k]
+                    if cik != 0 and bk != 0:
+                        terms.append((pos[k], mp.mpf(str((cik * bk).evalf(HP_DPS + 10)))))
+                self._hp_terms.append((col_of[name_i], terms))
+        self._hp_cache = None
+
     def _evaluate_hp_atoms(self, t: np.ndarray) -> np.ndarray:
+        """Evaluate the precomputed HP closure at every time in ``t`` (atoms).
+
+        A pure function of ``t`` (the instance is immutable after the solve), so a
+        1-deep cache keyed on the time vector collapses the panel fan-out — curves,
+        γ/β, neutron, decay-heat and internal-dose all evaluate the SAME ``curveX + t₀``
+        grid — to a single high-precision solve (§3). The result is downcast to float64
+        for the shared axis/floor path; the HP win is the cancellation-free computation
+        of N, not the storage width.
+        """
+        key = t.tobytes()
+        if self._hp_cache is not None and self._hp_cache[0] == key:
+            return self._hp_cache[1]
         out = np.zeros((len(t), len(self.names)))
-        col = {n: i for i, n in enumerate(self.names)}
-        for j, tj in enumerate(t):
-            decayed = self._hp_inv.decay(float(tj), "s")
-            for nuc, val in decayed.contents.items():
-                if nuc in col:
-                    out[j, col[nuc]] = float(val)
+        with mp.workdps(HP_DPS):
+            for j, tj in enumerate(t):
+                tt = mp.mpf(float(tj))
+                exps = [mp.e ** (-lam * tt) for lam in self._hp_lams]
+                for col_i, terms in self._hp_terms:
+                    s = mp.mpf(0)
+                    for p, coef in terms:
+                        s += coef * exps[p]
+                    out[j, col_i] = float(s)
+        self._hp_cache = (key, out)
         return out
 
     def _to_axis(self, N: np.ndarray, axis: str, unit: Optional[str]) -> tuple[np.ndarray, str]:
@@ -256,10 +366,19 @@ class SolvedInventory:
         if self.precision == "hp":
             N = self._evaluate_hp_atoms(t)
             peak = float(np.max(np.abs(N))) if N.size else 0.0
-            if peak > 0.0 and np.any(N < -peak * 1e-25):  # HP is exact; any real negative is a bug
+            # A negative beyond the cancellation-roundoff band (peak·1e-25) is a real bug
+            # — raise, never silently absorb it (§11).
+            if peak > 0.0 and np.any(N < -peak * 1e-25):
                 j, k = (int(v) for v in np.argwhere(N < -peak * 1e-25)[0])
                 raise EngineError(f"HP produced negative atoms for {self.names[k]} at row {j}")
-            info = {"clipped_count": 0, "peak_atoms": peak, "floor_atoms": 0.0}
+            # Within the band, a tiny negative is deep-cancellation roundoff in a sub-floor
+            # daughter (atom counts are physically >= 0): clip to honest zero and report the
+            # count (never a silent clip). ``np.where`` copies, so the 1-deep cache — built
+            # from the un-clipped N the guard above inspected — is left intact.
+            clipped = int(np.count_nonzero(N < 0.0))
+            if clipped:
+                N = np.where(N < 0.0, 0.0, N)
+            info = {"clipped_count": clipped, "peak_atoms": peak, "floor_atoms": 0.0}
         else:
             N, noise = self._evaluate_double_atoms(t)
             N, info = _apply_validity_floor(N, noise, names=self.names, times_s=t.tolist())
