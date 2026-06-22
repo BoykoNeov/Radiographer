@@ -252,9 +252,9 @@
               onkeydown={(e) => e.key === "Enter" && onLayerThickness(i, e)}
             />
             <span class="cm muted">cm</span>
-            <button class="mv" title="move toward source" disabled={i === 0} onclick={() => appState.moveShieldLayer(i, -1)}>↑</button>
-            <button class="mv" title="move toward detector" disabled={i === layers.length - 1} onclick={() => appState.moveShieldLayer(i, 1)}>↓</button>
-            <button class="rm" title="remove layer" data-testid="shield-layer-remove" onclick={() => appState.removeShieldLayer(i)}>✕</button>
+            <button class="mv" aria-label="Move layer toward source" title="move toward source" disabled={i === 0} onclick={() => appState.moveShieldLayer(i, -1)}>↑</button>
+            <button class="mv" aria-label="Move layer toward detector" title="move toward detector" disabled={i === layers.length - 1} onclick={() => appState.moveShieldLayer(i, 1)}>↓</button>
+            <button class="rm" aria-label="Remove layer" title="remove layer" data-testid="shield-layer-remove" onclick={() => appState.removeShieldLayer(i)}>✕</button>
           </div>
         {/each}
         <span class="end muted">▸ detector</span>

@@ -141,7 +141,7 @@
                 {/each}
               </select>
             </td>
-            <td><button class="remove" onclick={() => appState.removeEntry(i)} title="Remove">✕</button></td>
+            <td><button class="remove" aria-label="Remove this nuclide" onclick={() => appState.removeEntry(i)} title="Remove">✕</button></td>
           </tr>
         {/each}
       </tbody>

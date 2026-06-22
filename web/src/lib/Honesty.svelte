@@ -33,11 +33,14 @@
             "this (sub-10 keV lines are dropped from the dose sum — logged, never silent).",
         },
         {
-          title: "External dose only — external ≠ internal hazard",
+          title: "External vs internal hazard — different, never summed",
           body:
-            "Only external dose is computed. An α emitter reads almost nothing on an external " +
-            "survey meter (w_R=20 applies internally) yet can be deadly if inhaled — a Pu pit is " +
-            "the classic case. Internal / committed dose is out of scope for v1.",
+            "External dose (γ/β/n from a source at a distance) and committed internal dose (from " +
+            "an intake) are different hazards, computed differently and never added together. An α " +
+            "emitter reads almost nothing on an external survey meter (w_R=20 applies internally) " +
+            "yet can be deadly if inhaled — a Pu pit is the classic case. The tool computes external " +
+            "dose from a point source AND, separately, committed effective dose E(50) from a " +
+            "hypothetical intake (the internal-dose panel; see its caveats below).",
         },
       ],
     },
@@ -225,6 +228,31 @@
             "dominant γ emitters and the 7:10 law are broadly common, so this is a representative " +
             "illustrative mix, not a weapon-specific vector; (3) scaled to a default 1 kt " +
             "(~1.45×10²³ fissions), editable.",
+        },
+      ],
+    },
+    {
+      heading: "Internal / committed dose (M13)",
+      items: [
+        {
+          title: "A hypothetical-intake scenario — committed E(50), reference adult",
+          body:
+            "The internal-dose panel computes the committed effective dose E(50) = Σ e_n·A_n a " +
+            "reference adult would receive over 50 years IF the whole inventory were ingested or " +
+            "inhaled at the chosen time — a scenario, not a measured field. It is a SCALAR in Sv " +
+            "(not a rate, so there is no accumulate/integrate control). Coefficients are ICRP-119 " +
+            "(public ICRP-72 / worker ICRP-68), reference-person and adult, with ONE default " +
+            "absorption type / chemical form / f1 per nuclide — real intakes vary by form, particle " +
+            "size, and individual (e.g. Po-210 Type M ≈ 3× the default F; H-3 OBT ≈ 2.3× HTO).",
+        },
+        {
+          title: "Partial coverage → lower bound; never summed with external dose",
+          body:
+            "Coverage is a curated nuclide set (~40 nuclides). A tracked nuclide with activity but " +
+            "no coefficient makes the result a LOWER BOUND, flagged per calculation with the gap " +
+            "listed — the under-count, dangerous direction. The committed effective Sv is NOT " +
+            "comparable to, and is never summed with, the external H*(10) (Sv) or air kerma (Gy) — " +
+            "a different quantity and a different exposure scenario.",
         },
       ],
     },
