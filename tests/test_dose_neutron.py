@@ -35,7 +35,6 @@ from engine.neutron_dose import (
     NeutronDoseModel,
     neutron_transmission,
 )
-from engine.photon_interp import ABOVE_GRID
 
 SV_S_TO_MREM_H = 3.6e8        # Sv/s → mrem/h  (×3600 s/h × 1e5 mrem/Sv)
 SV_S_TO_USV_H = 3.6e9         # Sv/s → µSv/h
