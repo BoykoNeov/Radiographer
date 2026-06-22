@@ -25,11 +25,11 @@
 | `build/fetch_nist_xraymac.py` | One-time acquisition of the NIST pages (verbatim). Dev-time only. |
 | `LICENSE.ICRP-07` | The license governing the emission data (see below). |
 
-Datasets still to land (§7): spent-fuel discharge vectors (M7); the **AmBe** neutron
-source (deferred from M5 — its ISO 8529-1 spectrum was not cleanly sourceable; see
-`docs/plans/M5-neutron.md`).
-(Emissions ✅, attenuation ✅, G-P buildup ✅, H\*(10) & effective-dose conversion ✅
-[photon + neutron], Cf-252 neutron source ✅.)
+**All §7 datasets have landed**, plus the post-v1 extension data. Coverage: emissions ✅,
+attenuation ✅, G-P buildup ✅, H\*(10) & effective-dose conversion ✅ [photon + neutron],
+neutron sources ✅ [Cf-252 + **AmBe**, sourced at M7d from IAEA TRS-403], spent-fuel
+discharge vectors ✅ (M7c), bomb fallout ✅ (M7d), neutron removal ✅ (M10/M11), internal-dose
+coefficients ✅ (M13).
 
 ## Emissions — canonical schema (`schema_version: 1`)
 
@@ -237,8 +237,10 @@ Design choices (M5 review):
 - **Source-correlated γ** (AmBe 4.438 MeV, …) are reaction γ — NOT in the ICRP-107 decay
   lines — scored through the M3 gamma engine via `photon_override`. Cf-252 prompt-fission γ
   (a continuum) is unmodeled in v1 (§11), so its `source_gammas` is `[]`.
-- **AmBe deferred** — its ISO 8529-1 spectrum wasn't cleanly sourceable; the schema/engine are
-  AmBe-ready. See `docs/plans/M5-neutron.md` and HANDOFF_PLAN §11.
+- **AmBe shipped at M7d** — sourced from **IAEA TRS-403 (2001) Table 4.V** (open access): the
+  ISO 8529 spectrum (folds to H\*(10) ≈ 393.6 pSv·cm², matching the published 391 to <1%), a
+  construction-dependent yield (±15%), and the 4.438 MeV reaction γ via `photon_override`. See
+  `docs/plans/M7-sources.md` and HANDOFF_PLAN §11.
 
 ### ⚠️ Trust boundary (honesty)
 The neutron **effective** table is verbatim from OpenMC mainline (clean, blob-SHA == tree);
@@ -278,6 +280,10 @@ hand-re-derived) — a future cheap strengthener is a coarse per-nuclide invaria
 
 ## License — read before redistributing
 
+> The repo-level licensing is settled: **code is MIT (`/LICENSE`), bundled data
+> keeps its upstream terms (`/NOTICE`).** The per-dataset terms below are the detail
+> behind that NOTICE.
+
 The emission data derives from **ICRP Publication 107** and is governed by
 `LICENSE.ICRP-07` (© 2008 A. Endo & K.F. Eckerman). It permits use, copying, and
 distribution **for educational, research, and not-for-profit purposes** provided
@@ -299,4 +305,27 @@ emission data constrains the repo license.
 The **neutron source** data (`neutron_sources/`) is **reconstructed from public physics
 facts** — the ISO 8529-1 Cf-252 Maxwellian parameter and NNDC/Holden SF-branch, ν̄,
 half-life, and atomic-mass constants — not transcribed from a copyrightable table. No new
-license restriction; only the ICRP-107 emission data constrains the repo license.
+license restriction. (The AmBe spectrum is from **IAEA TRS-403**, open-access and cited.)
+
+The **internal-dose coefficients** (`internal_dose/`, `vendor/icrp119/`) derive from **ICRP
+Publication 119** (consolidating the ICRP-68 worker and ICRP-72 public values). Like
+ICRP-107, ICRP content is reproduced here for **non-commercial, educational / reference use
+only** — it carries the **same non-commercial constraint** and does not worsen the position
+ICRP-107 already sets.
+
+The **spent-fuel discharge vectors** (`spent_fuel/`, `vendor/sckcen_sf/`) are from the
+**SCK-CEN Serpent2 library** (Mendeley DOI 10.17632/shv89y2zzd), released **CC-BY-4.0** —
+redistributable with attribution, **no** non-commercial restriction.
+
+The **fallout** data (`fallout/`, `vendor/endf_nfy/`) uses **ENDF/B-VIII.0** U-235 thermal
+fission yields from the NNDC — public, no non-commercial restriction.
+
+The **neutron-removal** data (`neutron_removal/`, `vendor/ncrp20_removal/`, with the SF ν̄
+tables in `vendor/iaea_sf_nu/` and `vendor/llnl_sf_multiplicity/`, and the (α,n) yields in
+`vendor/panda_alpha_n/`) is reconstructed from **published measured values** (NCRP-20 removal
+cross-sections, IAEA/Holden ν̄, PANDA/NUREG-CR-5550 oxide yields) — physics facts, not
+copyrightable tables. No new license restriction.
+
+**Net:** the only non-commercial constraint on the bundle comes from the **ICRP** data
+(ICRP-107 emission spectra and ICRP-68/72/74/116/119 dose coefficients). Everything else is
+public-domain, CC-BY, MIT, or reconstructed physics facts. See `/NOTICE`.

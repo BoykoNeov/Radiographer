@@ -1,0 +1,42 @@
+# NOTICE — licensing of Radiographer
+
+Radiographer is **dual-licensed** because it bundles physics datasets that carry
+their own upstream terms.
+
+## Source code — MIT
+
+All source code in this repository — `engine/`, `web/` (excluding bundled data
+copied into the runtime), `data/build/`, `tests/`, `docs/`, and the launcher
+scripts — is licensed under the **MIT License**; see `LICENSE`.
+
+## Bundled datasets — upstream terms; NON-COMMERCIAL where ICRP-derived
+
+The physics datasets under `data/` are **not** covered by the MIT license. Each is
+reproduced from a cited published source under that source's terms, documented
+per-dataset in `data/README.md` and per-file in `data/vendor/**/PROVENANCE.md`.
+
+The binding constraint is the **ICRP-derived** data:
+
+- **ICRP-107 emission data** (`data/emissions/`, `data/vendor/icrp107/`) — governed
+  by `data/LICENSE.ICRP-07` (© 2008 A. Endo & K. F. Eckerman): use, copying, and
+  distribution for **educational, research, and not-for-profit purposes only**, with
+  the license text travelling with the data. **No commercial use.**
+- **ICRP-119 internal-dose coefficients** (`data/internal_dose/`,
+  `data/vendor/icrp119/`) and the **ICRP-74 / ICRP-116 fluence-to-dose coefficients**
+  (`data/conversion/`) are reproduced from ICRP publications for the same
+  non-commercial, educational / reference use.
+
+Other bundled data carries **no** non-commercial restriction (e.g. NIST SRD 126
+attenuation — U.S.-Government public domain; the SCK-CEN spent-fuel discharge
+library — CC-BY-4.0; ENDF/B-VIII.0 fission yields; OpenMC tables; reconstructed
+neutron spectra). See `data/README.md` for each.
+
+## What this means for reuse
+
+- The **code** may be reused freely under MIT.
+- **Any redistribution of the application that includes the bundled ICRP-derived
+  datasets is limited to non-commercial use.** A commercial distribution would have
+  to remove or separately license the ICRP-derived tables.
+
+This is an educational / reference tool, not a validated radiation-safety code — see
+the README disclaimer and the in-app **Honesty** panel.
