@@ -8,9 +8,11 @@ each milestone is built.
 
 - **`../HANDOFF_PLAN.md` (repo root)** — the contract: what we're building, all
   LOCKED / OPEN decisions. Authoritative for design.
-- **`docs/plans/`** — one dev-doc per milestone (M0–M7), created *when that
-  milestone starts*. Captures the accepted approach, key files/decisions, and
-  whatever a fresh session needs to resume. This is the durable record.
+- **`docs/plans/`** — one dev-doc per milestone (M0–M7, plus the post-v1
+  extensions M8–M13), created *when that milestone starts*. Captures the accepted
+  approach, key files/decisions, and whatever a fresh session needs to resume.
+  This is the durable record. (M11 — the neutron dose-vs-thickness explorer — has
+  no standalone doc; its design lives in the M10 doc and session memory.)
 - **Harness Task tools** (`TaskCreate` / `TaskUpdate`) — the *in-session*
   checklist for the milestone you're actively working. Ephemeral; not a
   substitute for a dev-doc.
