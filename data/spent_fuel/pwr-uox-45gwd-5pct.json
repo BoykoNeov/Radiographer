@@ -1,0 +1,431 @@
+{
+  "schema_version": 3,
+  "id": "pwr-uox-45gwd-5pct",
+  "label": "PWR spent fuel — 45 GWd/tHM, 5.0% (high enrichment)",
+  "reactor": "PWR UOX (Serpent2 pin-cell)",
+  "burnup_GWd_tHM": 45.0,
+  "burnup_achieved_GWd_tHM": 45.0148,
+  "enrichment_pct": 5.0,
+  "cooling_time_s": 0.0,
+  "basis": "grams per tonne initial heavy metal (1 tU); load with unit='g'",
+  "basis_note": "Vector derived from the dataset's mass-density (atom-inventory) columns, NOT the _A activity column — _A carries a fixed ~0.535 geometry factor on a different volume basis than the mass density, so activity is recomputed as λN by the engine. Validated: Cs-137 matches the fission-yield estimate to <1%.",
+  "a_factor_A_over_lambdaN": 0.5349562299255811,
+  "basis_HM_density_g_cm3": 8.87639942,
+  "n_nuclides": 67,
+  "n_stable_skipped": 78,
+  "entries": [
+    {
+      "name": "H-3",
+      "mass_g_per_tHM": 1.6110135791974084e-06
+    },
+    {
+      "name": "Se-79",
+      "mass_g_per_tHM": 6.466585975239947
+    },
+    {
+      "name": "Kr-81",
+      "mass_g_per_tHM": 2.2644316742564972e-05
+    },
+    {
+      "name": "Kr-85",
+      "mass_g_per_tHM": 37.678340526952084
+    },
+    {
+      "name": "Rb-87",
+      "mass_g_per_tHM": 346.7036412383525
+    },
+    {
+      "name": "Sr-90",
+      "mass_g_per_tHM": 740.6978538151452
+    },
+    {
+      "name": "Y-90",
+      "mass_g_per_tHM": 0.1926456797501796
+    },
+    {
+      "name": "Zr-93",
+      "mass_g_per_tHM": 978.3493947369033
+    },
+    {
+      "name": "Nb-93m",
+      "mass_g_per_tHM": 0.0007841017140709065
+    },
+    {
+      "name": "Tc-99",
+      "mass_g_per_tHM": 1053.833830294221
+    },
+    {
+      "name": "Ru-106",
+      "mass_g_per_tHM": 176.18855641807068
+    },
+    {
+      "name": "Rh-106",
+      "mass_g_per_tHM": 0.0001813798505250229
+    },
+    {
+      "name": "Pd-107",
+      "mass_g_per_tHM": 263.2644036651519
+    },
+    {
+      "name": "Cd-113m",
+      "mass_g_per_tHM": 0.1430760311594901
+    },
+    {
+      "name": "Sn-126",
+      "mass_g_per_tHM": 28.805148112634164
+    },
+    {
+      "name": "Sb-125",
+      "mass_g_per_tHM": 12.298342473642315
+    },
+    {
+      "name": "Te-125m",
+      "mass_g_per_tHM": 0.15321527746213115
+    },
+    {
+      "name": "I-129",
+      "mass_g_per_tHM": 200.90691232098703
+    },
+    {
+      "name": "Cs-134",
+      "mass_g_per_tHM": 181.05877439210593
+    },
+    {
+      "name": "Cs-135",
+      "mass_g_per_tHM": 695.3821823398749
+    },
+    {
+      "name": "Cs-137",
+      "mass_g_per_tHM": 1620.0262425775338
+    },
+    {
+      "name": "Ba-137m",
+      "mass_g_per_tHM": 0.0002489748258759631
+    },
+    {
+      "name": "Ce-144",
+      "mass_g_per_tHM": 395.93080862059725
+    },
+    {
+      "name": "Nd-144",
+      "mass_g_per_tHM": 1353.2626723550482
+    },
+    {
+      "name": "Pm-147",
+      "mass_g_per_tHM": 221.35439236464643
+    },
+    {
+      "name": "Sm-146",
+      "mass_g_per_tHM": 0.003627597010500458
+    },
+    {
+      "name": "Sm-147",
+      "mass_g_per_tHM": 107.72701348313143
+    },
+    {
+      "name": "Sm-148",
+      "mass_g_per_tHM": 203.2119009804541
+    },
+    {
+      "name": "Sm-151",
+      "mass_g_per_tHM": 18.092358444140405
+    },
+    {
+      "name": "Eu-154",
+      "mass_g_per_tHM": 37.67777723549083
+    },
+    {
+      "name": "Eu-155",
+      "mass_g_per_tHM": 10.848993543825904
+    },
+    {
+      "name": "Ho-166m",
+      "mass_g_per_tHM": 0.00017236718714489755
+    },
+    {
+      "name": "Pb-210",
+      "mass_g_per_tHM": 1.5208869453961546e-09
+    },
+    {
+      "name": "Ac-227",
+      "mass_g_per_tHM": 2.974178915441369e-08
+    },
+    {
+      "name": "Th-228",
+      "mass_g_per_tHM": 3.3797487675470105e-06
+    },
+    {
+      "name": "Th-229",
+      "mass_g_per_tHM": 9.90266388891274e-07
+    },
+    {
+      "name": "Th-230",
+      "mass_g_per_tHM": 0.002129241723554617
+    },
+    {
+      "name": "Th-232",
+      "mass_g_per_tHM": 0.013518995070188042
+    },
+    {
+      "name": "Pa-231",
+      "mass_g_per_tHM": 0.0009249245793853652
+    },
+    {
+      "name": "U-232",
+      "mass_g_per_tHM": 0.0005204813102022397
+    },
+    {
+      "name": "U-233",
+      "mass_g_per_tHM": 0.006669370901292768
+    },
+    {
+      "name": "U-234",
+      "mass_g_per_tHM": 257.68443844993175
+    },
+    {
+      "name": "U-235",
+      "mass_g_per_tHM": 14472.534855805305
+    },
+    {
+      "name": "U-236",
+      "mass_g_per_tHM": 6425.995192541707
+    },
+    {
+      "name": "U-238",
+      "mass_g_per_tHM": 918994.2468812428
+    },
+    {
+      "name": "Np-237",
+      "mass_g_per_tHM": 681.0452880679405
+    },
+    {
+      "name": "Pu-238",
+      "mass_g_per_tHM": 283.1035289306528
+    },
+    {
+      "name": "Pu-239",
+      "mass_g_per_tHM": 7156.651812768471
+    },
+    {
+      "name": "Pu-240",
+      "mass_g_per_tHM": 2597.945282638036
+    },
+    {
+      "name": "Pu-241",
+      "mass_g_per_tHM": 1778.3787381663365
+    },
+    {
+      "name": "Pu-242",
+      "mass_g_per_tHM": 577.1844818582983
+    },
+    {
+      "name": "Pu-244",
+      "mass_g_per_tHM": 0.03582533693599831
+    },
+    {
+      "name": "Am-241",
+      "mass_g_per_tHM": 61.666107404616994
+    },
+    {
+      "name": "Am-242m",
+      "mass_g_per_tHM": 0.9136587501602086
+    },
+    {
+      "name": "Am-243",
+      "mass_g_per_tHM": 121.36114532800059
+    },
+    {
+      "name": "Cm-242",
+      "mass_g_per_tHM": 21.215584280230598
+    },
+    {
+      "name": "Cm-243",
+      "mass_g_per_tHM": 0.6590510096716671
+    },
+    {
+      "name": "Cm-244",
+      "mass_g_per_tHM": 49.559171369510096
+    },
+    {
+      "name": "Cm-245",
+      "mass_g_per_tHM": 3.8303819365532785
+    },
+    {
+      "name": "Cm-246",
+      "mass_g_per_tHM": 0.26474698679118247
+    },
+    {
+      "name": "Cm-247",
+      "mass_g_per_tHM": 0.0035036728890237346
+    },
+    {
+      "name": "Cm-248",
+      "mass_g_per_tHM": 0.0002039115089753363
+    },
+    {
+      "name": "Cm-250",
+      "mass_g_per_tHM": 1.5434186038464682e-11
+    },
+    {
+      "name": "Bk-249",
+      "mass_g_per_tHM": 4.528863348512994e-06
+    },
+    {
+      "name": "Cf-249",
+      "mass_g_per_tHM": 1.1186968420580605e-06
+    },
+    {
+      "name": "Cf-250",
+      "mass_g_per_tHM": 3.064305549242623e-17
+    },
+    {
+      "name": "Cf-251",
+      "mass_g_per_tHM": 1.3406336777936476e-12
+    }
+  ],
+  "neutron": {
+    "model": "spontaneous fission (SF) + (α,n)-on-oxygen — a BEST ESTIMATE of the intrinsic neutron source for clean oxide fuel (SF + (α,n)-on-O is essentially complete). Residual caveats: thick-target (α,n) yield carries ±factor; minor α-emitters absent from PANDA Table 13 are bounded as a dropped-(α,n) fraction (never silent).",
+    "spectrum_source": "Cf-252",
+    "nubar_source": "ν_p from IAEA NDS SF_n-Yield_20150313 Table 1 (JEFF-3.1 / Holden 1985) for the 18 safeguards isotopes, plus Cm-246/248 derived (Σ_k k·P(k)) from the Holden & Zucker BNL-36467 distributions (LLNL UCRL-AR-228518 Table 4); yield_per_decay = (_SF/_A)·ν_p. See data/vendor/*/PROVENANCE.md.",
+    "yields_n_per_decay": {
+      "Th-232": 2.097821493064894e-11,
+      "U-232": 1.5401936500788112e-12,
+      "U-234": 3.0607354710912787e-11,
+      "U-235": 1.3475736141111988e-10,
+      "U-236": 1.7097166086169277e-09,
+      "U-238": 1.0920012529712001e-06,
+      "Pu-238": 4.110609963416753e-09,
+      "Pu-239": 7.192011601026244e-12,
+      "Pu-240": 1.2260660553823581e-07,
+      "Pu-242": 1.1775510678410758e-05,
+      "Am-241": 1.0749977788606765e-11,
+      "Cm-242": 1.5494030873951626e-07,
+      "Cm-244": 3.7535995365440158e-06,
+      "Cm-246": 0.0007659010591250952,
+      "Cm-248": 0.2626083825813348,
+      "Bk-249": 1.5955342217860043e-09
+    },
+    "dropped_sf_branch": {
+      "Th-230": 2.4990256389671904e-13,
+      "Pa-231": 2.995302584164747e-12,
+      "Pu-244": 0.00125,
+      "Am-242m": 1.6000023789557575e-10,
+      "Am-243": 3.700003759999248e-11,
+      "Cm-250": 0.740343347639485,
+      "Cf-249": 5.201864706716877e-09,
+      "Cf-250": 0.0007700170357751277
+    },
+    "dropped_nubar_nominal": 3.3,
+    "dropped_sf_frac_at_discharge": 3.2730309417971956e-07,
+    "crosscheck_Cm244": {
+      "Cm244_n_per_decay": 3.7535995365440158e-06,
+      "Cm244_iaea_n_per_decay": 3.6735934382296785e-06,
+      "rel": 0.02177870242301298,
+      "note": "branching-ratio check; ν̄ cancels (not a yield validation)"
+    },
+    "alpha_n": {
+      "source": "PANDA/NUREG-CR-5550 Ch.11 Table 13 'Oxide (n/s-g)' / specific activity (per gram of isotope); see data/vendor/panda_alpha_n/PROVENANCE.md",
+      "yields_n_per_decay": {
+        "Th-232": 5.4222126765175464e-09,
+        "U-232": 1.800865801686403e-08,
+        "U-233": 1.3462707805154686e-08,
+        "U-234": 1.3031155676774389e-08,
+        "U-235": 8.881746499785706e-09,
+        "U-236": 1.0030262722036312e-08,
+        "U-238": 6.67389250671241e-09,
+        "Np-237": 1.3063472551940084e-08,
+        "Pu-238": 2.114901282541061e-08,
+        "Pu-239": 1.6600959507111963e-08,
+        "Pu-240": 1.6796338578896478e-08,
+        "Pu-241": 3.3996410058520776e-13,
+        "Pu-242": 1.3724621067320644e-08,
+        "Am-241": 2.118726057983947e-08,
+        "Cm-242": 3.066906682635023e-08,
+        "Cm-244": 2.5815342979559467e-08,
+        "Bk-249": 3.0623437123345883e-13
+      },
+      "dropped_alpha_branch": {
+        "Nd-144": 1.0,
+        "Sm-146": 1.0,
+        "Sm-147": 1.0,
+        "Sm-148": 1.0,
+        "Ac-227": 0.013799995842,
+        "Th-228": 0.9999997535101,
+        "Th-229": 0.99999966238,
+        "Th-230": 1.000000183825,
+        "Pa-231": 1.0000012747,
+        "Pu-244": 0.99879,
+        "Am-242m": 0.004499999408,
+        "Am-243": 1.0000001343340001,
+        "Cm-243": 0.9976002027699999,
+        "Cm-245": 1.0000001524,
+        "Cm-246": 0.999737,
+        "Cm-247": 1.0,
+        "Cm-248": 0.9160997204,
+        "Cm-250": 0.18,
+        "Cf-249": 1.000000059143,
+        "Cf-250": 0.999230303,
+        "Cf-251": 1.00000001
+      },
+      "nominal_O_yield_per_alpha": 5.9e-08,
+      "basis_check": {
+        "n_isotopes": 17,
+        "worst_rel": 0.040881815830835916,
+        "worst_nuclide": "Pu-242",
+        "tol": 0.08
+      },
+      "pu238_alpha_n_n_s_g": 13400.0
+    },
+    "crosscheck_Pu238_oxide_total": {
+      "sf_n_s_g": 2604.4796494521515,
+      "alpha_n_n_s_g": 13400.0,
+      "total_n_s_g": 16004.47964945215,
+      "canonical_n_s_g": 16000.0,
+      "rel": 0.00027997809075941404,
+      "note": "cross-pipeline sanity (dataset-SF ↔ PANDA-SF); NOT an independent (α,n) magnitude validation — canonical ≈ PANDA's own column sum"
+    }
+  },
+  "dropped": {
+    "nuclides": [
+      "Se-82",
+      "Zr-96",
+      "Mo-100",
+      "Xe-136",
+      "Nd-150"
+    ],
+    "activity_frac": 2.4086065101191674e-19
+  },
+  "source_ref": "SCK-CEN UOX PWR Serpent2 discharge library, Mendeley Data DOI 10.17632/shv89y2zzd (UOX file, version 4), CC BY 4.0. Discharge (zero cooling); cooling = the §9 reference-time control.",
+  "neutron_caveat": "Neutron output = spontaneous fission + (α,n)-on-oxygen, a BEST ESTIMATE folded against a representative SF spectrum. SF: Cm-242 dominates at short cooling, Cm-244 through ~1 century, Cm-246/248 (ν_p from Holden & Zucker BNL-36467) beyond. (α,n) (PANDA Table 13 oxide yields): Cm-242 at short cooling, then Am-241/Cm-244/Pu-238. For clean oxide fuel SF + (α,n)-on-O is essentially the complete intrinsic source. Residual caveats, surfaced never silent: the thick-target (α,n) yield carries a ±factor; the (α,n) spectrum is softer than SF (folded on the same h̄, flat over 0.5–6 MeV); minor SF emitters without an evaluated ν̄ and α-emitters absent from Table 13 are bounded as a dropped-fraction warning at the evaluated cooling time.",
+  "selfcheck": {
+    "cs137_Bq_per_tHM": 5188528664634148.0,
+    "cs137_fission_yield_estimate_Bq_per_tHM": 5493146964949956.0,
+    "decay_heat_W_per_tHM": {
+      "t0": 14020.971736616331,
+      "t10yr": 1606.4718748520943,
+      "t100yr": 428.8384360383645
+    },
+    "neutron_n_per_s_per_tHM": {
+      "total": {
+        "t0": 1054942330.8981233,
+        "t10yr": 395571809.8769881,
+        "t100yr": 25350119.160241444
+      },
+      "sf": {
+        "t0": 966737642.7888757,
+        "t10yr": 386561111.1947198,
+        "t100yr": 18449556.524764165
+      },
+      "alpha_n": {
+        "t0": 88204688.1092476,
+        "t10yr": 9010698.682268344,
+        "t100yr": 6900562.635477278
+      },
+      "alpha_n_frac": {
+        "t0": 0.08361090983443113,
+        "t10yr": 0.02277892017904517,
+        "t100yr": 0.272210264253904
+      }
+    }
+  }
+}

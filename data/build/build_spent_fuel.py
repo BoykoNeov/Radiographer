@@ -100,17 +100,29 @@ _MIN_ALPHA_BRANCH_FOR_DROPPED = 1.0e-3
 #: is the NON-tautological basis check; ``yield = oxide/SA`` then ``yield·SA`` would just echo oxide.
 _ALPHA_SG_BASIS_REL_TOL = 0.08
 
-#: Curated (burnup GWd/tHM, enrichment %) grid points to ship (§13 #4). A modern PWR
-#: reference plus a low-burnup contrast — both legible IE/BU and on the dataset grid
-#: (BU multiple of 0.2, IE multiple of 0.025). Documented, not user-asked (the user
-#: scoped "do spent fuel"); more points are a trivial add.
+#: Curated (burnup GWd/tHM, enrichment %) grid points to ship (§13 #4). A two-axis CROSS
+#: centered on the reference point (45 GWd/tHM, 4.0%): a **burnup axis** (20/45/60 @ 4.0%)
+#: and an **enrichment axis** (3.0/4.0/5.0 % @ 45 GWd), sharing that center. Both axes are
+#: pure-physics contrasts — at fixed burnup, fission products (Cs-137) are ~enrichment-
+#: independent while lower enrichment reaches the same burnup with more U-238 capture, so
+#: Pu/minor-actinide buildup (decay heat, SF + (α,n) neutron source) rises as enrichment
+#: falls. Every point is on the dataset grid (BU multiple of 0.2, IE multiple of 0.025).
+#: Documented, not user-asked; more points are a trivial GRID_POINTS add.
 GRID_POINTS = [
+    # Burnup axis (fixed 4.0% enrichment).
     {"id": "pwr-uox-60gwd-4pct", "burnup": 60.0, "enrichment": 4.0,
      "label": "PWR spent fuel — 60 GWd/tHM, 4.0% (high burnup)"},
     {"id": "pwr-uox-45gwd-4pct", "burnup": 45.0, "enrichment": 4.0,
      "label": "PWR spent fuel — 45 GWd/tHM, 4.0% (reference)"},
     {"id": "pwr-uox-20gwd-4pct", "burnup": 20.0, "enrichment": 4.0,
      "label": "PWR spent fuel — 20 GWd/tHM, 4.0% (low burnup)"},
+    # Enrichment axis (fixed 45 GWd/tHM burnup), crossing the reference at 4.0%. 3.0% reaching
+    # 45 GWd is high for commercial fuel (the dataset is a Cartesian depletion grid, not a
+    # fuel-management envelope) — labelled as the low-enrichment contrast, not a typical case.
+    {"id": "pwr-uox-45gwd-3pct", "burnup": 45.0, "enrichment": 3.0,
+     "label": "PWR spent fuel — 45 GWd/tHM, 3.0% (low enrichment)"},
+    {"id": "pwr-uox-45gwd-5pct", "burnup": 45.0, "enrichment": 5.0,
+     "label": "PWR spent fuel — 45 GWd/tHM, 5.0% (high enrichment)"},
 ]
 
 #: Heavy-metal elements (Z ≥ 90) — their discharge mass-density sum at BU=0 is the initial

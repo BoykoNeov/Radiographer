@@ -18,6 +18,10 @@ CSV, re-deriving every anchor *independently* of the build script:
 5. **Decay heat magnitude** — folded through the M7c decay-heat engine, the W/tHM at 10 yr
    sits in the published PWR band; and cooling monotonically lowers both heat and the
    long-lived activity (forward decay).
+6. **Enrichment axis (fixed burnup)** — at 45 GWd, Cs-137 (a fission product) is ~enrichment-
+   independent (it tracks burnup), while the intrinsic neutron source rises as enrichment falls
+   (lower enrichment reaches the same burnup with more U-238 capture → more Pu/minor-actinide
+   buildup). The two axes cross at the reference point (45 GWd, 4.0%).
 """
 
 from __future__ import annotations
@@ -51,7 +55,12 @@ def _solve(record: dict) -> SolvedInventory:
     return SolvedInventory.from_entries(spec, precision="double")
 
 
-POINTS = ["pwr-uox-60gwd-4pct", "pwr-uox-45gwd-4pct", "pwr-uox-20gwd-4pct"]
+# The burnup × enrichment CROSS centered on the reference (45 GWd/tHM, 4.0%): a burnup axis
+# (20/45/60 @ 4.0%) and an enrichment axis (3/4/5% @ 45 GWd), sharing that center point.
+POINTS = ["pwr-uox-60gwd-4pct", "pwr-uox-45gwd-4pct", "pwr-uox-20gwd-4pct",
+          "pwr-uox-45gwd-3pct", "pwr-uox-45gwd-5pct"]
+# The enrichment axis, low→high enrichment, at fixed 45 GWd/tHM burnup.
+ENRICHMENT_AXIS = ["pwr-uox-45gwd-3pct", "pwr-uox-45gwd-4pct", "pwr-uox-45gwd-5pct"]
 
 
 @pytest.fixture(scope="module")
@@ -110,12 +119,48 @@ def test_burnup_scaling(points):
         assert cs[hi] / cs[lo] == pytest.approx(bu[hi] / bu[lo], rel=0.15), (hi, lo)
 
 
+def test_enrichment_axis_at_fixed_burnup(points):
+    # The enrichment axis (3/4/5% @ 45 GWd) is a pure-actinide contrast at FIXED burnup, with two
+    # independent signatures — both computed via the engine's λN, NOT the dataset's opaque _A column:
+    #  (a) Cs-137, a fission product, tracks total fissions ≈ burnup → ~enrichment-independent.
+    #  (b) the intrinsic neutron source (SF + (α,n)) RISES as enrichment falls: lower enrichment
+    #      reaches the same burnup with more U-238 capture → more Pu/minor-actinide buildup
+    #      (Cm-244 roughly doubles from 5% to 3%), so the source is ~2× larger at 3% than at 5%.
+    invs = {pid: _solve(points[pid]) for pid in ENRICHMENT_AXIS}
+    act0 = {pid: invs[pid].evaluate([0.0], axis="activity", unit="Bq")["series"]
+            for pid in ENRICHMENT_AXIS}
+
+    # (a) Cs-137 discharge activity is flat across the enrichment axis (within 3%).
+    cs = {pid: act0[pid]["Cs-137"][0] for pid in ENRICHMENT_AXIS}
+    assert max(cs.values()) / min(cs.values()) < 1.03, cs
+
+    # (b) the discharge neutron source (SF + (α,n) modeled yields) is strictly monotonic in
+    #     enrichment, with a material (not marginal) 3%-vs-5% contrast.
+    def _source0(pid: str) -> float:
+        d = points[pid]
+        sf = d["neutron"]["yields_n_per_decay"]
+        an = d["neutron"]["alpha_n"]["yields_n_per_decay"]
+        s = act0[pid]
+        return (math.fsum(y * s.get(n, [0.0])[0] for n, y in sf.items())
+                + math.fsum(y * s.get(n, [0.0])[0] for n, y in an.items()))
+
+    s3, s4, s5 = (_source0(p) for p in ENRICHMENT_AXIS)   # 3% → 4% → 5%
+    assert s3 > s4 > s5 > 0.0, (s3, s4, s5)
+    assert s3 / s5 > 1.5, s3 / s5
+
+
 @pytest.mark.parametrize("point_id,lo_kw,hi_kw", [
     # High burnup carries more decay heat at 10 yr (FP ∝ burnup + extra minor-actinide heat);
     # the band is the 45 GWd band scaled ~×(60/45), an independent published-range expectation.
     ("pwr-uox-60gwd-4pct", 1.3, 3.5),
     ("pwr-uox-45gwd-4pct", 1.0, 2.5),
     ("pwr-uox-20gwd-4pct", 0.4, 1.2),
+    # The enrichment axis shares the 45 GWd band: 10-yr heat is fission-product-dominated and
+    # FP track burnup, not enrichment, so the published range is the SAME regardless of IE. The
+    # small actinide tail (slightly higher at low enrichment) stays well inside — reusing the
+    # band is itself the cross-check on that enrichment-insensitivity. (Trend → enrichment test.)
+    ("pwr-uox-45gwd-3pct", 1.0, 2.5),
+    ("pwr-uox-45gwd-5pct", 1.0, 2.5),
 ])
 def test_decay_heat_10yr_in_published_band(points, point_id, lo_kw, hi_kw):
     inv = _solve(points[point_id])
@@ -332,12 +377,17 @@ def test_sourcing_cm246_248_extends_valid_cooling_regime(points, point_id):
             b * series.get(n, [0.0] * len(ts))[i] for n, b in dropped.items() if n in series)
         frac = s_drop / (s + s_drop) if (s + s_drop) > 0 else 0.0
         assert frac < 0.01, f"{point_id}: dropped SF frac {frac:.3%} at t={ts[i] / _YEAR_S:.0f} yr"
-    # Cm-246 must be modeled (the sourcing goal). Its WEIGHT in the long-cooling SF source is
-    # burnup-dependent — Cm-246 is a high-order capture product, so at high burnup it dominates
-    # the 1 kyr source (Cm-244 long gone) while at low burnup Pu-240 leads. Assert the regime-
-    # extending dominance only where the physics gives it.
+    # Cm-246 must be modeled (the sourcing goal). Its WEIGHT in the long-cooling SF source is a
+    # CROSS signature — Cm-246 is a high-order capture product, so it leads the 1 kyr source (Cm-244
+    # long gone) at high burnup AND at low enrichment. Keyed on physics, verified against the build
+    # output (not assumed): it dominates at 60/45 GWd @4% and at 45 GWd @3%; at 45 GWd @5% (less
+    # capture) and 20 GWd @4% (too little capture) the lower-order Pu-240 still leads.
     assert "Cm-246" in yields
     s1k = {n: yields[n] * series[n][0] for n in yields if n in series}
-    if point_id in ("pwr-uox-45gwd-4pct", "pwr-uox-60gwd-4pct"):
+    _CM246_DOMINANT = {"pwr-uox-60gwd-4pct", "pwr-uox-45gwd-4pct", "pwr-uox-45gwd-3pct"}
+    if point_id in _CM246_DOMINANT:
         assert max(s1k, key=s1k.get) == "Cm-246"
         assert s1k["Cm-246"] / math.fsum(s1k.values()) > 0.4
+    else:  # 20 GWd @4%, 45 GWd @5%: the lower-order Pu-240 leads, Cm-246 not yet dominant
+        assert max(s1k, key=s1k.get) == "Pu-240"
+        assert s1k["Cm-246"] / math.fsum(s1k.values()) < 0.4

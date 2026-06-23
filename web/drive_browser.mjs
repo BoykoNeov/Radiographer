@@ -2115,9 +2115,16 @@ async function runM7(page) {
     ids: window.__APP__.spentFuelSources.map((s) => s.id),
     hasNeutron: window.__APP__.spentFuelSources.every((s) => s.spentFuelNeutronId),
   }));
+  // The shipped catalog is the burnup × enrichment CROSS centered on the reference point
+  // (45 GWd/tHM, 4.0%): a burnup axis (20/45/60 @ 4.0%) and an enrichment axis (3/4/5% @ 45 GWd).
+  // Exact count (no-silent-drop, §11): bump this when a GRID_POINT is added in build_spent_fuel.py.
   record(
-    "M7c spent-fuel catalog present (inventory from validated data/spent_fuel vectors), all SF-neutron armed (M9)",
-    sfCat.n === 2 && sfCat.ids.includes("pwr-uox-45gwd-4pct") && sfCat.hasNeutron,
+    "M7c spent-fuel catalog present (5-point burnup×enrichment cross from validated data/spent_fuel vectors), all SF-neutron armed (M9)",
+    sfCat.n === 5 &&
+      ["pwr-uox-45gwd-4pct", "pwr-uox-45gwd-3pct", "pwr-uox-45gwd-5pct"].every((id) =>
+        sfCat.ids.includes(id),
+      ) &&
+      sfCat.hasNeutron,
     `n=${sfCat.n}, ids=${JSON.stringify(sfCat.ids)}, hasNeutron=${sfCat.hasNeutron}`,
   );
 
