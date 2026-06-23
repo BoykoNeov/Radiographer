@@ -51,8 +51,11 @@ before concluding "defer".
   discrete-β path only (no double-count). Anchored to FETCHED published specific powers
   (Pu-238 0.567 W/g = the recoil discriminator; Po-210; Co-60). Bridge `decay_heat`.
 - *Part 2 — discharge vectors* (`data/spent_fuel/*.json`, §13 #4 RESOLVED): CC-BY SCK-CEN
-  Serpent2 PWR UOX library (Mendeley DOI 10.17632/shv89y2zzd), shipped at 45 & 20 GWd/tHM
-  @4.0%. The §11 no-fabrication discipline met with a *citable, machine-readable* source,
+  Serpent2 PWR UOX library (Mendeley DOI 10.17632/shv89y2zzd), shipped at **60, 45 & 20 GWd/tHM
+  @4.0%** — a single-axis burnup series (the 60 GWd high-burnup point added post-M13; demonstrates
+  the "trivial `GRID_POINTS` add" claim — its decay heat at 10 yr is ~2.5 kW/tHM, ~×1.33 the 45 GWd
+  reference, and its Cm-244-driven discharge neutron source is ~3.6e9 n/s/tHM). The §11
+  no-fabrication discipline met with a *citable, machine-readable* source,
   NOT memory. **Basis pivot (the crux):** the dataset's `_A` activity column carries a fixed
   ~0.535 geometry factor on a different volume basis than the mass-density column, so activity
   is derived as λN from the mass-density (atom-inventory) columns. Doubly validated — Cs-137

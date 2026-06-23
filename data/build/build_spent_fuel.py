@@ -105,6 +105,8 @@ _ALPHA_SG_BASIS_REL_TOL = 0.08
 #: (BU multiple of 0.2, IE multiple of 0.025). Documented, not user-asked (the user
 #: scoped "do spent fuel"); more points are a trivial add.
 GRID_POINTS = [
+    {"id": "pwr-uox-60gwd-4pct", "burnup": 60.0, "enrichment": 4.0,
+     "label": "PWR spent fuel — 60 GWd/tHM, 4.0% (high burnup)"},
     {"id": "pwr-uox-45gwd-4pct", "burnup": 45.0, "enrichment": 4.0,
      "label": "PWR spent fuel — 45 GWd/tHM, 4.0% (reference)"},
     {"id": "pwr-uox-20gwd-4pct", "burnup": 20.0, "enrichment": 4.0,

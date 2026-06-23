@@ -51,7 +51,7 @@ def _solve(record: dict) -> SolvedInventory:
     return SolvedInventory.from_entries(spec, precision="double")
 
 
-POINTS = ["pwr-uox-45gwd-4pct", "pwr-uox-20gwd-4pct"]
+POINTS = ["pwr-uox-60gwd-4pct", "pwr-uox-45gwd-4pct", "pwr-uox-20gwd-4pct"]
 
 
 @pytest.fixture(scope="module")
@@ -100,14 +100,20 @@ def test_cs137_matches_independent_fission_yield(points, point_id):
 
 
 def test_burnup_scaling(points):
-    hi, lo = points["pwr-uox-45gwd-4pct"], points["pwr-uox-20gwd-4pct"]
-    cs_hi = _solve(hi).evaluate([0.0], axis="activity", unit="Bq")["series"]["Cs-137"][0]
-    cs_lo = _solve(lo).evaluate([0.0], axis="activity", unit="Bq")["series"]["Cs-137"][0]
-    # Cs-137 (long-lived FP) tracks total fissions ≈ burnup; ratio ≈ 45/20 within ~15%.
-    assert cs_hi / cs_lo == pytest.approx(45.0 / 20.0, rel=0.15)
+    # Cs-137 (long-lived FP) tracks total fissions ≈ burnup. Across the whole 20→45→60 GWd
+    # series the discharge Cs-137 ratio must track the achieved-burnup ratio within ~15%.
+    cs = {pid: _solve(points[pid]).evaluate([0.0], axis="activity", unit="Bq")["series"]["Cs-137"][0]
+          for pid in POINTS}
+    bu = {pid: points[pid]["burnup_GWd_tHM"] for pid in POINTS}
+    for hi, lo in (("pwr-uox-45gwd-4pct", "pwr-uox-20gwd-4pct"),
+                   ("pwr-uox-60gwd-4pct", "pwr-uox-45gwd-4pct")):
+        assert cs[hi] / cs[lo] == pytest.approx(bu[hi] / bu[lo], rel=0.15), (hi, lo)
 
 
 @pytest.mark.parametrize("point_id,lo_kw,hi_kw", [
+    # High burnup carries more decay heat at 10 yr (FP ∝ burnup + extra minor-actinide heat);
+    # the band is the 45 GWd band scaled ~×(60/45), an independent published-range expectation.
+    ("pwr-uox-60gwd-4pct", 1.3, 3.5),
     ("pwr-uox-45gwd-4pct", 1.0, 2.5),
     ("pwr-uox-20gwd-4pct", 0.4, 1.2),
 ])
@@ -332,6 +338,6 @@ def test_sourcing_cm246_248_extends_valid_cooling_regime(points, point_id):
     # extending dominance only where the physics gives it.
     assert "Cm-246" in yields
     s1k = {n: yields[n] * series[n][0] for n in yields if n in series}
-    if point_id == "pwr-uox-45gwd-4pct":
+    if point_id in ("pwr-uox-45gwd-4pct", "pwr-uox-60gwd-4pct"):
         assert max(s1k, key=s1k.get) == "Cm-246"
         assert s1k["Cm-246"] / math.fsum(s1k.values()) > 0.4
