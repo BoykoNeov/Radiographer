@@ -389,5 +389,10 @@ def test_sourcing_cm246_248_extends_valid_cooling_regime(points, point_id):
         assert max(s1k, key=s1k.get) == "Cm-246"
         assert s1k["Cm-246"] / math.fsum(s1k.values()) > 0.4
     else:  # 20 GWd @4%, 45 GWd @5%: the lower-order Pu-240 leads, Cm-246 not yet dominant
+        # 45 GWd @5% is DELIBERATELY the near-crossover point (Pu-240 0.45 vs Cm-246 0.36) — the
+        # tightest margin in this suite. It is deterministic (fixed by the committed JSON + rd's
+        # nuclear data, not flaky), but if a future radioactivedecay data bump (Cm-246/Pu-240/
+        # Cm-244 half-lives) trips this, it is a physics-boundary recalibration, NOT a bug — move
+        # 45@5% between the sets per the new numbers; do NOT widen 0.4 (that blurs the boundary).
         assert max(s1k, key=s1k.get) == "Pu-240"
         assert s1k["Cm-246"] / math.fsum(s1k.values()) < 0.4

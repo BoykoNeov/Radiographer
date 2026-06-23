@@ -70,7 +70,8 @@ def catalog() -> list[dict]:
     """The §8 picker records for every bundled vector: a prebuilt-source manifest whose
     inventory comes from validated ``data/`` (not a hand-written manifest). Each entry's
     amount is the per-tonne-HM mass loaded with ``unit="g"`` (the engine's λN gives activity
-    and decay heat). Ordered by descending burnup (the reference case first)."""
+    and decay heat). Ordered by descending burnup, then ascending enrichment (so the highest-
+    burnup case leads; the 45 GWd reference sits inside its enrichment group of the cross)."""
     out: list[dict] = []
     for sid in available_sources():
         rec = load_vector(sid)
