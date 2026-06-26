@@ -8,7 +8,7 @@
   import Plotly from "plotly.js-basic-dist-min";
   import { onDestroy, untrack } from "svelte";
   import { appState } from "./state.svelte";
-  import { ACTIVITY_UNITS, AXIS_OPTIONS, MASS_UNITS } from "./types";
+  import { ACTIVITY_UNITS, AXIS_OPTIONS, MASS_UNITS, TIME_UNITS } from "./types";
 
   // Display floor: clip at peak / 10^D (D decades below the global peak), §9. A
   // SINGLE global floor across ALL series (not per-series) is load-bearing — it is
@@ -17,6 +17,13 @@
   const FLOOR_DECADES = 13;
 
   let plotEl = $state<HTMLDivElement | null>(null);
+
+  // x-axis display time unit (§9 "switch from seconds to years"). DISPLAY-ONLY: the
+  // store/grid stay in SI seconds (§12) — this only rescales the plotted x array, the
+  // cursor line, the axis title, and the hover label. Default "s" so the existing
+  // seconds-based behaviour (and gate) is unchanged. Local to this plot, not the slider.
+  let timeUnit = $state<string>("s");
+  const timeUnitDef = $derived(TIME_UNITS.find((u) => u.value === timeUnit) ?? TIME_UNITS[0]);
 
   /** y-axis title tracks axis + resolved unit (§12, obsessive labels). */
   function yTitle(axis: string, unit: string): string {
@@ -43,12 +50,21 @@
   function buildTraces(): Partial<Plotly.PlotData>[] {
     const c = appState.curve;
     if (!c) return [];
-    // x is the DISPLAY grid (time since the reference origin); the series were
-    // evaluated at the absolute times `t₀ + curveX` (the M6d offset, in the store).
-    const x = appState.curveX;
-    const peak = globalPeak(c.series, c.nuclides);
+    // Drop HIDDEN species (clicked off in the decay chain) entirely — "remove them from
+    // the time-evolution display" (display-only; the store keeps the full closure).
+    const hidden = appState.hiddenNuclides;
+    const visible = c.nuclides.filter((n) => !hidden.has(n));
+    // x is the DISPLAY grid (time since the reference origin), rescaled to the chosen
+    // display unit; the store/grid stay SI seconds (§12). The series were evaluated at
+    // the absolute times `t₀ + curveX` (the M6d offset, in the store).
+    const f = timeUnitDef.seconds;
+    const x = appState.curveX.map((v) => v / f);
+    const ulabel = timeUnitDef.label;
+    // Floor over the VISIBLE series only, so hiding the dominant species rescales the
+    // gap and reveals the smaller ones (the reason a user hides a trace). Single floor.
+    const peak = globalPeak(c.series, visible);
     const floor = appState.logY ? peak / 10 ** FLOOR_DECADES : 0;
-    return c.nuclides.map((name) => {
+    return visible.map((name) => {
       const raw = c.series[name] ?? [];
       const y = raw.map((v) =>
         appState.logY ? (v > floor ? v : null) : Number.isFinite(v) ? v : null,
@@ -60,7 +76,7 @@
         x,
         y,
         line: { color: appState.colors[name] ?? "#888", width: 2 },
-        hovertemplate: `${name}: %{y:.3e} @ %{x:.3e} s<extra></extra>`,
+        hovertemplate: `${name}: %{y:.3e} @ %{x:.3e} ${ulabel}<extra></extra>`,
       } as Partial<Plotly.PlotData>;
     });
   }
@@ -69,7 +85,7 @@
   // spanning the full plot height (yref:"paper" so it works on log or linear y).
   // Moving it is a cheap Plotly.relayout — never a trace rebuild (see the effects).
   function cursorShapes(): Partial<Plotly.Shape>[] {
-    const x = appState.cursorOffsetS;
+    const x = appState.cursorOffsetS / timeUnitDef.seconds; // same display unit as the x array
     if (!appState.curve || !(x > 0)) return [];
     return [
       {
@@ -90,7 +106,7 @@
     const c = appState.curve;
     return {
       margin: { l: 70, r: 20, t: 10, b: 50 },
-      xaxis: { type: "log", title: { text: "Time (s)" }, automargin: true },
+      xaxis: { type: "log", title: { text: `Time (${timeUnitDef.label})` }, automargin: true },
       yaxis: {
         type: appState.logY ? "log" : "linear",
         title: { text: c ? yTitle(c.axis, c.unit) : "" },
@@ -115,6 +131,8 @@
     void appState.logY;
     void appState.colors;
     void appState.curveX;
+    void appState.hiddenNuclides.size; // rebuild traces on hide/show (advisor #3)
+    void timeUnit; // and on an x-axis unit switch (rescales x + relabels the axis)
     const el = plotEl;
     if (!el) return;
     if (!c) {
@@ -155,6 +173,10 @@
   }
 
   const hasCurve = $derived(appState.curve !== null);
+  /** Every species hidden — the plot is intentionally empty; tell the user how to restore. */
+  const allHidden = $derived(
+    appState.curve !== null && appState.curve.nuclides.every((n) => appState.hiddenNuclides.has(n)),
+  );
 </script>
 
 <section class="curves">
@@ -197,6 +219,21 @@
       />
       log y-axis
     </label>
+
+    <!-- x-axis time unit (§9 "switch from seconds to years"); rescales the plotted x. -->
+    <label class="timeunit">
+      x-axis
+      <select
+        aria-label="Time axis unit"
+        data-testid="curve-time-unit"
+        value={timeUnit}
+        onchange={(e) => (timeUnit = (e.target as HTMLSelectElement).value)}
+      >
+        {#each TIME_UNITS as u (u.value)}
+          <option value={u.value}>{u.label}</option>
+        {/each}
+      </select>
+    </label>
   </header>
 
   {#if appState.curveError}
@@ -206,6 +243,10 @@
   {:else if !hasCurve}
     <p class="note muted">
       All loaded nuclides are stable — there is no time evolution to plot.
+    </p>
+  {:else if allHidden}
+    <p class="note muted" data-testid="curves-all-hidden">
+      All species hidden — click a node in the decay chain, or use “Show all”, to restore them.
     </p>
   {/if}
 
@@ -262,15 +303,18 @@
     font-weight: 600;
   }
   .unit,
-  .logtoggle {
+  .logtoggle,
+  .timeunit {
     font: inherit;
   }
-  .logtoggle {
+  .logtoggle,
+  .timeunit {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
   }
-  .unit {
+  .unit,
+  .timeunit select {
     padding: 0.3rem 0.4rem;
   }
   .plot {

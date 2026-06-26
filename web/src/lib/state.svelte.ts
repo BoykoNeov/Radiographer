@@ -34,6 +34,7 @@ import {
   type SolveEntry,
   type SolveOk,
 } from "./bridge";
+import { SvelteSet } from "svelte/reactivity";
 import { geometricFactor, interpAt, trapzWindow, type TrapzResult } from "./dosemath";
 import { ColorRegistry } from "./palette";
 import type { PrebuiltSource } from "./sources";
@@ -135,6 +136,17 @@ export class AppState {
   curveX = $state<number[]>([]);
   /** Loud curve-path error (#3) — surfaced, never a silent blank chart. */
   curveError = $state<string>("");
+
+  // -- per-species visibility (view-only; shared by the curves + the DAG) ----
+  // The set of nuclide ids the user has HIDDEN by clicking a decay-chain node (or
+  // "Hide all"). DISPLAY-ONLY: it drops a species' trace from the time-evolution
+  // overlay and greys its DAG node — it NEVER reaches a physics path. Dose, chain
+  // activity, decay heat, and internal dose are all computed over the FULL closure
+  // regardless of what is hidden, so hiding a species changes no number (advisor #2).
+  // EPHEMERAL like `axis` (NOT serialized): a fresh inventory starts fully visible.
+  // Pruned to the closure on each solve so a hide intent survives a quantity edit but
+  // a stale id cannot linger. A SvelteSet so `.has` / `.size` are reactive in views.
+  hiddenNuclides = new SvelteSet<string>();
 
   // -- time control (M6d, §9) -----------------------------------------------
   // The slider/cursor scrubs a position over the already-drawn curves; it is a
@@ -964,6 +976,35 @@ export class AppState {
     this.logY = v;
   }
 
+  // -- per-species visibility (view-only; #2 display-only, never a physics path) ----
+  // No recompute/re-evaluate: hiding only filters the rendered curves traces and greys
+  // the DAG node; the curves/DAG effects re-run off `hiddenNuclides` reactively.
+
+  /** Toggle a species' visibility (curves trace + DAG node). A toggle so a greyed node
+   *  un-hides on a second click — the "Hide all, then click the few I want" flow. */
+  toggleHidden(nuclide: string): void {
+    if (this.hiddenNuclides.has(nuclide)) this.hiddenNuclides.delete(nuclide);
+    else this.hiddenNuclides.add(nuclide);
+  }
+
+  /** Hide every species in the current closure (the "Hide all" button). */
+  hideAll(): void {
+    for (const n of this.closure) this.hiddenNuclides.add(n);
+  }
+
+  /** Show every species (the "Show all" button). */
+  showAll(): void {
+    this.hiddenNuclides.clear();
+  }
+
+  /** Keep only hidden ids that still exist in `closure` — drops stale ids after a
+   *  re-solve while preserving a hide intent across a quantity edit (#2 display-only). */
+  private pruneHidden(closure: string[]): void {
+    if (this.hiddenNuclides.size === 0) return;
+    const keep = new Set(closure);
+    for (const id of [...this.hiddenNuclides]) if (!keep.has(id)) this.hiddenNuclides.delete(id);
+  }
+
   // -- dose inputs (each RE-EVALUATES the rate series, never re-solves; #1) ---
   // distance / quantity / geometry change the per-decay coefficients → recompute the
   // dose-rate series (a cheap evaluate off the live handle). exposure & the cursor do
@@ -1116,6 +1157,7 @@ export class AppState {
       this.curveError = "";
       this.neutronSource = null; // no inventory ⇒ no prebuilt source
       this.spentFuelNeutronId = null; // M9: same — empty inventory carries no SF neutron source
+      this.hiddenNuclides.clear(); // empty inventory ⇒ nothing to hide (view-only)
       this.clearDose();
       this.clearChain();
       this.errorMsg = "";
@@ -1144,6 +1186,7 @@ export class AppState {
       this.curveX = [];
       this.cursorOffsetS = 0;
       this.curveError = "";
+      this.hiddenNuclides.clear(); // a failed solve has no closure → reset visibility (view-only)
       this.clearDose();
       this.clearChain();
       this.status = "error";
@@ -1154,6 +1197,7 @@ export class AppState {
     this.handle = res.handle;
     this.solveMeta = res;
     this.colors = this.registry.assignAll(res.nuclides); // fresh reference → reactive (#4)
+    this.pruneHidden(res.nuclides); // drop hidden ids no longer in the closure (view-only)
     this.status = "solved";
     this.resetCursor(); // the range changed → home the cursor before evaluating (#2 advisor)
     this.recomputeCurves(); // one evaluate over the auto-range grid (§9; "evaluate many", #1)

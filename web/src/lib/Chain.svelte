@@ -27,6 +27,13 @@
   const SF_ID = "SF";
   const SF_COLOR = "#9e9e9e";
 
+  // A HIDDEN node (clicked off, or "Hide all") is greyed + faded + shrunk to the floor
+  // size, but NEVER removed: it stays a clickable target so the user can hide-all then
+  // tap the few species they want back on (advisor #1). It is also dropped from the
+  // time-evolution overlay (Curves.svelte reads the same `hiddenNuclides`).
+  const HIDDEN_OPACITY = 0.18;
+  const HIDDEN_COLOR = "#bdbdbd";
+
   // -- live-encoding scale (node size/opacity ← activity) ----------------------
   // Normalized against the FIXED global activity peak over the whole series (not the
   // per-frame peak), so absolute decay reads as an overall fade and in-growth as a
@@ -223,10 +230,18 @@
     if (!cy) return;
     const activity = appState.activityAtCursor; // {nuclide: Bq} | null (all-stable)
     const peak = activityPeak;
+    const hidden = appState.hiddenNuclides;
     cy.batch(() => {
       cy!.nodes().forEach((node) => {
         const id = node.id();
         if (id === SF_ID) return; // the sink is not an activity quantity — leave neutral
+        if (hidden.has(id)) {
+          // Greyed-but-present: overrides the activity encoding AND the palette color,
+          // yet keeps the node on-canvas + clickable so a second tap restores it.
+          node.style({ width: SIZE_MIN, height: SIZE_MIN, opacity: HIDDEN_OPACITY, "background-color": HIDDEN_COLOR });
+          return;
+        }
+        node.removeStyle("background-color"); // un-hidden → revert to the shared-palette mapper
         if (!activity) {
           node.style({ width: SIZE_NEUTRAL, height: SIZE_NEUTRAL, opacity: 0.9 }); // topology-only
           return;
@@ -269,7 +284,15 @@
       });
       cy.on("mouseover", "node", (ev) => (hovered = ev.target.id()));
       cy.on("mouseout", "node", () => (hovered = null));
-      cy.on("tap", "node", (ev) => (hovered = ev.target.id()));
+      // Click toggles a species' visibility (greys it here + drops it from the curves);
+      // the SF terminal sink is not a species, so it is not hideable. Keep the tooltip on
+      // the just-toggled node so its new (hidden/shown) state is visible immediately.
+      cy.on("tap", "node", (ev) => {
+        const id = ev.target.id();
+        if (id === SF_ID) return;
+        appState.toggleHidden(id);
+        hovered = id;
+      });
       applyEncoding(); // initial frame at the current cursor
       if (typeof window !== "undefined") window.__CY__ = cy; // gate hook (canvas → no DOM)
     });
@@ -280,6 +303,7 @@
   $effect(() => {
     void appState.activityAtCursor; // the tracked dep
     void activityPeak;
+    void appState.hiddenNuclides.size; // re-grey on hide/show (advisor #3)
     if (cy) applyEncoding();
   });
 
@@ -308,6 +332,10 @@
   <section class="chain" data-testid="chain">
     <header>
       <h2>Decay chain</h2>
+      <div class="visibility" role="group" aria-label="Species visibility" data-testid="chain-visibility">
+        <button data-testid="chain-hide-all" onclick={() => appState.hideAll()}>Hide all</button>
+        <button data-testid="chain-show-all" onclick={() => appState.showAll()}>Show all</button>
+      </div>
       <div class="layout-toggle" role="group" aria-label="Chain layout" data-testid="chain-layout">
         <button
           class:selected={layoutMode === "dagre"}
@@ -352,9 +380,14 @@
             {/if}
             · activity now
             <strong>{hoverNode.activityBq == null ? "—" : `${hoverNode.activityBq.toExponential(3)} Bq`}</strong>
+            {#if appState.hiddenNuclides.has(hoverNode.node.id)}
+              · <span class="muted">hidden — click to show</span>
+            {:else}
+              · <span class="muted">click to hide</span>
+            {/if}
           {/if}
         {:else}
-          <span class="muted">Hover a node for half-life, decay modes &amp; live activity (at the time cursor).</span>
+          <span class="muted">Hover a node for half-life, decay modes &amp; live activity; click to hide/show it.</span>
         {/if}
       </div>
     {/if}
@@ -367,6 +400,9 @@
       <strong>Chart (N, Z)</strong> places each node by neutron/proton number (α steps
       down-left, β⁻ a diagonal step — re-convergence falls out because a shared daughter is
       one coordinate). Per-emission energies appear in the dose per-line table (M6f-2).
+      <strong>Click a node</strong> to hide that species — it greys out here and drops from
+      the time-evolution plot; click again to show it. <strong>Hide all</strong> /
+      <strong>Show all</strong> bulk-toggle (hide all, then click the few you want to keep).
     </p>
   </section>
 {/if}
@@ -388,6 +424,21 @@
     margin: 0;
     font-size: 1.05rem;
     margin-right: auto;
+  }
+  .visibility {
+    display: inline-flex;
+    gap: 0.4rem;
+  }
+  .visibility button {
+    font: inherit;
+    padding: 0.3rem 0.7rem;
+    border: 1px solid #8886;
+    border-radius: 0.4rem;
+    background: transparent;
+    cursor: pointer;
+  }
+  .visibility button:hover {
+    background: #8881;
   }
   .layout-toggle {
     display: inline-flex;

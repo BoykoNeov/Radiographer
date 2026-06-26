@@ -2506,6 +2506,205 @@ async function runM13(page) {
   return { ok: checks.every((c) => c.pass), checks };
 }
 
+// --- Views: per-species hide/show (DAG + curves) + curve x-axis time unit -------
+//
+// Two post-M13 UI affordances, asserted through the RENDERED paths (Cytoscape canvas +
+// the Plotly div), mirroring M6e/M6c:
+//  (a) clicking a decay-chain node HIDES that species — greyed-but-present in the DAG
+//      (opacity small, node still on-canvas + clickable per advisor #1) AND its trace
+//      drops from the time-evolution overlay; a second click restores it; Hide all /
+//      Show all bulk-toggle. Display-only: the γ rate + activity numbers are UNCHANGED
+//      by hiding (the physics runs over the full closure — advisor #2).
+//  (b) the curve x-axis switches s → yr: the x ARRAY rescales by the Julian year (not a
+//      relabel), the axis title tracks, and the store stays SI seconds (§12).
+
+async function runViews(page) {
+  const checks = [];
+  const record = (name, pass, detail) => checks.push({ name, pass, detail });
+
+  const PLOTV = '[data-testid="curves-plot"]';
+
+  // Clean baseline: Cs-137 only (closure Cs-137 → Ba-137m → Ba-137), Activity, t₀=0,
+  // nothing hidden. Cursor homed to mid-range (deep in the secular plateau).
+  await page.evaluate(async () => {
+    const app = window.__APP__;
+    await app.clear();
+    app.setReferenceTimeS(0);
+    app.setAxis("activity");
+    app.showAll();
+    await app.addEntry("Cs-137", 1.0e9, "Bq");
+  });
+  await page.waitForFunction(
+    "window.__APP__.status === 'solved' && window.__CY__ && window.__CY__.nodes().length === window.__APP__.closure.length",
+    null,
+    { timeout: 30_000 },
+  );
+  await page.waitForFunction(
+    `(() => { const el = document.querySelector('${PLOTV}');
+       return el && el.data && el.data.length === window.__APP__.closure.length; })()`,
+    null,
+    { timeout: 30_000 },
+  );
+
+  const tracesNow = () =>
+    page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      return el && el.data ? el.data.map((d) => d.name) : [];
+    }, PLOTV);
+
+  // (a1) Click the Cs-137 DAG node (emit tap on the live Cytoscape instance — canvas,
+  //      so we drive the model directly as M6e does). The handler must flip
+  //      hiddenNuclides, grey-but-keep the node, and drop the Cs-137 overlay trace —
+  //      while the γ rate + Cs-137 activity at the cursor stay EXACTLY equal (#2).
+  const baseTraces = await tracesNow();
+  const physBefore = await page.evaluate(() => {
+    const app = window.__APP__;
+    return { gamma: app.gammaRateAtCursor, csAct: app.activityAtCursor?.["Cs-137"] ?? null };
+  });
+  await page.evaluate(() => window.__CY__.getElementById("Cs-137").emit("tap"));
+  await page.waitForFunction("window.__APP__.hiddenNuclides.has('Cs-137') === true", null, {
+    timeout: 30_000,
+  });
+  await page.waitForFunction(
+    `(() => { const el = document.querySelector('${PLOTV}');
+       const names = el && el.data ? el.data.map((d) => d.name) : [];
+       const op = parseFloat(window.__CY__.getElementById('Cs-137').style('opacity'));
+       return !names.includes('Cs-137') && op < 0.3; })()`,
+    null,
+    { timeout: 30_000 },
+  );
+  const hiddenState = await page.evaluate((sel) => {
+    const app = window.__APP__;
+    const el = document.querySelector(sel);
+    const names = el.data.map((d) => d.name);
+    const node = window.__CY__.getElementById("Cs-137");
+    return {
+      present: node.length === 1, // still on-canvas → clickable to restore (advisor #1)
+      opacity: parseFloat(node.style("opacity")),
+      traceGone: !names.includes("Cs-137"),
+      nTraces: names.length,
+      gamma: app.gammaRateAtCursor,
+      csAct: app.activityAtCursor?.["Cs-137"] ?? null,
+    };
+  }, PLOTV);
+  record(
+    "click DAG node → hidden: greyed-but-present node + trace dropped, physics UNCHANGED (#1/#2)",
+    hiddenState.present &&
+      hiddenState.opacity < 0.3 &&
+      hiddenState.traceGone &&
+      hiddenState.nTraces === baseTraces.length - 1 &&
+      hiddenState.gamma === physBefore.gamma &&
+      hiddenState.csAct === physBefore.csAct,
+    `present=${hiddenState.present}, opacity=${hiddenState.opacity}, traceGone=${hiddenState.traceGone}, ` +
+      `traces=${baseTraces.length}→${hiddenState.nTraces}, γ unchanged=${hiddenState.gamma === physBefore.gamma}, ` +
+      `A(Cs-137) unchanged=${hiddenState.csAct === physBefore.csAct}`,
+  );
+
+  // (a2) Click again → restored (trace back, node un-greyed). Proves the toggle.
+  await page.evaluate(() => window.__CY__.getElementById("Cs-137").emit("tap"));
+  await page.waitForFunction("window.__APP__.hiddenNuclides.has('Cs-137') === false", null, {
+    timeout: 30_000,
+  });
+  await page.waitForFunction(
+    `(() => { const el = document.querySelector('${PLOTV}');
+       const names = el && el.data ? el.data.map((d) => d.name) : [];
+       const op = parseFloat(window.__CY__.getElementById('Cs-137').style('opacity'));
+       return names.includes('Cs-137') && op > 0.3; })()`,
+    null,
+    { timeout: 30_000 },
+  );
+  const restored = await tracesNow();
+  record(
+    "click again → restored (trace back, node un-greyed): a true toggle",
+    restored.includes("Cs-137") && restored.length === baseTraces.length,
+    `traces=[${restored.join(", ")}]`,
+  );
+
+  // (a3) Hide all → 0 traces + every (non-SF) DAG node greyed; Show all → restored.
+  await page.click('[data-testid="chain-hide-all"]');
+  await page.waitForFunction(
+    "window.__APP__.hiddenNuclides.size === window.__APP__.closure.length",
+    null,
+    { timeout: 30_000 },
+  );
+  await page.waitForFunction(
+    `(() => { const el = document.querySelector('${PLOTV}'); return el && el.data && el.data.length === 0; })()`,
+    null,
+    { timeout: 30_000 },
+  );
+  const bulkHidden = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    const cy = window.__CY__;
+    const ops = cy
+      .nodes()
+      .filter((n) => n.id() !== "SF")
+      .map((n) => parseFloat(n.style("opacity")));
+    return { nTraces: el.data.length, nNodes: ops.length, allFaded: ops.every((o) => o < 0.3) };
+  }, PLOTV);
+  await page.click('[data-testid="chain-show-all"]');
+  await page.waitForFunction("window.__APP__.hiddenNuclides.size === 0", null, { timeout: 30_000 });
+  await page.waitForFunction(
+    `(() => { const el = document.querySelector('${PLOTV}');
+       return el && el.data && el.data.length === window.__APP__.closure.length; })()`,
+    null,
+    { timeout: 30_000 },
+  );
+  const shown = await tracesNow();
+  record(
+    "Hide all → 0 traces + all DAG nodes greyed; Show all → restored",
+    bulkHidden.nTraces === 0 &&
+      bulkHidden.nNodes >= 2 &&
+      bulkHidden.allFaded &&
+      shown.length === baseTraces.length,
+    `hidden: traces=${bulkHidden.nTraces}, ${bulkHidden.nNodes} nodes faded=${bulkHidden.allFaded}; shown traces=${shown.length}`,
+  );
+
+  // (b) x-axis time unit s → yr: the x ARRAY rescales by the Julian year (31 557 600 s),
+  //     the axis title tracks, the cursor line follows, and the store cursor stays SI s.
+  const beforeUnit = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    const cs = el.data.find((d) => d.name === "Cs-137");
+    return {
+      title: el.layout.xaxis.title.text,
+      maxX: Math.max(...cs.x),
+      cursorOffsetS: window.__APP__.cursorOffsetS,
+    };
+  }, PLOTV);
+  await page.selectOption('[data-testid="curve-time-unit"]', "y");
+  await page.waitForFunction(
+    `document.querySelector('${PLOTV}').layout.xaxis.title.text === 'Time (yr)'`,
+    null,
+    { timeout: 30_000 },
+  );
+  const afterUnit = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    const cs = el.data.find((d) => d.name === "Cs-137");
+    const shapeX = el.layout.shapes && el.layout.shapes.length ? el.layout.shapes[0].x0 : null;
+    return {
+      title: el.layout.xaxis.title.text,
+      maxX: Math.max(...cs.x),
+      shapeX,
+      cursorOffsetS: window.__APP__.cursorOffsetS, // unchanged — store is SI seconds (§12)
+    };
+  }, PLOTV);
+  const SPYR = 31_557_600;
+  const ratio = beforeUnit.maxX / afterUnit.maxX;
+  const wantShapeX = beforeUnit.cursorOffsetS / SPYR;
+  record(
+    "curve x-axis s → yr: x array rescales by the Julian year, cursor follows, state stays SI seconds (§12)",
+    afterUnit.title === "Time (yr)" &&
+      Math.abs(ratio - SPYR) / SPYR < 1e-6 &&
+      afterUnit.shapeX !== null &&
+      Math.abs(afterUnit.shapeX - wantShapeX) / wantShapeX < 1e-6 &&
+      afterUnit.cursorOffsetS === beforeUnit.cursorOffsetS,
+    `title="${afterUnit.title}", maxX ${beforeUnit.maxX.toExponential(2)}s→${afterUnit.maxX.toExponential(2)}yr (ratio=${ratio.toExponential(3)}, want ${SPYR}), ` +
+      `cursorOffsetS unchanged=${afterUnit.cursorOffsetS === beforeUnit.cursorOffsetS}`,
+  );
+  await page.selectOption('[data-testid="curve-time-unit"]', "s"); // restore
+
+  return { ok: checks.every((c) => c.pass), checks };
+}
+
 let exitCode = 1;
 let browser;
 let server;
@@ -2538,6 +2737,7 @@ try {
   let m6h = { ok: false, checks: [] };
   let m7 = { ok: false, checks: [] };
   let m13 = { ok: false, checks: [] };
+  let views = { ok: false, checks: [] };
   if (m6aOk) {
     m6b = await runM6b(page);
     if (m6b.ok) {
@@ -2556,8 +2756,13 @@ try {
                   m7 = await runM7(page);
                   if (m7.ok) {
                     m13 = await runM13(page);
+                    if (m13.ok) {
+                      views = await runViews(page);
+                    } else {
+                      console.log("[gate] skipping Views — M13 checks failed");
+                    }
                   } else {
-                    console.log("[gate] skipping M13 — M7 checks failed");
+                    console.log("[gate] skipping M13/Views — M7 checks failed");
                   }
                 } else {
                   console.log("[gate] skipping M7/M13 — M6h checks failed");
@@ -2629,14 +2834,29 @@ try {
     console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
   }
 
+  console.log("\n===== Views: hide/show species + curve x-axis time unit =====");
+  for (const c of views.checks) {
+    console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
+  }
+
   exitCode =
-    m6aOk && m6b.ok && m6c.ok && m6d.ok && m6e.ok && m6f.ok && m6g.ok && m6h.ok && m7.ok && m13.ok
+    m6aOk &&
+    m6b.ok &&
+    m6c.ok &&
+    m6d.ok &&
+    m6e.ok &&
+    m6f.ok &&
+    m6g.ok &&
+    m6h.ok &&
+    m7.ok &&
+    m13.ok &&
+    views.ok
       ? 0
       : 1;
   console.log(
     exitCode === 0
-      ? "\n✅ M13 PASS (real browser): boot + inventory + curves + time + chain + dose + shield + honesty/round-trip + sources/neutron + spent-fuel/decay-heat + internal/committed dose"
-      : "\n❌ M13 FAIL (real browser)",
+      ? "\n✅ PASS (real browser): boot + inventory + curves + time + chain + dose + shield + honesty/round-trip + sources/neutron + spent-fuel/decay-heat + internal/committed dose + views (hide-show + time-unit)"
+      : "\n❌ FAIL (real browser)",
   );
 } catch (err) {
   console.error("Driver error:", err);
