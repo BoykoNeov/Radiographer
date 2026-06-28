@@ -1,17 +1,21 @@
-# NOTICE — licensing of Radiographer
+# NOTICE — Radiographer
 
-Radiographer is **dual-licensed** because it bundles physics datasets that carry
-their own upstream terms.
+Copyright (c) 2026 Boyko Neov
 
-## Source code — MIT
+This software was originally created by Boyko Neov.
+
+## Source code — BNCL-1.0
 
 All source code in this repository — `engine/`, `web/` (excluding bundled data
 copied into the runtime), `data/build/`, `tests/`, `docs/`, and the launcher
-scripts — is licensed under the **MIT License**; see `LICENSE`.
+scripts — is licensed under the **Boyko Non-Commercial License v1.0 (BNCL-1.0)**;
+see `LICENSE`. Free use, modification, and redistribution are permitted for
+**non-commercial purposes only**. Commercial use requires prior written permission
+from the Copyright Holder.
 
 ## Bundled datasets — upstream terms; NON-COMMERCIAL where ICRP-derived
 
-The physics datasets under `data/` are **not** covered by the MIT license. Each is
+The physics datasets under `data/` are **not** covered by BNCL-1.0. Each is
 reproduced from a cited published source under that source's terms, documented
 per-dataset in `data/README.md` and per-file in `data/vendor/**/PROVENANCE.md`.
 
@@ -33,10 +37,14 @@ neutron spectra). See `data/README.md` for each.
 
 ## What this means for reuse
 
-- The **code** may be reused freely under MIT.
+- The **code** may be reused, modified, and redistributed freely for
+  **non-commercial purposes** under BNCL-1.0.
 - **Any redistribution of the application that includes the bundled ICRP-derived
-  datasets is limited to non-commercial use.** A commercial distribution would have
-  to remove or separately license the ICRP-derived tables.
+  datasets is additionally limited to non-commercial use** by the upstream ICRP
+  data terms.
+- **Commercial use of either the code or the bundled ICRP-derived datasets requires
+  separate written permission** from the Copyright Holder (code) and/or the
+  respective rights holders (data).
 
 This is an educational / reference tool, not a validated radiation-safety code — see
 the README disclaimer and the in-app **Honesty** panel.

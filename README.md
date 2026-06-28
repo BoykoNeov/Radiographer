@@ -123,10 +123,13 @@ in WASM. See `HANDOFF_PLAN.md` for the full design.
 
 ## License
 
-**Dual-licensed.** The source code is **MIT** (see `LICENSE`). The bundled physics
-datasets under `data/` keep their own upstream terms (see `NOTICE` and
-`data/README.md`) — and the **ICRP-derived** data among them (ICRP-107 emission
-spectra and the ICRP-68/72/74/116/119 dose coefficients) is **non-commercial,
-educational / reference use only**. In practice: reuse the code freely under MIT, but
-any redistribution that bundles the ICRP-derived datasets is limited to non-commercial
-use.
+The source code is licensed under the **Boyko Non-Commercial License v1.0 (BNCL-1.0)**
+(see `LICENSE`) — free to use, modify, and redistribute for **non-commercial purposes**.
+Commercial use of the code requires prior written permission from the copyright holder.
+
+The bundled physics datasets under `data/` are **not** covered by BNCL-1.0; each keeps
+its own upstream terms (see `NOTICE` and `data/README.md`). The **ICRP-derived** datasets
+(ICRP-107 emission spectra and the ICRP-68/72/74/116/119 dose coefficients) are
+additionally restricted to **non-commercial, educational / reference use** by ICRP's own
+license. All other bundled data (NIST, SCK-CEN CC-BY-4.0, ENDF, IAEA, etc.) carries no
+commercial restriction.
