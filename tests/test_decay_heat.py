@@ -44,6 +44,7 @@ def _specific_power_W_per_g(nuclide: str) -> float:
 
 # --- the alpha-recoil discriminator (the test a β-γ anchor cannot do) -----------------
 
+
 def test_pu238_specific_power_requires_alpha_recoil():
     # Published 0.57 W/g (Wikipedia). With recoil the engine lands ~0.568 (0.4 %); WITHOUT
     # recoil it would be ~0.558 (≈2 % low) and fail this tolerance — so passing IS the proof
@@ -70,6 +71,7 @@ def test_po210_near_pure_alpha():
 
 # --- the β-γ anchor (counts the discrete-β channel exactly once) ----------------------
 
+
 def test_co60_beta_gamma_no_double_count():
     w = _specific_power_W_per_g("Co-60")
     assert w == pytest.approx(17.4, rel=0.03)
@@ -83,6 +85,7 @@ def test_co60_beta_gamma_no_double_count():
 
 
 # --- structure / no-silent-errors -----------------------------------------------------
+
 
 def test_stable_endproduct_is_zero_heat_not_a_hole():
     # Ni-60 (stable Co-60 daughter) has no emission file: legitimately zero heat, the

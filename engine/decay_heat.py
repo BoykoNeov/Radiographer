@@ -71,9 +71,7 @@ def _channel_sum(nuclide: str, channel: str, e_field: str) -> float:
             e = float(line[e_field])
             y = float(line["yield"])
         except (KeyError, TypeError, ValueError) as exc:
-            raise DecayHeatError(
-                f"{nuclide}: malformed {channel} entry {line!r} ({exc})"
-            ) from exc
+            raise DecayHeatError(f"{nuclide}: malformed {channel} entry {line!r} ({exc})") from exc
         if e < 0.0 or y < 0.0:
             raise DecayHeatError(
                 f"{nuclide}: negative {channel} energy/yield ({e}, {y}) — not physical"

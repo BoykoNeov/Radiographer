@@ -72,9 +72,7 @@ def _branching_to(parent: str, daughter: str) -> dict:
     fractions = list(nuc.branching_fractions())
     modes = list(nuc.decay_modes())
     if daughter not in progeny:
-        raise ValueError(
-            f"{daughter} is not listed as progeny of {parent}; progeny={progeny}"
-        )
+        raise ValueError(f"{daughter} is not listed as progeny of {parent}; progeny={progeny}")
     bf = float(fractions[progeny.index(daughter)])
     return {
         "parent": parent,
@@ -196,17 +194,21 @@ def _spectral_probe() -> dict:
         except Exception as exc:  # noqa: BLE001 - record, don't swallow
             findings["details"].append(f"Nuclide({nuclide_id!r}) failed: {exc!r}")
             continue
-        for attr in ("gammas", "photons", "gamma_spectrum", "spectrum",
-                     "plot_spectrum", "radiations"):
+        for attr in (
+            "gammas",
+            "photons",
+            "gamma_spectrum",
+            "spectrum",
+            "plot_spectrum",
+            "radiations",
+        ):
             fn = getattr(n, attr, None)
             if fn is None:
                 continue
             try:
                 value = fn() if callable(fn) else fn
                 text = repr(value)
-                findings["details"].append(
-                    f"{nuclide_id}.{attr} -> {text[:300]}"
-                )
+                findings["details"].append(f"{nuclide_id}.{attr} -> {text[:300]}")
                 if "0.66" in text or "662" in text:
                     findings["found_0662_line"] = True
             except Exception as exc:  # noqa: BLE001 - record, don't swallow

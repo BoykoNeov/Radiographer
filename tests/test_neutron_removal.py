@@ -46,6 +46,7 @@ def _compound_sigma_r(stoich: dict[str, int], rho: float) -> float:
 
 # -- 1. structural -----------------------------------------------------------
 
+
 def test_shipped_set_present():
     assert set(SHIPPED) <= nr.available_materials()
 
@@ -63,6 +64,7 @@ def test_record_schema(material):
 
 # -- 2. mixture-rule exactness vs Akyıldırım (2019) Table 2 -------------------
 
+
 def test_glucose_reproduces_akyildirim_table2():
     """Glucose C₆H₁₂O₆, ρ=1.562 → Akyıldırım (2019) Table 2 publishes Σ_R = 0.129 cm⁻¹."""
     sigma = _compound_sigma_r({"C": 6, "H": 12, "O": 6}, 1.562)
@@ -71,18 +73,22 @@ def test_glucose_reproduces_akyildirim_table2():
 
 # -- 3. independent cross-source: water vs El Abd (2017) Table 1 -------------
 
+
 def test_water_matches_independent_measurement():
     """Engine water Σ_R vs El Abd et al. (2017) MEASURED 0.1023 cm⁻¹ — separate group, ~1.5%."""
     measured = 0.1023
     assert nr.sigma_r_cm1("water") == pytest.approx(measured, rel=0.03)
 
 
-@pytest.mark.parametrize("material,stoich", [
-    ("water", {"H": 2, "O": 1}),
-    ("polyethylene", {"C": 1, "H": 2}),
-    ("pmma", {"C": 5, "H": 8, "O": 2}),
-    ("paraffin", {"C": 25, "H": 52}),  # CₙH₂ₙ₊₂, n=25 — pure H/C, same method as polyethylene
-])
+@pytest.mark.parametrize(
+    "material,stoich",
+    [
+        ("water", {"H": 2, "O": 1}),
+        ("polyethylene", {"C": 1, "H": 2}),
+        ("pmma", {"C": 5, "H": 8, "O": 2}),
+        ("paraffin", {"C": 25, "H": 52}),  # CₙH₂ₙ₊₂, n=25 — pure H/C, same method as polyethylene
+    ],
+)
 def test_shipped_values_match_independent_mixture_rule(material, stoich):
     """The committed Σ_R equals a from-scratch mixture-rule recompute at the file's density."""
     expected = _compound_sigma_r(stoich, nr.density(material))
@@ -99,6 +105,7 @@ def test_paraffin_is_hydrogen_rich_and_brackets_polyethylene():
 
 
 # -- 3b. concrete: published whole-material Σ_R (Ahmed et al. 2023) -----------
+
 
 def test_concrete_matches_published_ahmed2023():
     """Concrete ships a PUBLISHED whole-material removal cross-section, not a reconstruction: its
@@ -122,6 +129,7 @@ def test_concrete_matches_published_ahmed2023():
 
 # -- 4. physical sanity ------------------------------------------------------
 
+
 @pytest.mark.parametrize("material", SHIPPED)
 def test_relaxation_length_in_hydrogenous_range(material):
     """1/Σ_R is the fast-neutron relaxation length; ~5–12 cm for these hydrogenous shields."""
@@ -131,7 +139,7 @@ def test_relaxation_length_in_hydrogenous_range(material):
 
 def test_water_relaxation_and_tvl():
     sigma = nr.sigma_r_cm1("water")
-    assert (1.0 / sigma) == pytest.approx(9.6, abs=0.6)          # relaxation length ~9.6 cm
+    assert (1.0 / sigma) == pytest.approx(9.6, abs=0.6)  # relaxation length ~9.6 cm
     assert (math.log(10.0) / sigma) == pytest.approx(22.0, abs=2.0)  # TVL ~22 cm
 
 

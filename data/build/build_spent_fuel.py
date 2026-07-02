@@ -53,7 +53,7 @@ from engine.decay_heat import MEV_TO_J, DecayHeatModel, recoverable_energy_MeV  
 from engine.inventory import SolvedInventory  # noqa: E402
 
 SCHEMA_VERSION = 3  # v3: adds the (α,n)-on-oxygen neutron term to the neutron block (M12)
-DATA_DIR = Path(__file__).resolve().parents[1]                 # .../data
+DATA_DIR = Path(__file__).resolve().parents[1]  # .../data
 OUT_DIR = DATA_DIR / "spent_fuel"
 CSV_PATH = DATA_DIR / "vendor" / "sckcen_sf" / "SCKCEN_UOX_PWR.csv"
 NUBAR_PATH = DATA_DIR / "vendor" / "iaea_sf_nu" / "sf_nubar.json"
@@ -110,25 +110,56 @@ _ALPHA_SG_BASIS_REL_TOL = 0.08
 #: Documented, not user-asked; more points are a trivial GRID_POINTS add.
 GRID_POINTS = [
     # Burnup axis (fixed 4.0% enrichment).
-    {"id": "pwr-uox-60gwd-4pct", "burnup": 60.0, "enrichment": 4.0,
-     "label": "PWR spent fuel — 60 GWd/tHM, 4.0% (high burnup)"},
-    {"id": "pwr-uox-45gwd-4pct", "burnup": 45.0, "enrichment": 4.0,
-     "label": "PWR spent fuel — 45 GWd/tHM, 4.0% (reference)"},
-    {"id": "pwr-uox-20gwd-4pct", "burnup": 20.0, "enrichment": 4.0,
-     "label": "PWR spent fuel — 20 GWd/tHM, 4.0% (low burnup)"},
+    {
+        "id": "pwr-uox-60gwd-4pct",
+        "burnup": 60.0,
+        "enrichment": 4.0,
+        "label": "PWR spent fuel — 60 GWd/tHM, 4.0% (high burnup)",
+    },
+    {
+        "id": "pwr-uox-45gwd-4pct",
+        "burnup": 45.0,
+        "enrichment": 4.0,
+        "label": "PWR spent fuel — 45 GWd/tHM, 4.0% (reference)",
+    },
+    {
+        "id": "pwr-uox-20gwd-4pct",
+        "burnup": 20.0,
+        "enrichment": 4.0,
+        "label": "PWR spent fuel — 20 GWd/tHM, 4.0% (low burnup)",
+    },
     # Enrichment axis (fixed 45 GWd/tHM burnup), crossing the reference at 4.0%. 3.0% reaching
     # 45 GWd is high for commercial fuel (the dataset is a Cartesian depletion grid, not a
     # fuel-management envelope) — labelled as the low-enrichment contrast, not a typical case.
-    {"id": "pwr-uox-45gwd-3pct", "burnup": 45.0, "enrichment": 3.0,
-     "label": "PWR spent fuel — 45 GWd/tHM, 3.0% (low enrichment)"},
-    {"id": "pwr-uox-45gwd-5pct", "burnup": 45.0, "enrichment": 5.0,
-     "label": "PWR spent fuel — 45 GWd/tHM, 5.0% (high enrichment)"},
+    {
+        "id": "pwr-uox-45gwd-3pct",
+        "burnup": 45.0,
+        "enrichment": 3.0,
+        "label": "PWR spent fuel — 45 GWd/tHM, 3.0% (low enrichment)",
+    },
+    {
+        "id": "pwr-uox-45gwd-5pct",
+        "burnup": 45.0,
+        "enrichment": 5.0,
+        "label": "PWR spent fuel — 45 GWd/tHM, 5.0% (high enrichment)",
+    },
 ]
 
 #: Heavy-metal elements (Z ≥ 90) — their discharge mass-density sum at BU=0 is the initial
 #: HM density (g/cm³) that sets the "per tonne HM" basis. (At BU=0 this is essentially U.)
 _HM_ELEMENTS = {
-    "Th", "Pa", "U", "Np", "Pu", "Am", "Cm", "Bk", "Cf", "Es", "Fm", "Ac",
+    "Th",
+    "Pa",
+    "U",
+    "Np",
+    "Pu",
+    "Am",
+    "Cm",
+    "Bk",
+    "Cf",
+    "Es",
+    "Fm",
+    "Ac",
 }
 
 _CSV_NUCLIDE_RE = re.compile(r"^([A-Z][a-z]?)(\d+)(m\d*)?$")
@@ -158,14 +189,19 @@ def _read_header(path: Path) -> tuple[list[str], dict[str, int], list[str]]:
     idx = {name: i for i, name in enumerate(header)}
     if header[0] != "BU" or header[1] != "IE":
         raise BuildError(f"unexpected first columns {header[:2]} (want BU, IE)")
-    nuclides = [c for c in header[2:] if not c.endswith(
-        ("_A", "_H", "_SF", "_AN", "_GSRC", "_ING_TOX", "_INH_TOX"))]
+    nuclides = [
+        c
+        for c in header[2:]
+        if not c.endswith(("_A", "_H", "_SF", "_AN", "_GSRC", "_ING_TOX", "_INH_TOX"))
+    ]
     if len(nuclides) != 150:
         raise BuildError(f"expected 150 nuclide (mass-density) columns, got {len(nuclides)}")
     return header, idx, nuclides
 
 
-def _find_rows(path: Path, wanted: list[tuple[float, float]]) -> dict[tuple[float, float], list[str]]:
+def _find_rows(
+    path: Path, wanted: list[tuple[float, float]]
+) -> dict[tuple[float, float], list[str]]:
     """Stream the CSV once; for each wanted (nominal_BU, IE) return the row whose IE matches
     exactly and whose *achieved* burnup is closest to nominal_BU.
 
@@ -181,7 +217,7 @@ def _find_rows(path: Path, wanted: list[tuple[float, float]]) -> dict[tuple[floa
             c = line.find(",")
             c2 = line.find(",", c + 1)
             bu = float(line[:c])
-            ie = float(line[c + 1:c2])
+            ie = float(line[c + 1 : c2])
             for nominal_bu, want_ie in wanted:
                 if abs(ie - want_ie) > 1e-6:
                     continue
@@ -214,9 +250,7 @@ def _cell(row: list[str], idx: dict[str, int], col: str) -> float:
 
 def _hm_density(row: list[str], idx: dict[str, int], nuclides: list[str]) -> float:
     """Initial heavy-metal density (g/cm³) = Σ actinide mass densities of a fresh-fuel row."""
-    return math.fsum(
-        _cell(row, idx, n) for n in nuclides if _element_of(n) in _HM_ELEMENTS
-    )
+    return math.fsum(_cell(row, idx, n) for n in nuclides if _element_of(n) in _HM_ELEMENTS)
 
 
 # Cs-137 cumulative fission yield (thermal U-235/Pu-239, ~0.062) and the 200 MeV/fission
@@ -227,8 +261,11 @@ def _hm_density(row: list[str], idx: dict[str, int], nuclides: list[str]) -> flo
 _CS137_FY = 0.0620
 _J_PER_FISSION = 200.0 * 1.602176634e-13
 _CS137_BQ_PER_THM_PER_GWD = (
-    math.log(2.0) / (30.08 * 365.25 * 86400)              # λ(Cs-137), s⁻¹
-    * _CS137_FY * (1.0e9 * 86400) / _J_PER_FISSION         # N per (GWd/tHM)
+    math.log(2.0)
+    / (30.08 * 365.25 * 86400)  # λ(Cs-137), s⁻¹
+    * _CS137_FY
+    * (1.0e9 * 86400)
+    / _J_PER_FISSION  # N per (GWd/tHM)
 )
 
 
@@ -356,8 +393,9 @@ def _alpha_branch(rd_name: str) -> float:
     return math.fsum(float(a["yield"]) for a in emissions.alphas(rd_name))
 
 
-def build_alpha_n_block(idx: dict[str, int], nuclides: list[str], row: list[str],
-                        entry_names: set[str], alpha_n: dict) -> dict:
+def build_alpha_n_block(
+    idx: dict[str, int], nuclides: list[str], row: list[str], entry_names: set[str], alpha_n: dict
+) -> dict:
     """The M12 (α,n)-on-oxygen neutron term: neutrons-per-decay = oxide(n/s·g)/specific_activity.
 
     Closes the M9 "SF-only lower bound" gap. PANDA Table 13's "Oxide (n/s-g)" column is PER GRAM
@@ -402,7 +440,9 @@ def build_alpha_n_block(idx: dict[str, int], nuclides: list[str], row: list[str]
                 # a ÷ oxide-mass slip would show as a ~13% disagreement here (caught at 8%).
                 br = _alpha_branch(rd_name)
                 if br > 0.0:
-                    rel = abs(br * sa - float(oxide[rd_name]["alpha_s_g"])) / float(oxide[rd_name]["alpha_s_g"])
+                    rel = abs(br * sa - float(oxide[rd_name]["alpha_s_g"])) / float(
+                        oxide[rd_name]["alpha_s_g"]
+                    )
                     if rel > _ALPHA_SG_BASIS_REL_TOL:
                         raise BuildError(
                             f"{rd_name}: PANDA α/s·g {oxide[rd_name]['alpha_s_g']:.3e} ≠ ICRP-107 "
@@ -425,21 +465,32 @@ def build_alpha_n_block(idx: dict[str, int], nuclides: list[str], row: list[str]
 
     return {
         "source": "PANDA/NUREG-CR-5550 Ch.11 Table 13 'Oxide (n/s-g)' / specific activity "
-                  "(per gram of isotope); see data/vendor/panda_alpha_n/PROVENANCE.md",
+        "(per gram of isotope); see data/vendor/panda_alpha_n/PROVENANCE.md",
         "yields_n_per_decay": yields,
         "dropped_alpha_branch": dropped,
         "nominal_O_yield_per_alpha": o_yield_per_alpha,
         # The (α,n) magnitude rests on PANDA (not independently confirmed); what IS independently
         # validated is the per-gram-of-isotope BASIS (α/s·g vs ICRP-107 α-branch×SA, worst below).
-        "basis_check": {"n_isotopes": basis_checked, "worst_rel": worst_basis[0],
-                        "worst_nuclide": worst_basis[1], "tol": _ALPHA_SG_BASIS_REL_TOL},
-        "pu238_alpha_n_n_s_g": float(oxide["Pu-238"]["oxide_n_s_g"]) if "Pu-238" in yields else None,
+        "basis_check": {
+            "n_isotopes": basis_checked,
+            "worst_rel": worst_basis[0],
+            "worst_nuclide": worst_basis[1],
+            "tol": _ALPHA_SG_BASIS_REL_TOL,
+        },
+        "pu238_alpha_n_n_s_g": float(oxide["Pu-238"]["oxide_n_s_g"])
+        if "Pu-238" in yields
+        else None,
     }
 
 
-def build_neutron_block(idx: dict[str, int], nuclides: list[str], row: list[str],
-                        entry_names: set[str], nubar: dict[str, dict],
-                        alpha_n: dict) -> dict:
+def build_neutron_block(
+    idx: dict[str, int],
+    nuclides: list[str],
+    row: list[str],
+    entry_names: set[str],
+    nubar: dict[str, dict],
+    alpha_n: dict,
+) -> dict:
     """The M9 SF neutron source: per-nuclide neutrons-per-decay = (``_SF``/``_A``)·ν̄.
 
     ``_SF`` is the spontaneous-fission RATE (fissions/s) — ``_SF``/``_A`` reproduces the SF
@@ -499,8 +550,12 @@ def build_neutron_block(idx: dict[str, int], nuclides: list[str], row: list[str]
                 f"{rel:.1%} — SF branching-ratio mismatch (Serpent2 _SF half-life vs IAEA), or a "
                 "_SF units/mapping error"
             )
-        cross = {"Cm244_n_per_decay": yields["Cm-244"], "Cm244_iaea_n_per_decay": iaea_y,
-                 "rel": rel, "note": "branching-ratio check; ν̄ cancels (not a yield validation)"}
+        cross = {
+            "Cm244_n_per_decay": yields["Cm-244"],
+            "Cm244_iaea_n_per_decay": iaea_y,
+            "rel": rel,
+            "note": "branching-ratio check; ν̄ cancels (not a yield validation)",
+        }
 
     # M12: the (α,n)-on-oxygen term, modeled in parallel and ADDED to the SF source by the engine.
     # Its per-gram-of-isotope BASIS is independently validated INSIDE build_alpha_n_block (PANDA
@@ -525,21 +580,26 @@ def build_neutron_block(idx: dict[str, int], nuclides: list[str], row: list[str]
                 f"Pu-238 oxide total SF+(α,n) {total:.3e} n/s·g vs canonical {_PU238_OXIDE_TOTAL_N_S_G:.2e} "
                 f"off by {rel:.1%} — dataset SF-yield vs PANDA SF mismatch (weak anchor; see comment)"
             )
-        pu238_total = {"sf_n_s_g": sf_pu238, "alpha_n_n_s_g": an["pu238_alpha_n_n_s_g"],
-                       "total_n_s_g": total, "canonical_n_s_g": _PU238_OXIDE_TOTAL_N_S_G, "rel": rel,
-                       "note": "cross-pipeline sanity (dataset-SF ↔ PANDA-SF); NOT an independent "
-                               "(α,n) magnitude validation — canonical ≈ PANDA's own column sum"}
+        pu238_total = {
+            "sf_n_s_g": sf_pu238,
+            "alpha_n_n_s_g": an["pu238_alpha_n_n_s_g"],
+            "total_n_s_g": total,
+            "canonical_n_s_g": _PU238_OXIDE_TOTAL_N_S_G,
+            "rel": rel,
+            "note": "cross-pipeline sanity (dataset-SF ↔ PANDA-SF); NOT an independent "
+            "(α,n) magnitude validation — canonical ≈ PANDA's own column sum",
+        }
 
     return {
         "model": "spontaneous fission (SF) + (α,n)-on-oxygen — a BEST ESTIMATE of the intrinsic "
-                 "neutron source for clean oxide fuel (SF + (α,n)-on-O is essentially complete). "
-                 "Residual caveats: thick-target (α,n) yield carries ±factor; minor α-emitters "
-                 "absent from PANDA Table 13 are bounded as a dropped-(α,n) fraction (never silent).",
+        "neutron source for clean oxide fuel (SF + (α,n)-on-O is essentially complete). "
+        "Residual caveats: thick-target (α,n) yield carries ±factor; minor α-emitters "
+        "absent from PANDA Table 13 are bounded as a dropped-(α,n) fraction (never silent).",
         "spectrum_source": SF_SPECTRUM_SOURCE,
         "nubar_source": "ν_p from IAEA NDS SF_n-Yield_20150313 Table 1 (JEFF-3.1 / Holden 1985) for "
-                        "the 18 safeguards isotopes, plus Cm-246/248 derived (Σ_k k·P(k)) from the "
-                        "Holden & Zucker BNL-36467 distributions (LLNL UCRL-AR-228518 Table 4); "
-                        "yield_per_decay = (_SF/_A)·ν_p. See data/vendor/*/PROVENANCE.md.",
+        "the 18 safeguards isotopes, plus Cm-246/248 derived (Σ_k k·P(k)) from the "
+        "Holden & Zucker BNL-36467 distributions (LLNL UCRL-AR-228518 Table 4); "
+        "yield_per_decay = (_SF/_A)·ν_p. See data/vendor/*/PROVENANCE.md.",
         "yields_n_per_decay": yields,
         "dropped_sf_branch": dropped,
         "dropped_nubar_nominal": DROPPED_NUBAR_NOMINAL,
@@ -550,18 +610,25 @@ def build_neutron_block(idx: dict[str, int], nuclides: list[str], row: list[str]
     }
 
 
-def build_grid_point(gp: dict, idx: dict[str, int], nuclides: list[str], row: list[str],
-                     fresh_row: list[str], a_factor: float, nubar: dict[str, dict],
-                     alpha_n: dict) -> dict:
+def build_grid_point(
+    gp: dict,
+    idx: dict[str, int],
+    nuclides: list[str],
+    row: list[str],
+    fresh_row: list[str],
+    a_factor: float,
+    nubar: dict[str, dict],
+    alpha_n: dict,
+) -> dict:
     """Extract one discharge vector as **grams per tonne initial HM**, with diagnostics.
 
     Activity/heat come from the engine's λN at load time, so the vector is stored as the
     primary depletion output (atom inventory = mass density), normalized to 1 tonne initial
     HM via the fresh-fuel actinide-density sum. Loaded with ``unit="g"``."""
-    hm_density = _hm_density(fresh_row, idx, nuclides)        # g/cm³ initial HM
+    hm_density = _hm_density(fresh_row, idx, nuclides)  # g/cm³ initial HM
     if hm_density <= 0.0:
         raise BuildError(f"{gp['id']}: non-positive initial HM density {hm_density}")
-    per_tonne = 1.0e6 / hm_density                            # (g/cm³) → (g per tonne HM)
+    per_tonne = 1.0e6 / hm_density  # (g/cm³) → (g per tonne HM)
 
     nd = rd.DEFAULTDATA.nuclide_dict
     entries: list[dict] = []
@@ -653,7 +720,9 @@ def _selfcheck_solve(record: dict) -> None:
     engine-computed Cs-137 discharge activity must match the burnup-explicit fission-yield
     estimate (≈1.22e14·BU Bq/tHM) — an anchor independent of the dataset's own _A column,
     so it validates the mass-density→λN→per-tonne basis end to end."""
-    spec = [{"name": e["name"], "quantity": e["mass_g_per_tHM"], "unit": "g"} for e in record["entries"]]
+    spec = [
+        {"name": e["name"], "quantity": e["mass_g_per_tHM"], "unit": "g"} for e in record["entries"]
+    ]
     inv = SolvedInventory.from_entries(spec, precision="double")  # raises if too stiff for double
     yr = 365.25 * 86400
     act = inv.evaluate([0.0, 10 * yr, 100 * yr], axis="activity", unit="Bq")
@@ -689,7 +758,9 @@ def _selfcheck_solve(record: dict) -> None:
             "total": dict(zip(keys, s_tot)),
             "sf": dict(zip(keys, s_sf)),
             "alpha_n": dict(zip(keys, s_an)),
-            "alpha_n_frac": dict(zip(keys, [s_an[i] / s_tot[i] if s_tot[i] > 0 else 0.0 for i in range(3)])),
+            "alpha_n_frac": dict(
+                zip(keys, [s_an[i] / s_tot[i] if s_tot[i] > 0 else 0.0 for i in range(3)])
+            ),
         },
     }
 

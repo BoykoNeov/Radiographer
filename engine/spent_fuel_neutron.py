@@ -76,11 +76,17 @@ class SpentFuelNeutronModel:
         shield=None,
     ):
         if quantity not in QUANTITIES:
-            raise NeutronDoseError(f"unknown dose quantity {quantity!r}; expected one of {QUANTITIES}")
+            raise NeutronDoseError(
+                f"unknown dose quantity {quantity!r}; expected one of {QUANTITIES}"
+            )
         if quantity == "effective" and geometry is None:
-            raise NeutronDoseError("effective dose requires an ICRP-116 geometry (e.g. 'AP', 'ISO')")
+            raise NeutronDoseError(
+                "effective dose requires an ICRP-116 geometry (e.g. 'AP', 'ISO')"
+            )
         if quantity != "effective" and geometry is not None:
-            raise NeutronDoseError(f"{quantity} takes no geometry; geometry applies only to effective dose")
+            raise NeutronDoseError(
+                f"{quantity} takes no geometry; geometry applies only to effective dose"
+            )
         if geometry is not None and geometry not in GEOMETRIES:
             raise NeutronDoseError(f"unknown geometry {geometry!r}; expected one of {GEOMETRIES}")
 
@@ -90,11 +96,15 @@ class SpentFuelNeutronModel:
         self.spectrum_source = spectrum_source
         if not nsrc.has(spectrum_source):
             raise NeutronDoseError(f"representative SF spectrum {spectrum_source!r} not available")
-        self.dropped_branch = {k: float(v) for k, v in (dropped_sf_branch or {}).items() if float(v) > 0.0}
+        self.dropped_branch = {
+            k: float(v) for k, v in (dropped_sf_branch or {}).items() if float(v) > 0.0
+        }
         self.dropped_nubar = float(dropped_nubar_nominal)
         #: (α,n)-on-oxygen yields (M12), added to the SF source. Same representative spectrum and
         #: shield T_n (the (α,n) spectrum is softer than SF but h̄ is flat over 0.5–6 MeV — §11).
-        self.alpha_n_yields = {k: float(v) for k, v in (alpha_n_yields or {}).items() if float(v) > 0.0}
+        self.alpha_n_yields = {
+            k: float(v) for k, v in (alpha_n_yields or {}).items() if float(v) > 0.0
+        }
         #: α-emitters absent from PANDA Table 13: branch (α/decay) × this nominal O-yield bounds
         #: their unmodeled (α,n) for the residual warning (never enters the dose).
         self.dropped_alpha_branch = {
@@ -151,9 +161,9 @@ class SpentFuelNeutronModel:
         rates: list[float] = []
         rates_sf: list[float] = []
         rates_an: list[float] = []
-        dropped_frac: list[float] = []       # combined unmodeled residual (SF ν̄ + (α,n))
-        dropped_sf_frac: list[float] = []    # SF-ν̄-only residual
-        dropped_an_frac: list[float] = []    # (α,n)-only residual
+        dropped_frac: list[float] = []  # combined unmodeled residual (SF ν̄ + (α,n))
+        dropped_sf_frac: list[float] = []  # SF-ν̄-only residual
+        dropped_an_frac: list[float] = []  # (α,n)-only residual
         for i in range(n_t):
             s_sf = math.fsum(y * float(series[n][i]) for n, y in self.yields.items())
             s_an = math.fsum(y * float(series[n][i]) for n, y in self.alpha_n_yields.items())

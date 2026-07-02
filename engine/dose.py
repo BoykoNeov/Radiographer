@@ -281,7 +281,7 @@ class GammaDoseModel:
             lines = override  # synthetic source (e.g. bremsstrahlung); bypasses has_emissions
 
         rows: list[dict] = []
-        n_capped = 0          # lines whose buildup was frozen at the fit limit (§11 note)
+        n_capped = 0  # lines whose buildup was frozen at the fit limit (§11 note)
         deepest_mfp = 0.0
         for line in lines:
             E = float(line["E_MeV"])

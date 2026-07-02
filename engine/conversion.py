@@ -122,21 +122,14 @@ def load(quantity: str, geometry: str | None = None, particle: str = "photon") -
     data = json.loads(path.read_text(encoding="utf-8"))
     if data.get("schema_version") != SCHEMA_VERSION:
         raise ConversionError(
-            f"{name}: conversion schema_version {data.get('schema_version')!r} "
-            f"!= {SCHEMA_VERSION}"
+            f"{name}: conversion schema_version {data.get('schema_version')!r} != {SCHEMA_VERSION}"
         )
     if data.get("quantity") != quantity:
-        raise ConversionError(
-            f"{name}: embedded quantity {data.get('quantity')!r} != {quantity!r}"
-        )
+        raise ConversionError(f"{name}: embedded quantity {data.get('quantity')!r} != {quantity!r}")
     if data.get("geometry") != geometry:
-        raise ConversionError(
-            f"{name}: embedded geometry {data.get('geometry')!r} != {geometry!r}"
-        )
+        raise ConversionError(f"{name}: embedded geometry {data.get('geometry')!r} != {geometry!r}")
     if data.get("particle") != particle:
-        raise ConversionError(
-            f"{name}: embedded particle {data.get('particle')!r} != {particle!r}"
-        )
+        raise ConversionError(f"{name}: embedded particle {data.get('particle')!r} != {particle!r}")
     if data.get("units") != "pSv_cm2":
         raise ConversionError(f"{name}: unexpected units {data.get('units')!r}")
     e = data.get("E_MeV")

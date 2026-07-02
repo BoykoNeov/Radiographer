@@ -40,8 +40,8 @@ _YEAR_S = 365.25 * 86400
 
 # Independent fission-yield estimate of the Cs-137 discharge activity (NOT from the dataset):
 #   A(Cs-137)/tHM ≈ λ · Y_cum · (BU·1e9·86400 J/tHM) / (200 MeV/fission · 1.602e-13 J/MeV)
-_CS137_LAMBDA = math.log(2.0) / (30.08 * _YEAR_S)            # s⁻¹
-_CS137_YIELD = 0.0620                                        # cumulative thermal fission yield
+_CS137_LAMBDA = math.log(2.0) / (30.08 * _YEAR_S)  # s⁻¹
+_CS137_YIELD = 0.0620  # cumulative thermal fission yield
 _J_PER_FISSION = 200.0 * 1.602176634e-13
 _CS137_BQ_PER_THM_PER_GWD = _CS137_LAMBDA * _CS137_YIELD * (1.0e9 * 86400) / _J_PER_FISSION
 
@@ -51,14 +51,21 @@ def _load(point_id: str) -> dict:
 
 
 def _solve(record: dict) -> SolvedInventory:
-    spec = [{"name": e["name"], "quantity": e["mass_g_per_tHM"], "unit": "g"} for e in record["entries"]]
+    spec = [
+        {"name": e["name"], "quantity": e["mass_g_per_tHM"], "unit": "g"} for e in record["entries"]
+    ]
     return SolvedInventory.from_entries(spec, precision="double")
 
 
 # The burnup × enrichment CROSS centered on the reference (45 GWd/tHM, 4.0%): a burnup axis
 # (20/45/60 @ 4.0%) and an enrichment axis (3/4/5% @ 45 GWd), sharing that center point.
-POINTS = ["pwr-uox-60gwd-4pct", "pwr-uox-45gwd-4pct", "pwr-uox-20gwd-4pct",
-          "pwr-uox-45gwd-3pct", "pwr-uox-45gwd-5pct"]
+POINTS = [
+    "pwr-uox-60gwd-4pct",
+    "pwr-uox-45gwd-4pct",
+    "pwr-uox-20gwd-4pct",
+    "pwr-uox-45gwd-3pct",
+    "pwr-uox-45gwd-5pct",
+]
 # The enrichment axis, low→high enrichment, at fixed 45 GWd/tHM burnup.
 ENRICHMENT_AXIS = ["pwr-uox-45gwd-3pct", "pwr-uox-45gwd-4pct", "pwr-uox-45gwd-5pct"]
 
@@ -111,11 +118,15 @@ def test_cs137_matches_independent_fission_yield(points, point_id):
 def test_burnup_scaling(points):
     # Cs-137 (long-lived FP) tracks total fissions ≈ burnup. Across the whole 20→45→60 GWd
     # series the discharge Cs-137 ratio must track the achieved-burnup ratio within ~15%.
-    cs = {pid: _solve(points[pid]).evaluate([0.0], axis="activity", unit="Bq")["series"]["Cs-137"][0]
-          for pid in POINTS}
+    cs = {
+        pid: _solve(points[pid]).evaluate([0.0], axis="activity", unit="Bq")["series"]["Cs-137"][0]
+        for pid in POINTS
+    }
     bu = {pid: points[pid]["burnup_GWd_tHM"] for pid in POINTS}
-    for hi, lo in (("pwr-uox-45gwd-4pct", "pwr-uox-20gwd-4pct"),
-                   ("pwr-uox-60gwd-4pct", "pwr-uox-45gwd-4pct")):
+    for hi, lo in (
+        ("pwr-uox-45gwd-4pct", "pwr-uox-20gwd-4pct"),
+        ("pwr-uox-60gwd-4pct", "pwr-uox-45gwd-4pct"),
+    ):
         assert cs[hi] / cs[lo] == pytest.approx(bu[hi] / bu[lo], rel=0.15), (hi, lo)
 
 
@@ -127,8 +138,10 @@ def test_enrichment_axis_at_fixed_burnup(points):
     #      reaches the same burnup with more U-238 capture → more Pu/minor-actinide buildup
     #      (Cm-244 roughly doubles from 5% to 3%), so the source is ~2× larger at 3% than at 5%.
     invs = {pid: _solve(points[pid]) for pid in ENRICHMENT_AXIS}
-    act0 = {pid: invs[pid].evaluate([0.0], axis="activity", unit="Bq")["series"]
-            for pid in ENRICHMENT_AXIS}
+    act0 = {
+        pid: invs[pid].evaluate([0.0], axis="activity", unit="Bq")["series"]
+        for pid in ENRICHMENT_AXIS
+    }
 
     # (a) Cs-137 discharge activity is flat across the enrichment axis (within 3%).
     cs = {pid: act0[pid]["Cs-137"][0] for pid in ENRICHMENT_AXIS}
@@ -141,27 +154,31 @@ def test_enrichment_axis_at_fixed_burnup(points):
         sf = d["neutron"]["yields_n_per_decay"]
         an = d["neutron"]["alpha_n"]["yields_n_per_decay"]
         s = act0[pid]
-        return (math.fsum(y * s.get(n, [0.0])[0] for n, y in sf.items())
-                + math.fsum(y * s.get(n, [0.0])[0] for n, y in an.items()))
+        return math.fsum(y * s.get(n, [0.0])[0] for n, y in sf.items()) + math.fsum(
+            y * s.get(n, [0.0])[0] for n, y in an.items()
+        )
 
-    s3, s4, s5 = (_source0(p) for p in ENRICHMENT_AXIS)   # 3% → 4% → 5%
+    s3, s4, s5 = (_source0(p) for p in ENRICHMENT_AXIS)  # 3% → 4% → 5%
     assert s3 > s4 > s5 > 0.0, (s3, s4, s5)
     assert s3 / s5 > 1.5, s3 / s5
 
 
-@pytest.mark.parametrize("point_id,lo_kw,hi_kw", [
-    # High burnup carries more decay heat at 10 yr (FP ∝ burnup + extra minor-actinide heat);
-    # the band is the 45 GWd band scaled ~×(60/45), an independent published-range expectation.
-    ("pwr-uox-60gwd-4pct", 1.3, 3.5),
-    ("pwr-uox-45gwd-4pct", 1.0, 2.5),
-    ("pwr-uox-20gwd-4pct", 0.4, 1.2),
-    # The enrichment axis shares the 45 GWd band: 10-yr heat is fission-product-dominated and
-    # FP track burnup, not enrichment, so the published range is the SAME regardless of IE. The
-    # small actinide tail (slightly higher at low enrichment) stays well inside — reusing the
-    # band is itself the cross-check on that enrichment-insensitivity. (Trend → enrichment test.)
-    ("pwr-uox-45gwd-3pct", 1.0, 2.5),
-    ("pwr-uox-45gwd-5pct", 1.0, 2.5),
-])
+@pytest.mark.parametrize(
+    "point_id,lo_kw,hi_kw",
+    [
+        # High burnup carries more decay heat at 10 yr (FP ∝ burnup + extra minor-actinide heat);
+        # the band is the 45 GWd band scaled ~×(60/45), an independent published-range expectation.
+        ("pwr-uox-60gwd-4pct", 1.3, 3.5),
+        ("pwr-uox-45gwd-4pct", 1.0, 2.5),
+        ("pwr-uox-20gwd-4pct", 0.4, 1.2),
+        # The enrichment axis shares the 45 GWd band: 10-yr heat is fission-product-dominated and
+        # FP track burnup, not enrichment, so the published range is the SAME regardless of IE. The
+        # small actinide tail (slightly higher at low enrichment) stays well inside — reusing the
+        # band is itself the cross-check on that enrichment-insensitivity. (Trend → enrichment test.)
+        ("pwr-uox-45gwd-3pct", 1.0, 2.5),
+        ("pwr-uox-45gwd-5pct", 1.0, 2.5),
+    ],
+)
 def test_decay_heat_10yr_in_published_band(points, point_id, lo_kw, hi_kw):
     inv = _solve(points[point_id])
     act = inv.evaluate([10.0 * _YEAR_S], axis="activity", unit="Bq")
@@ -176,7 +193,9 @@ def test_cooling_lowers_heat_in_the_cooling_regime(points, point_id):
     # the first months. But through the spent-fuel COOLING regime (years+) it falls steadily.
     inv = _solve(points[point_id])
     ts = [1.0 * _YEAR_S, 10.0 * _YEAR_S, 100.0 * _YEAR_S, 1000.0 * _YEAR_S]
-    w = DecayHeatModel(inv.names).heat_series(inv.evaluate(ts, axis="activity", unit="Bq"))["total_W"]
+    w = DecayHeatModel(inv.names).heat_series(inv.evaluate(ts, axis="activity", unit="Bq"))[
+        "total_W"
+    ]
     assert all(w[i] > w[i + 1] for i in range(len(w) - 1)), w
 
 
@@ -187,7 +206,7 @@ def test_cooling_lowers_heat_in_the_cooling_regime(points, point_id):
 # NOTE the Cm-244 cross-check validates the SF BRANCHING RATIO (Serpent2 _SF/_A vs IAEA's implied
 # T_tot/T_SF) — ν̄ cancels in n_yield/SA, so it does NOT independently validate ν̄ or the absolute
 # yield; those rest on the cited IAEA/Holden ν̄.
-_CM244_IAEA_N_YIELD_N_S_G = 1.100e7   # IAEA NDS SF_n-Yield Table 1
+_CM244_IAEA_N_YIELD_N_S_G = 1.100e7  # IAEA NDS SF_n-Yield Table 1
 
 _VENDOR_DIR = Path(__file__).resolve().parents[1] / "data" / "vendor"
 _NUBAR_PATH = _VENDOR_DIR / "iaea_sf_nu" / "sf_nubar.json"
@@ -242,6 +261,7 @@ def test_panda_alpha_sg_is_per_gram_of_isotope():
     # (it just echoes the build's own arithmetic); this compares two independent data sources.
     import radioactivedecay as rd
     from engine import emissions
+
     nd = rd.DEFAULTDATA.nuclide_dict
     sd = rd.DEFAULTDATA.scipy_data
     oxide = json.loads(_PANDA_PATH.read_text(encoding="utf-8"))["oxide_an_yield"]
@@ -249,14 +269,14 @@ def test_panda_alpha_sg_is_per_gram_of_isotope():
     for nuc, rec in oxide.items():
         if not emissions.has_emissions(nuc):
             continue
-        br = math.fsum(float(a["yield"]) for a in emissions.alphas(nuc))   # α/decay, ICRP-107
+        br = math.fsum(float(a["yield"]) for a in emissions.alphas(nuc))  # α/decay, ICRP-107
         if br <= 0.0:
             continue
         lam = math.log(2.0) / float(rd.Nuclide(nuc).half_life("s"))
-        sa = lam * 6.02214076e23 / float(sd.atomic_masses[nd[nuc]])        # Bq/g, per gram isotope
+        sa = lam * 6.02214076e23 / float(sd.atomic_masses[nd[nuc]])  # Bq/g, per gram isotope
         assert br * sa == pytest.approx(rec["alpha_s_g"], rel=0.08), nuc
         checked += 1
-    assert checked >= 12   # the bulk of the table (β-dominated Pu-241 etc. included)
+    assert checked >= 12  # the bulk of the table (β-dominated Pu-241 etc. included)
 
 
 @pytest.mark.parametrize("point_id", POINTS)
@@ -290,10 +310,11 @@ def test_cm244_sf_branching_ratio_matches_iaea(points, point_id):
     # Serpent2's SF half-life agrees with IAEA's to ~2% — it catches a _SF units/mapping slip,
     # but the neutron magnitude still rests on the cited IAEA/Holden ν̄ (not validated here).
     import radioactivedecay as rd
+
     nd = rd.DEFAULTDATA.nuclide_dict
     sd = rd.DEFAULTDATA.scipy_data
     lam = math.log(2.0) / float(rd.Nuclide("Cm-244").half_life("s"))
-    sa = lam * 6.02214076e23 / float(sd.atomic_masses[nd["Cm-244"]])   # Bq/g
+    sa = lam * 6.02214076e23 / float(sd.atomic_masses[nd["Cm-244"]])  # Bq/g
     expected = _CM244_IAEA_N_YIELD_N_S_G / sa
     stored = points[point_id]["neutron"]["yields_n_per_decay"]["Cm-244"]
     assert stored == pytest.approx(expected, rel=0.05)
@@ -314,11 +335,11 @@ def test_sf_neutron_source_cm244_dominates_after_cooling(points, point_id):
         return math.fsum(y * act.get(name, [0.0] * 3)[i] for name, y in yields.items())
 
     s0, s10, s100 = s_at(0), s_at(1), s_at(2)
-    assert s0 > s10 > s100 > 0.0                       # cools down through the regime
+    assert s0 > s10 > s100 > 0.0  # cools down through the regime
     cm242_0 = yields.get("Cm-242", 0.0) * act["Cm-242"][0]
     cm244_10 = yields["Cm-244"] * act["Cm-244"][1]
-    assert cm242_0 / s0 > 0.10                         # Cm-242 a real share at discharge
-    assert cm244_10 / s10 > 0.85                       # Cm-244 dominant by 10 yr (more so at high BU)
+    assert cm242_0 / s0 > 0.10  # Cm-242 a real share at discharge
+    assert cm244_10 / s10 > 0.85  # Cm-244 dominant by 10 yr (more so at high BU)
 
 
 def test_cm246_nubar_derived_from_vendored_distribution():
@@ -352,8 +373,11 @@ def test_cm246_nubar_derived_from_vendored_distribution():
     assert nubar["Cm-246"]["src"] == "HZ-BNL36467" and nubar["Cm-248"]["src"] == "HZ-BNL36467"
 
     # Independent cross-confirm for Cm-248 (Vorobyev 2005, a different measurement).
-    vorobyev = next(r for r in mult["distributions"]
-                    if r["nuclide"] == "Cm-248" and r["role"] == "cross-confirm")
+    vorobyev = next(
+        r
+        for r in mult["distributions"]
+        if r["nuclide"] == "Cm-248" and r["role"] == "cross-confirm"
+    )
     assert math.fsum(k * p for k, p in enumerate(vorobyev["P"])) == pytest.approx(3.13, abs=2e-3)
 
 
@@ -369,12 +393,13 @@ def test_sourcing_cm246_248_extends_valid_cooling_regime(points, point_id):
     yields = d["neutron"]["yields_n_per_decay"]
     dropped = d["neutron"]["dropped_sf_branch"]
     nom = d["neutron"]["dropped_nubar_nominal"]
-    ts = [1.0e3 * _YEAR_S, 1.0e4 * _YEAR_S, 1.0e5 * _YEAR_S]   # the multi-century+ regime
+    ts = [1.0e3 * _YEAR_S, 1.0e4 * _YEAR_S, 1.0e5 * _YEAR_S]  # the multi-century+ regime
     series = inv.evaluate(ts, axis="activity", unit="Bq")["series"]
     for i in range(len(ts)):
         s = math.fsum(y * series.get(n, [0.0] * len(ts))[i] for n, y in yields.items())
         s_drop = nom * math.fsum(
-            b * series.get(n, [0.0] * len(ts))[i] for n, b in dropped.items() if n in series)
+            b * series.get(n, [0.0] * len(ts))[i] for n, b in dropped.items() if n in series
+        )
         frac = s_drop / (s + s_drop) if (s + s_drop) > 0 else 0.0
         assert frac < 0.01, f"{point_id}: dropped SF frac {frac:.3%} at t={ts[i] / _YEAR_S:.0f} yr"
     # Cm-246 must be modeled (the sourcing goal). Its WEIGHT in the long-cooling SF source is a

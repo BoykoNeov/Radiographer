@@ -58,14 +58,47 @@ COMPOUNDS = {  # id -> (exact tab2 name, vendor page)
 # material is tabulated at (high-Z pages add extra near-edge mesh on top of these). Used
 # to assert *completeness*: the integrity test proves canonical == vendored, but cannot
 # see a row both parsers' shared row-filter would drop, so this anchors against the grid.
-NIST_STD_E = [1.0e-3, 1.5e-3, 2.0e-3, 3.0e-3, 4.0e-3, 5.0e-3, 6.0e-3, 8.0e-3,
-              1.0e-2, 1.5e-2, 2.0e-2, 3.0e-2, 4.0e-2, 5.0e-2, 6.0e-2, 8.0e-2,
-              1.0e-1, 1.5e-1, 2.0e-1, 3.0e-1, 4.0e-1, 5.0e-1, 6.0e-1, 8.0e-1,
-              1.0, 1.25, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0]
+NIST_STD_E = [
+    1.0e-3,
+    1.5e-3,
+    2.0e-3,
+    3.0e-3,
+    4.0e-3,
+    5.0e-3,
+    6.0e-3,
+    8.0e-3,
+    1.0e-2,
+    1.5e-2,
+    2.0e-2,
+    3.0e-2,
+    4.0e-2,
+    5.0e-2,
+    6.0e-2,
+    8.0e-2,
+    1.0e-1,
+    1.5e-1,
+    2.0e-1,
+    3.0e-1,
+    4.0e-1,
+    5.0e-1,
+    6.0e-1,
+    8.0e-1,
+    1.0,
+    1.25,
+    1.5,
+    2.0,
+    3.0,
+    4.0,
+    5.0,
+    6.0,
+    8.0,
+    10.0,
+    15.0,
+    20.0,
+]
 
 DOSE_MEDIA = {"air", "water", "tissue_soft"}
-SHIELDS = {"lead", "tungsten", "iron", "copper", "aluminium",
-           "concrete", "pmma", "polyethylene"}
+SHIELDS = {"lead", "tungsten", "iron", "copper", "aluminium", "concrete", "pmma", "polyethylene"}
 REQUIRED = set(ELEMENTS) | set(COMPOUNDS)
 
 ALL = sorted(p.stem for p in CANON.glob("*.json"))
@@ -74,6 +107,7 @@ ALL = sorted(p.stem for p in CANON.glob("*.json"))
 # --------------------------------------------------------------------------- #
 # Independent HTML parsing (stdlib HTMLParser) — NOT the build's regex path.
 # --------------------------------------------------------------------------- #
+
 
 class _TableParser(HTMLParser):
     """Collect every <tr> as a list of stripped <td> texts."""
@@ -166,12 +200,12 @@ def _independent_density(material: str) -> float:
 # 0. The dataset exists (fail-first sentinel before the build has run).
 # --------------------------------------------------------------------------- #
 
+
 def test_dataset_is_present_and_complete():
     have = set(ALL)
     missing = sorted(REQUIRED - have)
     assert not missing, (
-        f"missing attenuation files {missing}; run "
-        "`python data/build/build_attenuation.py`"
+        f"missing attenuation files {missing}; run `python data/build/build_attenuation.py`"
     )
 
 
@@ -179,9 +213,10 @@ def test_dataset_is_present_and_complete():
 # 1. Structural / schema / physical sanity.
 # --------------------------------------------------------------------------- #
 
+
 def test_schema_and_physical_sanity():
     for m in REQUIRED:
-        data = at.load_attenuation(m)          # validates version/name/alignment/rho
+        data = at.load_attenuation(m)  # validates version/name/alignment/rho
         e = data["E_MeV"]
         mu = data["mu_rho_cm2_g"]
         muen = data["muen_rho_cm2_g"]
@@ -216,14 +251,14 @@ def test_loader_raises_on_missing_material():
 # 2. Transform integrity — independent of the build's parser.
 # --------------------------------------------------------------------------- #
 
+
 def test_canonical_rows_match_independent_parse():
     """No row dropped, duplicated, mis-ordered, or value-mangled vs the raw HTML."""
     for m in REQUIRED:
-        _, page = (ELEMENTS[m] if m in ELEMENTS else COMPOUNDS[m])
+        _, page = ELEMENTS[m] if m in ELEMENTS else COMPOUNDS[m]
         indep = sorted((e, mu, muen) for (_lab, e, mu, muen) in _independent_rows(page))
         data = at.load_attenuation(m)
-        canon = sorted(zip(data["E_MeV"], data["mu_rho_cm2_g"],
-                           data["muen_rho_cm2_g"]))
+        canon = sorted(zip(data["E_MeV"], data["mu_rho_cm2_g"], data["muen_rho_cm2_g"]))
         assert canon == indep, f"{m}: canonical rows differ from independent HTML parse"
 
 
@@ -234,17 +269,18 @@ def test_density_matches_independent_index():
 
 def test_edges_match_independent_parse():
     for m in REQUIRED:
-        _, page = (ELEMENTS[m] if m in ELEMENTS else COMPOUNDS[m])
-        indep = sorted((lab, e) for (lab, e, _mu, _muen) in _independent_rows(page)
-                       if lab is not None)
-        canon = sorted((edge["label"], edge["E_MeV"])
-                       for edge in at.edges(m))
+        _, page = ELEMENTS[m] if m in ELEMENTS else COMPOUNDS[m]
+        indep = sorted(
+            (lab, e) for (lab, e, _mu, _muen) in _independent_rows(page) if lab is not None
+        )
+        canon = sorted((edge["label"], edge["E_MeV"]) for edge in at.edges(m))
         assert canon == indep, f"{m}: edge markers differ from independent parse"
 
 
 # --------------------------------------------------------------------------- #
 # 3. Coverage — dose media + shields, both directions.
 # --------------------------------------------------------------------------- #
+
 
 def test_required_coverage_both_directions():
     have = set(ALL)
@@ -273,13 +309,13 @@ def test_full_energy_grid_present():
 # 4. Physics goldens — independent published values (textbook-rounded), hardcoded.
 # --------------------------------------------------------------------------- #
 
+
 def _row_at(material: str, energy: float, tol_frac: float = 0.01) -> tuple[float, float]:
     """Return (μ/ρ, μ_en/ρ) at the unique non-edge grid point near `energy`."""
     e = at.energies(material)
     mu = at.mu_rho(material)
     muen = at.muen_rho(material)
-    hits = [(mu[i], muen[i]) for i, ei in enumerate(e)
-            if abs(ei - energy) <= tol_frac * energy]
+    hits = [(mu[i], muen[i]) for i, ei in enumerate(e) if abs(ei - energy) <= tol_frac * energy]
     assert len(hits) == 1, f"{material}: expected one grid row near {energy} MeV, got {len(hits)}"
     return hits[0]
 
@@ -320,8 +356,14 @@ def test_golden_densities():
     # Density feeds M3 shielding as μ = (μ/ρ)·ρ; only lead's ρ is otherwise anchored
     # (via the HVL golden). Anchor the rest externally so a mis-keyed tab lookup can't
     # silently corrupt a shield. Values: standard handbook densities (g/cm³).
-    expect = {"aluminium": 2.699, "iron": 7.874, "copper": 8.96, "tungsten": 19.30,
-              "concrete": 2.30, "air": 1.205e-3}
+    expect = {
+        "aluminium": 2.699,
+        "iron": 7.874,
+        "copper": 8.96,
+        "tungsten": 19.30,
+        "concrete": 2.30,
+        "air": 1.205e-3,
+    }
     for m, rho in expect.items():
         assert abs(at.density(m) - rho) / rho < 0.01, (m, at.density(m))
 

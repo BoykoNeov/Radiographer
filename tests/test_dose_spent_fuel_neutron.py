@@ -33,7 +33,9 @@ def vector() -> dict:
 
 @pytest.fixture(scope="module")
 def solved(vector) -> SolvedInventory:
-    spec = [{"name": e["name"], "quantity": e["mass_g_per_tHM"], "unit": "g"} for e in vector["entries"]]
+    spec = [
+        {"name": e["name"], "quantity": e["mass_g_per_tHM"], "unit": "g"} for e in vector["entries"]
+    ]
     return SolvedInventory.from_entries(spec, precision="double")
 
 
@@ -41,8 +43,12 @@ def _model(vector, quantity="ambient_H10", geometry=None) -> SpentFuelNeutronMod
     n = vector["neutron"]
     an = n.get("alpha_n") or {}
     return SpentFuelNeutronModel(
-        n["yields_n_per_decay"], n["spectrum_source"], quantity, geometry=geometry,
-        dropped_sf_branch=n["dropped_sf_branch"], dropped_nubar_nominal=n["dropped_nubar_nominal"],
+        n["yields_n_per_decay"],
+        n["spectrum_source"],
+        quantity,
+        geometry=geometry,
+        dropped_sf_branch=n["dropped_sf_branch"],
+        dropped_nubar_nominal=n["dropped_nubar_nominal"],
         alpha_n_yields=an.get("yields_n_per_decay"),
         dropped_alpha_branch=an.get("dropped_alpha_branch"),
         nominal_O_yield_per_alpha=an.get("nominal_O_yield_per_alpha", 5.9e-8),
@@ -68,14 +74,16 @@ def test_dose_equals_independent_hand_calc(vector, solved):
     yields = vector["neutron"]["yields_n_per_decay"]
     an_yields = vector["neutron"]["alpha_n"]["yields_n_per_decay"]
     for i in range(len(ts)):
-        s_sf = math.fsum(y * act["series"][n][i] for n, y in yields.items())          # n/s
-        s_an = math.fsum(y * act["series"][n][i] for n, y in an_yields.items())        # n/s
+        s_sf = math.fsum(y * act["series"][n][i] for n, y in yields.items())  # n/s
+        s_an = math.fsum(y * act["series"][n][i] for n, y in an_yields.items())  # n/s
         k = (m.hbar_pSv_cm2 * PSV_CM2_TO_SV_M2) / (4.0 * math.pi * d * d)
         assert out["rate_si"][i] == pytest.approx(k * (s_sf + s_an), rel=1e-12)
         # The reported SF/(α,n) split must add back to the total and match each term.
         assert out["rate_si_sf"][i] == pytest.approx(k * s_sf, rel=1e-12)
         assert out["rate_si_alpha_n"][i] == pytest.approx(k * s_an, rel=1e-12)
-        assert out["rate_si"][i] == pytest.approx(out["rate_si_sf"][i] + out["rate_si_alpha_n"][i], rel=1e-12)
+        assert out["rate_si"][i] == pytest.approx(
+            out["rate_si_sf"][i] + out["rate_si_alpha_n"][i], rel=1e-12
+        )
     assert out["si_unit"] == "Sv" and out["per"] == "second"
 
 
@@ -91,12 +99,12 @@ def test_alpha_n_strictly_adds_and_grows_at_century(vector, solved):
     o_sf = sf_only.dose_rate_series(act, 1.0)
     o = full.dose_rate_series(act, 1.0)
     for i in range(len(ts)):
-        assert o["rate_si"][i] > o_sf["rate_si"][i]      # (α,n) strictly adds to the dose
+        assert o["rate_si"][i] > o_sf["rate_si"][i]  # (α,n) strictly adds to the dose
         assert o["rate_si_alpha_n"][i] > 0.0
     frac10 = o["rate_si_alpha_n"][0] / o["rate_si"][0]
     frac100 = o["rate_si_alpha_n"][1] / o["rate_si"][1]
-    assert frac100 > frac10                              # Am-241 ingrowth raises the (α,n) share
-    assert frac100 > 0.1                                 # ~20% at a century — a real correction
+    assert frac100 > frac10  # Am-241 ingrowth raises the (α,n) share
+    assert frac100 > 0.1  # ~20% at a century — a real correction
 
 
 def test_source_cools_through_the_regime(vector, solved):
@@ -124,7 +132,7 @@ def test_cm246_now_modeled_so_no_lower_bound_warning_at_long_cooling(vector, sol
     m = _model(vector)
     ts = [100.0 * _YEAR_S, 500.0 * _YEAR_S, 1.0e4 * _YEAR_S, 1.0e5 * _YEAR_S]
     out = m.dose_rate_series(solved.evaluate(ts, axis="activity", unit="Bq"), 1.0)
-    assert max(out["dropped_sf_frac"]) < 0.01     # was >0.5 by 500 yr before Cm-246 was modeled
+    assert max(out["dropped_sf_frac"]) < 0.01  # was >0.5 by 500 yr before Cm-246 was modeled
     assert not any(w.get("reason") == "dropped_sf_unmodeled" for w in out["warnings"])
 
 
@@ -135,8 +143,11 @@ def test_dropped_sf_warning_mechanism_still_fires_for_a_large_unmodeled_branch(v
     # confirm the dropped fraction and the loud warning both appear.
     n = vector["neutron"]
     m = SpentFuelNeutronModel(
-        n["yields_n_per_decay"], n["spectrum_source"], "ambient_H10",
-        dropped_sf_branch={"Cm-244": 1.0e-3}, dropped_nubar_nominal=3.3,
+        n["yields_n_per_decay"],
+        n["spectrum_source"],
+        "ambient_H10",
+        dropped_sf_branch={"Cm-244": 1.0e-3},
+        dropped_nubar_nominal=3.3,
     )
     out = m.dose_rate_series(solved.evaluate([10.0 * _YEAR_S], axis="activity", unit="Bq"), 1.0)
     assert out["dropped_sf_frac"][0] > 0.05
@@ -163,6 +174,7 @@ def test_missing_emitter_is_loud(vector, solved):
 
 # --- M10 neutron shielding: the SAME removal-cross-section gate as the single-source path ----
 
+
 def test_water_shield_attenuates_spent_fuel_neutron_dose(vector, solved):
     # A hydrogenous shield attenuates the SF neutron dose by the removal scalar T_n; h̄ is
     # unchanged (no spectrum hardening), so the whole series scales by exactly exp(−Σ_R·x).
@@ -173,9 +185,13 @@ def test_water_shield_attenuates_spent_fuel_neutron_dose(vector, solved):
     bare = _model(vector).dose_rate_series(act, 1.0)["rate_si"][0]
     an = n["alpha_n"]
     shielded_model = SpentFuelNeutronModel(
-        n["yields_n_per_decay"], n["spectrum_source"], "ambient_H10",
-        dropped_sf_branch=n["dropped_sf_branch"], dropped_nubar_nominal=n["dropped_nubar_nominal"],
-        alpha_n_yields=an["yields_n_per_decay"], dropped_alpha_branch=an["dropped_alpha_branch"],
+        n["yields_n_per_decay"],
+        n["spectrum_source"],
+        "ambient_H10",
+        dropped_sf_branch=n["dropped_sf_branch"],
+        dropped_nubar_nominal=n["dropped_nubar_nominal"],
+        alpha_n_yields=an["yields_n_per_decay"],
+        dropped_alpha_branch=an["dropped_alpha_branch"],
         nominal_O_yield_per_alpha=an["nominal_O_yield_per_alpha"],
         shield=[("water", 20.0)],
     )
@@ -190,7 +206,10 @@ def test_lead_shield_does_not_attenuate_spent_fuel_and_warns(vector):
     # γ-oriented stack → T_n=1 + loud "steer to hydrogenous" warning (never a silent under-count).
     n = vector["neutron"]
     m = SpentFuelNeutronModel(
-        n["yields_n_per_decay"], n["spectrum_source"], "ambient_H10", shield=[("lead", 15.0)],
+        n["yields_n_per_decay"],
+        n["spectrum_source"],
+        "ambient_H10",
+        shield=[("lead", 15.0)],
     )
     assert m.T_n == 1.0
     assert any(w.get("reason") == "no_hydrogenous_layer" for w in m.warnings)

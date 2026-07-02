@@ -53,7 +53,9 @@ def load_vector(source_id: str) -> dict:
         raise FalloutError(f"no fallout vector {source_id!r} (expected {path})")
     data = json.loads(path.read_text(encoding="utf-8"))
     if data.get("schema_version") != SCHEMA_VERSION:
-        raise FalloutError(f"{source_id}: schema_version {data.get('schema_version')!r} != {SCHEMA_VERSION}")
+        raise FalloutError(
+            f"{source_id}: schema_version {data.get('schema_version')!r} != {SCHEMA_VERSION}"
+        )
     if data.get("id") != source_id:
         raise FalloutError(f"{path.name}: embedded id {data.get('id')!r} != {source_id!r}")
     if not data.get("entries"):

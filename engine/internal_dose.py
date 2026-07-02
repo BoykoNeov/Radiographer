@@ -224,14 +224,14 @@ class InternalDoseModel:
         self.route = route
         self.population = population
         self.absorption_type = absorption_type  # None ⇒ each nuclide's default_type
-        self.ingestion_form = ingestion_form    # None ⇒ each nuclide's default_form (H-3 only)
+        self.ingestion_form = ingestion_form  # None ⇒ each nuclide's default_form (H-3 only)
 
         data = load(population)
         self.amad_um = data.get("amad_um")
         self.icrp_publication = data.get("icrp_publication")
         coeffs: dict[str, float] = {}
-        types_used: dict[str, str] = {}    # inhalation: F/M/S or a vapour form token
-        forms_used: dict[str, str] = {}    # ingestion: chemical form, H-3 only (others: single)
+        types_used: dict[str, str] = {}  # inhalation: F/M/S or a vapour form token
+        forms_used: dict[str, str] = {}  # ingestion: chemical form, H-3 only (others: single)
         f1_used: dict[str, float] = {}
         covered: list[str] = []
         noble_gas_na: list[str] = []
@@ -240,8 +240,11 @@ class InternalDoseModel:
             rec = data["coefficients"].get(n)
             if rec is not None and route in rec:
                 coeffs[n] = coefficient(
-                    n, route, population,
-                    absorption_type=absorption_type, ingestion_form=ingestion_form,
+                    n,
+                    route,
+                    population,
+                    absorption_type=absorption_type,
+                    ingestion_form=ingestion_form,
                 )
                 if route == "inhalation":
                     types_used[n] = absorption_type or rec["inhalation"]["default_type"]
@@ -295,39 +298,41 @@ class InternalDoseModel:
             if e_n == 0.0:
                 continue
             if nuclide not in series:
-                raise InternalDoseError(
-                    f"no activity series for contributing nuclide {nuclide!r}"
-                )
+                raise InternalDoseError(f"no activity series for contributing nuclide {nuclide!r}")
             col = series[nuclide]
             for j, a in enumerate(col):
                 committed[j] += e_n * float(a)
 
         warnings: list[dict] = []
         if self.uncovered:
-            warnings.append({
-                "reason": "uncovered_nuclides",
-                "nuclides": list(self.uncovered),
-                "message": (
-                    f"{len(self.uncovered)} tracked nuclide(s) have no {self.route} coefficient "
-                    f"in the curated {self.population} set ({', '.join(self.uncovered)}); their "
-                    "committed dose is omitted, so this E(50) is a LOWER BOUND (§11)."
-                ),
-            })
+            warnings.append(
+                {
+                    "reason": "uncovered_nuclides",
+                    "nuclides": list(self.uncovered),
+                    "message": (
+                        f"{len(self.uncovered)} tracked nuclide(s) have no {self.route} coefficient "
+                        f"in the curated {self.population} set ({', '.join(self.uncovered)}); their "
+                        "committed dose is omitted, so this E(50) is a LOWER BOUND (§11)."
+                    ),
+                }
+            )
         if self.noble_gas_na:
-            warnings.append({
-                "reason": "noble_gas_no_intake_pathway",
-                "nuclides": list(self.noble_gas_na),
-                "message": (
-                    f"{len(self.noble_gas_na)} noble-gas nuclide(s) ({', '.join(self.noble_gas_na)}) "
-                    "have no intake committed-dose coefficient (submersion is a different quantity, "
-                    "ICRP-119 Annex C); excluded, and they do NOT make the result a lower bound."
-                ),
-            })
+            warnings.append(
+                {
+                    "reason": "noble_gas_no_intake_pathway",
+                    "nuclides": list(self.noble_gas_na),
+                    "message": (
+                        f"{len(self.noble_gas_na)} noble-gas nuclide(s) ({', '.join(self.noble_gas_na)}) "
+                        "have no intake committed-dose coefficient (submersion is a different quantity, "
+                        "ICRP-119 Annex C); excluded, and they do NOT make the result a lower bound."
+                    ),
+                }
+            )
 
         return {
             "quantity": QUANTITY,
             "si_unit": SI_UNIT,
-            "per": None,            # committed scalar, NOT a rate — integrate is disabled (§M13)
+            "per": None,  # committed scalar, NOT a rate — integrate is disabled (§M13)
             "route": self.route,
             "population": self.population,
             "icrp_publication": self.icrp_publication,
@@ -337,8 +342,8 @@ class InternalDoseModel:
             "covered": list(self.covered),
             "noble_gas_na": list(self.noble_gas_na),
             "uncovered": list(self.uncovered),
-            "types_used": dict(self.types_used),     # inhalation: F/M/S or vapour form per nuclide
-            "forms_used": dict(self.forms_used),     # ingestion: chemical form (H-3 HTO/OBT only)
+            "types_used": dict(self.types_used),  # inhalation: F/M/S or vapour form per nuclide
+            "forms_used": dict(self.forms_used),  # ingestion: chemical form (H-3 HTO/OBT only)
             "f1_used": dict(self.f1_used),
             # Per-nuclide e_n (Sv/Bq) for the cursor breakdown — the client folds A_n(t) at the
             # cursor (mirrors dose_lines' coeff_si), so the table is live on scrub with no re-fetch.

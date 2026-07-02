@@ -59,7 +59,7 @@ _DEFAULT_ROOT = Path(__file__).resolve().parents[1] / "data" / "buildup"
 _data_root = _DEFAULT_ROOT
 
 _GP_KEYS = ("b", "c", "a", "Xk", "d")
-_TANH_M2 = math.tanh(-2.0)            # ≈ −0.96403, the Harima reference constant
+_TANH_M2 = math.tanh(-2.0)  # ≈ −0.96403, the Harima reference constant
 
 
 class BuildupError(Exception):
@@ -100,8 +100,7 @@ def load_buildup(material: str) -> dict:
     data = json.loads(path.read_text(encoding="utf-8"))
     if data.get("schema_version") != SCHEMA_VERSION:
         raise BuildupError(
-            f"{material}: buildup schema_version {data.get('schema_version')!r} "
-            f"!= {SCHEMA_VERSION}"
+            f"{material}: buildup schema_version {data.get('schema_version')!r} != {SCHEMA_VERSION}"
         )
     if data.get("material") != material:
         raise BuildupError(
@@ -146,15 +145,14 @@ def gp_buildup(b: float, c: float, a: float, Xk: float, d: float, mfp: float) ->
     if mfp == 0:
         return 1.0
     mfp = min(mfp, MFP_FIT_MAX)  # freeze buildup at the fit limit; attenuation stays exact
-    k = c * (mfp ** a) + d * (math.tanh(mfp / Xk - 2.0) - _TANH_M2) / (1.0 - _TANH_M2)
+    k = c * (mfp**a) + d * (math.tanh(mfp / Xk - 2.0) - _TANH_M2) / (1.0 - _TANH_M2)
     if k <= 0.0:
         raise BuildupError(
-            f"non-physical G-P ratio K={k:.4g} at mfp={mfp} "
-            f"(b={b}, c={c}, a={a}, Xk={Xk}, d={d})"
+            f"non-physical G-P ratio K={k:.4g} at mfp={mfp} (b={b}, c={c}, a={a}, Xk={Xk}, d={d})"
         )
     if abs(k - 1.0) < 1e-9:
         return 1.0 + (b - 1.0) * mfp
-    return 1.0 + (b - 1.0) * (k ** mfp - 1.0) / (k - 1.0)
+    return 1.0 + (b - 1.0) * (k**mfp - 1.0) / (k - 1.0)
 
 
 def _grid_index(material: str, E_MeV: float, rel_tol: float = 1e-6) -> int:

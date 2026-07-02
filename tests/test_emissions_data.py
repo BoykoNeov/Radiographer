@@ -36,8 +36,15 @@ ALL = sorted(p.stem for p in CANON.glob("*.json"))
 
 # ICRP-107 expresses half-lives in these units only (enumerated from the data); an
 # unrecognised unit must hard-fail so a parse bug can't silently become NaN.
-UNIT_S = {"s": 1.0, "m": 60.0, "h": 3600.0, "d": 86400.0,
-          "y": 365.25 * 86400.0, "ms": 1e-3, "us": 1e-6}
+UNIT_S = {
+    "s": 1.0,
+    "m": 60.0,
+    "h": 3600.0,
+    "d": 86400.0,
+    "y": 365.25 * 86400.0,
+    "ms": 1e-3,
+    "us": 1e-6,
+}
 
 # How each canonical group maps back to upstream ICRP categories (for the
 # independent integrity check). Inverse of the build's routing.
@@ -81,6 +88,7 @@ def _canonical_triples(data: dict) -> list[tuple[str, float, float]]:
 # 0. The dataset exists (fail-first sentinel before the build has run).
 # --------------------------------------------------------------------------- #
 
+
 def test_dataset_is_present_and_complete():
     assert len(ALL) == 1252, (
         f"expected 1252 canonical emission files, found {len(ALL)}; "
@@ -92,11 +100,11 @@ def test_dataset_is_present_and_complete():
 # 1. Structural / schema.
 # --------------------------------------------------------------------------- #
 
+
 def test_schema_and_physical_sanity():
     for name in ALL:
-        data = em.load_emissions(name)              # validates version + name
-        for group in ("photons", "betas", "alphas", "electrons",
-                      "neutrons", "beta_spectra"):
+        data = em.load_emissions(name)  # validates version + name
+        for group in ("photons", "betas", "alphas", "electrons", "neutrons", "beta_spectra"):
             assert isinstance(data[group], list)
         # photons ascending in energy (dose engine relies on it)
         es = [p["E_MeV"] for p in data["photons"]]
@@ -111,7 +119,7 @@ def test_schema_and_physical_sanity():
         for e in data["electrons"]:
             assert e["origin"] in {"auger", "IE"}
         for s in data["beta_spectra"]:
-            assert s["E_MeV"] >= 0 and s["intensity"] >= 0   # E starts at 0
+            assert s["E_MeV"] >= 0 and s["intensity"] >= 0  # E starts at 0
 
 
 def test_loader_raises_on_missing_nuclide():
@@ -122,6 +130,7 @@ def test_loader_raises_on_missing_nuclide():
 # --------------------------------------------------------------------------- #
 # 2. Transform integrity — independent of the build's transform().
 # --------------------------------------------------------------------------- #
+
 
 def test_transform_preserves_every_upstream_value():
     """No emission line dropped, duplicated, mis-routed, or value-mangled."""
@@ -139,6 +148,7 @@ def test_annihilation_routed_into_photons():
 # --------------------------------------------------------------------------- #
 # 3. Coverage — no silent dose holes (§11).
 # --------------------------------------------------------------------------- #
+
 
 def test_every_radioactive_nuclide_has_emissions():
     have = set(ALL)
@@ -159,6 +169,7 @@ def test_every_radioactive_nuclide_has_emissions():
 # --------------------------------------------------------------------------- #
 # 4. Half-life parse canary (rd stays the source of truth for half-lives).
 # --------------------------------------------------------------------------- #
+
 
 def test_half_life_parse_canary():
     worst = 0.0

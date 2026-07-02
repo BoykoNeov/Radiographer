@@ -61,10 +61,31 @@ ALL = sorted(p.stem for p in CANON.glob("*.json"))
 # generate_photon_effective_dose.py (the module that derives ICRP-74 effective dose),
 # so dividing H*(10)/Φ by it is a cross-source check, not circular.
 ICRP74_KA_PHI = {
-    0.01: 7.43, 0.015: 3.12, 0.02: 1.68, 0.03: 0.721, 0.04: 0.429, 0.05: 0.323,
-    0.06: 0.289, 0.08: 0.307, 0.1: 0.371, 0.15: 0.599, 0.2: 0.856, 0.3: 1.38,
-    0.4: 1.89, 0.5: 2.38, 0.6: 2.84, 0.8: 3.69, 1.0: 4.47, 1.5: 6.14, 2.0: 7.55,
-    3.0: 9.96, 4.0: 12.1, 5.0: 14.1, 6.0: 16.1, 8.0: 20.1, 10.0: 24.0,
+    0.01: 7.43,
+    0.015: 3.12,
+    0.02: 1.68,
+    0.03: 0.721,
+    0.04: 0.429,
+    0.05: 0.323,
+    0.06: 0.289,
+    0.08: 0.307,
+    0.1: 0.371,
+    0.15: 0.599,
+    0.2: 0.856,
+    0.3: 1.38,
+    0.4: 1.89,
+    0.5: 2.38,
+    0.6: 2.84,
+    0.8: 3.69,
+    1.0: 4.47,
+    1.5: 6.14,
+    2.0: 7.55,
+    3.0: 9.96,
+    4.0: 12.1,
+    5.0: 14.1,
+    6.0: 16.1,
+    8.0: 20.1,
+    10.0: 24.0,
 }
 
 # IAEA training doc "Quantities" — Hp(10,0°)/Ka (Sv/Gy), monoenergetic photons, ICRU
@@ -98,6 +119,7 @@ def _icrp116_ap_fit(energy: float) -> float:
 # 0. The dataset exists (fail-first sentinel before the build has run).
 # --------------------------------------------------------------------------- #
 
+
 def test_dataset_is_present_and_complete():
     missing = sorted(REQUIRED - set(ALL))
     assert not missing, (
@@ -109,9 +131,10 @@ def test_dataset_is_present_and_complete():
 # 1. Structural / schema / physical sanity.
 # --------------------------------------------------------------------------- #
 
+
 def test_effective_schema_and_sanity():
     for g in GEOMETRIES:
-        d = cv.load("effective", g)            # validates version/quantity/geom/units/align
+        d = cv.load("effective", g)  # validates version/quantity/geom/units/align
         e, c = d["E_MeV"], d["coeff_pSv_cm2"]
         assert e == sorted(e) and len(set(e)) == len(e), f"{g}: E not strictly ascending"
         assert e[0] == pytest.approx(0.01) and e[-1] == pytest.approx(10000.0), f"{g}: grid bounds"
@@ -133,18 +156,19 @@ def test_ambient_schema_and_sanity():
 
 def test_loader_rejects_bad_quantity_and_geometry():
     with pytest.raises(cv.ConversionError):
-        cv.load("ambient_H10", "AP")              # H*(10) takes no geometry
+        cv.load("ambient_H10", "AP")  # H*(10) takes no geometry
     with pytest.raises(cv.ConversionError):
-        cv.load("effective")                       # effective requires a geometry
+        cv.load("effective")  # effective requires a geometry
     with pytest.raises(cv.ConversionError):
-        cv.load("effective", "TOP")                # not a real geometry
+        cv.load("effective", "TOP")  # not a real geometry
     with pytest.raises(cv.ConversionError):
-        cv.load("equivalent")                      # unknown quantity
+        cv.load("equivalent")  # unknown quantity
 
 
 # --------------------------------------------------------------------------- #
 # 2. Transform integrity — independent re-parse (numpy, not the build's split).
 # --------------------------------------------------------------------------- #
+
 
 def _independent_table(path: Path) -> np.ndarray:
     """Re-parse a vendored OpenMC dose table independently (3 header lines, then data)."""
@@ -152,7 +176,7 @@ def _independent_table(path: Path) -> np.ndarray:
 
 
 def test_effective_rows_match_independent_parse():
-    indep = _independent_table(EFFECTIVE_SRC)       # cols: E, AP, PA, LLAT, RLAT, ROT, ISO
+    indep = _independent_table(EFFECTIVE_SRC)  # cols: E, AP, PA, LLAT, RLAT, ROT, ISO
     e_indep = indep[:, 0]
     for gi, g in enumerate(GEOMETRIES, start=1):
         d = cv.load("effective", g)
@@ -163,7 +187,7 @@ def test_effective_rows_match_independent_parse():
 
 
 def test_ambient_rows_match_independent_parse():
-    indep = _independent_table(AMBIENT_SRC)         # cols: E, H*(10)/Φ
+    indep = _independent_table(AMBIENT_SRC)  # cols: E, H*(10)/Φ
     d = cv.load("ambient_H10")
     assert np.array_equal(d["E_MeV"], indep[:, 0]), "H*(10): energy grid drift"
     assert np.array_equal(d["coeff_pSv_cm2"], indep[:, 1]), (
@@ -175,6 +199,7 @@ def test_ambient_rows_match_independent_parse():
 # 3. Coverage — all quantities/geometries, both directions.
 # --------------------------------------------------------------------------- #
 
+
 def test_required_coverage_both_directions():
     have = set(ALL)
     assert REQUIRED <= have, f"missing: {sorted(REQUIRED - have)}"
@@ -184,6 +209,7 @@ def test_required_coverage_both_directions():
 # --------------------------------------------------------------------------- #
 # 4a. Effective goldens — independent ICRP-116 Table A.1 values + ordering.
 # --------------------------------------------------------------------------- #
+
 
 def _coeff_at(quantity: str, geometry: str | None, energy: float) -> float:
     e = cv.energies(quantity, geometry)
@@ -221,6 +247,7 @@ def test_golden_effective_geometry_ordering():
 # --------------------------------------------------------------------------- #
 # 4b. H*(10) goldens — derived H*(10)/Ka vs the independent IAEA table.
 # --------------------------------------------------------------------------- #
+
 
 def _derived_h10_over_ka() -> dict[float, float]:
     """H*(10)/Ka = (H*(10)/Φ) / (Ka/Φ) on the shared ICRP-74 grid (no interpolation)."""
@@ -287,9 +314,10 @@ def test_accessor_helpers_agree_with_load():
 # triangle in tests/test_dose_neutron.py (the independent cross-check for the degraded table).
 # =========================================================================== #
 
+
 def test_neutron_effective_schema_and_sanity():
     for g in GEOMETRIES:
-        d = cv.load("effective", g, "neutron")     # validates version/quantity/geom/units/particle
+        d = cv.load("effective", g, "neutron")  # validates version/quantity/geom/units/particle
         assert d["particle"] == "neutron"
         e, c = d["E_MeV"], d["coeff_pSv_cm2"]
         assert e == sorted(e) and len(set(e)) == len(e), f"{g}: E not strictly ascending"
@@ -307,14 +335,16 @@ def test_neutron_ambient_schema_and_sanity():
     assert e == sorted(e) and len(set(e)) == len(e)
     # Neutron H*(10) grid: thermal (1e-9 MeV) → 20 MeV (the ICRP-74 neutron end, below the
     # 10 GeV effective end — the off-grid contract differs by particle, enforced by the engine).
-    assert e[0] == pytest.approx(1e-9) and e[-1] == pytest.approx(20.0), "neutron H*(10) grid 1e-9–20 MeV"
+    assert e[0] == pytest.approx(1e-9) and e[-1] == pytest.approx(20.0), (
+        "neutron H*(10) grid 1e-9–20 MeV"
+    )
     for ei, ci in zip(e, c):
         assert math.isfinite(ei) and ei > 0
         assert math.isfinite(ci) and ci > 0
 
 
 def test_neutron_effective_rows_match_independent_parse():
-    indep = _independent_table(EFFECTIVE_SRC_N)     # cols: E, AP, PA, LLAT, RLAT, ROT, ISO
+    indep = _independent_table(EFFECTIVE_SRC_N)  # cols: E, AP, PA, LLAT, RLAT, ROT, ISO
     e_indep = indep[:, 0]
     for gi, g in enumerate(GEOMETRIES, start=1):
         d = cv.load("effective", g, "neutron")
@@ -325,7 +355,7 @@ def test_neutron_effective_rows_match_independent_parse():
 
 
 def test_neutron_ambient_rows_match_independent_parse():
-    indep = _independent_table(AMBIENT_SRC_N)       # cols: E, H*(10)/Φ
+    indep = _independent_table(AMBIENT_SRC_N)  # cols: E, H*(10)/Φ
     d = cv.load("ambient_H10", None, "neutron")
     assert np.array_equal(d["E_MeV"], indep[:, 0]), "neutron H*(10): energy grid drift"
     assert np.array_equal(d["coeff_pSv_cm2"], indep[:, 1]), (
@@ -338,7 +368,7 @@ def test_particle_isolation():
     assert cv.energies("ambient_H10") != cv.energies("ambient_H10", None, "neutron")
     assert cv.energies("effective", "AP") != cv.energies("effective", "AP", "neutron")
     with pytest.raises(cv.ConversionError):
-        cv.load("ambient_H10", None, "muon")        # unknown particle
+        cv.load("ambient_H10", None, "muon")  # unknown particle
 
 
 def test_golden_neutron_h10_dip_and_fast_rise():

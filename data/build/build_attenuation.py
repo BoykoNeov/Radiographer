@@ -30,21 +30,16 @@ import sys
 from pathlib import Path
 
 SCHEMA_VERSION = 1
-SOURCE = (
-    "NIST X-Ray Mass Attenuation Coefficients "
-    "(Hubbell & Seltzer, NIST SRD 126 / NISTIR 5632)"
-)
+SOURCE = "NIST X-Ray Mass Attenuation Coefficients (Hubbell & Seltzer, NIST SRD 126 / NISTIR 5632)"
 
-DATA_DIR = Path(__file__).resolve().parents[1]                 # .../data
+DATA_DIR = Path(__file__).resolve().parents[1]  # .../data
 VENDOR_DIR = DATA_DIR / "vendor" / "nist_xraymac"
 MANIFEST_PATH = VENDOR_DIR / "MANIFEST.sha256"
 OUT_DIR = DATA_DIR / "attenuation"
 
 # Pinned combined hash of the vendored NIST pages (sha256 over the sorted
 # "<sha256>  <relpath>" manifest lines). Regenerating from drifted bytes must fail.
-EXPECTED_MANIFEST_SHA256 = (
-    "ebb10026976a004110bafd7a7766598e7e0b3926b933b34253c5a11e29a8fd8a"
-)
+EXPECTED_MANIFEST_SHA256 = "ebb10026976a004110bafd7a7766598e7e0b3926b933b34253c5a11e29a8fd8a"
 
 # Material registry: id -> spec. Elements look up density by Z in tab1; compounds by
 # their EXACT NIST display name in tab2. The id is this project's stable slug.
@@ -78,12 +73,12 @@ class BuildError(Exception):
 
 def verify_vendor_manifest() -> None:
     """Recompute the vendored-bytes hash and refuse to build on any drift."""
-    files = sorted(p.relative_to(VENDOR_DIR).as_posix()
-                   for p in VENDOR_DIR.rglob("*.html"))
+    files = sorted(p.relative_to(VENDOR_DIR).as_posix() for p in VENDOR_DIR.rglob("*.html"))
     if not files:
         raise BuildError(f"no vendored NIST pages under {VENDOR_DIR}")
-    lines = [f"{hashlib.sha256((VENDOR_DIR / rel).read_bytes()).hexdigest()}  {rel}"
-             for rel in files]
+    lines = [
+        f"{hashlib.sha256((VENDOR_DIR / rel).read_bytes()).hexdigest()}  {rel}" for rel in files
+    ]
     manifest = "\n".join(lines)
     combined = hashlib.sha256(manifest.encode()).hexdigest()
     if combined != EXPECTED_MANIFEST_SHA256:
@@ -130,8 +125,7 @@ def parse_material_page(relpath: str) -> list[tuple[str | None, float, float, fl
             raise BuildError(f"{relpath}: non-positive coefficient at {e} MeV")
         if muen > mu * (1 + 1e-9):
             raise BuildError(
-                f"{relpath}: μ_en/ρ {muen} > μ/ρ {mu} at {e} MeV "
-                "(columns swapped or mis-parsed?)"
+                f"{relpath}: μ_en/ρ {muen} > μ/ρ {mu} at {e} MeV (columns swapped or mis-parsed?)"
             )
         label = next((c for c in cells[:-3] if c), None)
         if label is not None:
@@ -204,8 +198,7 @@ def _write(mid, name, kind, rho, rows, *, extra) -> None:
         "E_MeV": [e for _l, e, _m, _me in rows],
         "mu_rho_cm2_g": [m for _l, _e, m, _me in rows],
         "muen_rho_cm2_g": [me for _l, _e, _m, me in rows],
-        "edges": [{"label": lab, "E_MeV": e}
-                  for lab, e, _m, _me in rows if lab is not None],
+        "edges": [{"label": lab, "E_MeV": e} for lab, e, _m, _me in rows if lab is not None],
     }
     out = OUT_DIR / f"{mid}.json"
     out.write_text(

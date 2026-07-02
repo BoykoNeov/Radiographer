@@ -39,7 +39,7 @@ from pathlib import Path
 import radioactivedecay as rd
 
 SCHEMA_VERSION = 1
-DATA_DIR = Path(__file__).resolve().parents[1]                       # .../data
+DATA_DIR = Path(__file__).resolve().parents[1]  # .../data
 ENDF_FILE = DATA_DIR / "vendor" / "endf_nfy" / "nfy-092_U_235.endf"
 OUT_DIR = DATA_DIR / "fallout"
 OUT_ID = "u235_fission_fallout"
@@ -50,11 +50,46 @@ YIELD_CUTOFF = 1.0e-3
 
 #: Z → element symbol over the fission-product range (light + heavy peaks).
 _Z_SYMBOL = {
-    27: "Co", 28: "Ni", 29: "Cu", 30: "Zn", 31: "Ga", 32: "Ge", 33: "As", 34: "Se",
-    35: "Br", 36: "Kr", 37: "Rb", 38: "Sr", 39: "Y", 40: "Zr", 41: "Nb", 42: "Mo",
-    43: "Tc", 44: "Ru", 45: "Rh", 46: "Pd", 47: "Ag", 48: "Cd", 49: "In", 50: "Sn",
-    51: "Sb", 52: "Te", 53: "I", 54: "Xe", 55: "Cs", 56: "Ba", 57: "La", 58: "Ce",
-    59: "Pr", 60: "Nd", 61: "Pm", 62: "Sm", 63: "Eu", 64: "Gd", 65: "Tb", 66: "Dy",
+    27: "Co",
+    28: "Ni",
+    29: "Cu",
+    30: "Zn",
+    31: "Ga",
+    32: "Ge",
+    33: "As",
+    34: "Se",
+    35: "Br",
+    36: "Kr",
+    37: "Rb",
+    38: "Sr",
+    39: "Y",
+    40: "Zr",
+    41: "Nb",
+    42: "Mo",
+    43: "Tc",
+    44: "Ru",
+    45: "Rh",
+    46: "Pd",
+    47: "Ag",
+    48: "Cd",
+    49: "In",
+    50: "Sn",
+    51: "Sb",
+    52: "Te",
+    53: "I",
+    54: "Xe",
+    55: "Cs",
+    56: "Ba",
+    57: "La",
+    58: "Ce",
+    59: "Pr",
+    60: "Nd",
+    61: "Pm",
+    62: "Sm",
+    63: "Eu",
+    64: "Gd",
+    65: "Tb",
+    66: "Dy",
     67: "Ho",
 }
 
@@ -75,14 +110,18 @@ def _endf_float(s: str) -> float:
 def parse_cumulative_thermal(path: Path) -> dict[tuple[int, int], float]:
     """``{(ZA, state): cumulative_yield}`` from MF=8 MT=459, the thermal (first) energy block."""
     lines = path.read_text(encoding="latin-1").splitlines()
-    recs = [ln for ln in lines if len(ln) >= 75 and ln[70:72].strip() == "8" and ln[72:75].strip() == "459"]
+    recs = [
+        ln
+        for ln in lines
+        if len(ln) >= 75 and ln[70:72].strip() == "8" and ln[72:75].strip() == "459"
+    ]
     if not recs:
         raise BuildError(f"{path.name}: no MF=8/MT=459 (cumulative fission yields) section")
 
     def fields(ln: str) -> list[str]:
         return [ln[i : i + 11] for i in range(0, 66, 11)]
 
-    hdr = recs[1]                                      # first LIST = lowest (thermal) energy
+    hdr = recs[1]  # first LIST = lowest (thermal) energy
     energy_eV = _endf_float(hdr[:11])
     nn, nfp = int(hdr[44:55]), int(hdr[55:66])
     if abs(energy_eV - 0.0253) > 1e-3:
@@ -125,8 +164,8 @@ def build_fallout() -> dict:
         if not name:
             continue
         try:
-            rd.Nuclide(name)                           # keep only nuclides the engine can solve
-        except Exception:                              # noqa: BLE001 - unknown to the decay data
+            rd.Nuclide(name)  # keep only nuclides the engine can solve
+        except Exception:  # noqa: BLE001 - unknown to the decay data
             continue
         entries.append({"name": name, "yield_per_fission": y})
 

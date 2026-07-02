@@ -34,7 +34,11 @@ from engine.neutron_dose import NeutronDoseError, NeutronDoseModel
 from engine.neutron_source import NeutronSourceError
 from engine.spent_fuel_neutron import SpentFuelNeutronModel
 from engine.fallout import FalloutError, catalog as _fallout_catalog
-from engine.spent_fuel import SpentFuelError, catalog as _spent_fuel_catalog, load_vector as _spent_fuel_vector
+from engine.spent_fuel import (
+    SpentFuelError,
+    catalog as _spent_fuel_catalog,
+    load_vector as _spent_fuel_vector,
+)
 from engine.photon_interp import OffGridError
 
 #: Expected, structured domain errors — surfaced loudly but without a traceback (the
@@ -138,7 +142,9 @@ def materials() -> str:
             has_rem = neutron_removal.has_material(m)
             # Density from the γ file when present (one source for γ↔n); else the removal file.
             density = (
-                attenuation.density(m) if attenuation.has_material(m) else neutron_removal.density(m)
+                attenuation.density(m)
+                if attenuation.has_material(m)
+                else neutron_removal.density(m)
             )
             out.append(
                 {
@@ -449,11 +455,20 @@ def neutron_dose(handle: str, request_json: str) -> str:
                 # drops the source-γ to null + a loud warning, never blanks the neutron dose.
                 try:
                     gm = GammaDoseModel(
-                        [model.parent], quantity, geometry=geometry, photon_override=override,
+                        [model.parent],
+                        quantity,
+                        geometry=geometry,
+                        photon_override=override,
                         shield=shield if shield else None,
                     )
                     out["source_gamma"] = gm.dose_rate_series(activities, distance_m)
-                except (DoseError, BuildupError, AttenuationError, OffGridError, OverflowError) as exc:
+                except (
+                    DoseError,
+                    BuildupError,
+                    AttenuationError,
+                    OffGridError,
+                    OverflowError,
+                ) as exc:
                     out["warnings"] = [
                         *out.get("warnings", []),
                         {

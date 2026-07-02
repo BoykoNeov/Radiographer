@@ -47,6 +47,7 @@ def _vector() -> dict:
 # 1. Structural.
 # --------------------------------------------------------------------------- #
 
+
 def test_vector_present_and_structural():
     assert VECTOR_ID in fo.available_sources()
     rec = _vector()
@@ -68,16 +69,20 @@ def test_loader_rejects_unknown_vector():
 # 2. Cited goldens — dominant yields match textbook ENDF/B U-235 thermal values.
 # --------------------------------------------------------------------------- #
 
+
 def test_dominant_yields_match_published():
     yld = {e["name"]: e["yield_per_fission"] for e in _vector()["entries"]}
     for name, ref in PUBLISHED_CUMULATIVE_YIELDS.items():
         assert name in yld, f"{name} missing from the fallout vector"
-        assert yld[name] == pytest.approx(ref, rel=0.05), f"{name} yield {yld[name]} vs published {ref}"
+        assert yld[name] == pytest.approx(ref, rel=0.05), (
+            f"{name} yield {yld[name]} vs published {ref}"
+        )
 
 
 # --------------------------------------------------------------------------- #
 # 3. The physics golden — Way–Wigner t⁻¹·² (7:10) decay law.
 # --------------------------------------------------------------------------- #
+
 
 def _slope(grid: list[float], y: list[float]) -> float:
     return (math.log(y[-1]) - math.log(y[0])) / (math.log(grid[-1]) - math.log(grid[0]))
@@ -98,7 +103,9 @@ def test_rendered_gamma_dose_follows_way_wigner_t_minus_1_2():
     grid, res = _fallout_grid(1 * HOUR, 30 * 24 * HOUR)
     dose = GammaDoseModel(res["nuclides"], "ambient_H10").dose_rate_series(res, 1.0)
     slope = _slope(grid, dose["rate_si"])
-    assert slope == pytest.approx(-1.2, abs=0.1), f"rendered γ-dose slope {slope:.3f} ≠ Way–Wigner −1.2"
+    assert slope == pytest.approx(-1.2, abs=0.1), (
+        f"rendered γ-dose slope {slope:.3f} ≠ Way–Wigner −1.2"
+    )
 
 
 def test_gross_gamma_emission_proxy_also_follows_t_minus_1_2():

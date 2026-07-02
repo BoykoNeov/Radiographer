@@ -27,7 +27,7 @@ from engine.inventory import SolvedInventory
 from engine.photon_interp import ABOVE_GRID, BELOW_FLOOR
 
 GBQ = 1.0e9
-CI = 3.7e10            # Bq per curie
+CI = 3.7e10  # Bq per curie
 R_TO_MGY_AIRKERMA = 8.76  # 1 R ≈ 8.76 mGy air kerma
 
 
@@ -36,6 +36,7 @@ def mGy_per_h(gy_per_s: float) -> float:
 
 
 # --- Co-60: the gamma-dose reference case --------------------------------------------
+
 
 def test_co60_air_kerma_rate_constant():
     # Co-60 (1.173 + 1.333 MeV) air-kerma rate constant Γ ≈ 0.308 mGy·m²·GBq⁻¹·h⁻¹
@@ -53,6 +54,7 @@ def test_co60_one_curie_at_one_metre_rule_of_thumb():
 
 
 # --- Cs-137: the secular-equilibrium coupling test -----------------------------------
+
 
 def test_cs137_air_kerma_via_secular_equilibrium():
     # Load Cs-137, decay 1 h (>> Ba-137m's 2.55 min) → equilibrium, then dose-sum BOTH
@@ -77,6 +79,7 @@ def test_cs137_dose_is_emitted_by_ba137m_not_cs137():
 
 # --- conversion-path absolute calibration (separate machinery from μ_en/ρ) -----------
 
+
 def test_co60_hstar10_to_air_kerma_ratio_is_physical():
     # H*(10) runs through a wholly separate path (interp_conversion → pSv·cm²→Sv·m²) than
     # air_kerma (μ_en/ρ). A factor slip in that conversion (the easiest place to drop a
@@ -99,6 +102,7 @@ def test_co60_effective_ap_to_air_kerma_ratio_is_physical():
 
 # --- evaluate-many: the C_n matvec over a time grid ----------------------------------
 
+
 def test_dose_rate_series_is_proportional_to_activity_over_grid():
     # The headline "solve once, evaluate many": dose at each time = (1/4πd²)·Σ C_n·A_n(t).
     # For a single-nuclide source the rate must track the activity exactly across the whole
@@ -117,6 +121,7 @@ def test_dose_rate_series_is_proportional_to_activity_over_grid():
 
 
 # --- per-line decomposition (M6f-2 per-line γ table source) --------------------------
+
 
 def test_per_line_rows_sum_to_coefficient_exactly():
     # The §9 per-line table and the total dose share ONE coefficient-assembly path: a
@@ -155,6 +160,7 @@ def test_per_line_rows_exclude_below_floor_lines():
 
 # --- inverse-square ------------------------------------------------------------------
 
+
 def test_inverse_square_law_exact():
     m = GammaDoseModel(["Co-60"], "air_kerma")
     k1 = m.dose_rate({"Co-60": GBQ}, 1.0)
@@ -163,6 +169,7 @@ def test_inverse_square_law_exact():
 
 
 # --- off-grid: two severities --------------------------------------------------------
+
 
 def test_below_floor_lines_skipped_with_warnings_not_errors():
     # Co-60 carries many sub-10-keV X-ray lines (down to ~14 eV) below the H*(10) 10 keV
@@ -195,6 +202,7 @@ def test_above_grid_line_raises_loudly(monkeypatch):
 
 # --- shielding: no silent surrogate --------------------------------------------------
 
+
 def test_no_buildup_shield_material_raises_loudly():
     # PMMA has no ANS-6.4.3 buildup; a shield calc through it must fail loudly, never
     # silently fall back to B=1 (buildup.py contract, §6.5).
@@ -211,6 +219,7 @@ def test_lead_shield_attenuates_dose():
 
 
 # --- broad-beam HVL / TVL (attenuation + buildup) ------------------------------------
+
 
 def _solve_thickness(material: str, E_MeV: float, frac: float) -> float:
     """Thickness (cm) at which broad-beam transmission B·exp(−μx) drops to ``frac``."""
@@ -261,14 +270,13 @@ def test_broad_beam_tvl_exceeds_narrow_beam_lead():
 # detector. transmission = B_last(E, Σ μx) · exp(−Σ μx): attenuation exact and
 # order-invariant, buildup taken as the detector-side material over the whole depth.
 
+
 def _stack_mfp(layers, E_MeV):
     """Total mean-free-paths Σ μᵢxᵢ of a layer stack at energy E (cm⁻¹ · cm)."""
     from engine import attenuation as att
     from engine import photon_interp as pi
 
-    return sum(
-        pi.interp_mu_rho(mat, E_MeV) * att.density(mat) * x for mat, x in layers
-    )
+    return sum(pi.interp_mu_rho(mat, E_MeV) * att.density(mat) * x for mat, x in layers)
 
 
 def test_stack_single_layer_reduces_to_tuple():
@@ -298,8 +306,8 @@ def test_stack_order_locks_detector_side():
     from engine import photon_interp as pi
 
     E = 1.0
-    lead_water = [("lead", 1.0), ("water", 5.0)]   # detector-side = water
-    water_lead = [("water", 5.0), ("lead", 1.0)]   # detector-side = lead
+    lead_water = [("lead", 1.0), ("water", 5.0)]  # detector-side = water
+    water_lead = [("water", 5.0), ("lead", 1.0)]  # detector-side = lead
 
     mfp = _stack_mfp(lead_water, E)
     assert _stack_mfp(water_lead, E) == pytest.approx(mfp, rel=1e-12)  # (a) same Σμx
@@ -349,6 +357,7 @@ def test_stack_lastlayer_artifact_low_z_behind_high_z():
 # of mfp. The raw G-P form overflows float64; the cap freezes B at the fit limit while the
 # exact exp(−mfp) drives transmission → ~0. The whole γ panel must build, finite, with a
 # §11 honesty note — not crash with a cryptic OverflowError.
+
 
 def test_thick_lead_low_energy_does_not_overflow():
     from engine.buildup import MFP_FIT_MAX

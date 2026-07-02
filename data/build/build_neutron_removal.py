@@ -38,7 +38,7 @@ import sys
 from pathlib import Path
 
 SCHEMA_VERSION = 1
-DATA_DIR = Path(__file__).resolve().parents[1]              # .../data
+DATA_DIR = Path(__file__).resolve().parents[1]  # .../data
 OUT_DIR = DATA_DIR / "neutron_removal"
 ATTEN_DIR = DATA_DIR / "attenuation"
 
@@ -61,10 +61,10 @@ ATOMIC_WEIGHT: dict[str, float] = {
 #: element MUST be in SIGMA_R_MASS_CM2_G — a missing one is a loud build error, never a silent
 #: drop. Paraffin (CₙH₂ₙ₊₂, n=25 representative) is pure H/C, like polyethylene.
 MATERIALS: dict[str, dict[str, int]] = {
-    "water": {"H": 2, "O": 1},          # H₂O
-    "polyethylene": {"C": 1, "H": 2},   # (CH₂)ₙ monomer unit
-    "pmma": {"C": 5, "H": 8, "O": 2},   # C₅H₈O₂ (acrylic / Perspex)
-    "paraffin": {"C": 25, "H": 52},     # CₙH₂ₙ₊₂, n=25 (paraffin wax, ~15 wt% H)
+    "water": {"H": 2, "O": 1},  # H₂O
+    "polyethylene": {"C": 1, "H": 2},  # (CH₂)ₙ monomer unit
+    "pmma": {"C": 5, "H": 8, "O": 2},  # C₅H₈O₂ (acrylic / Perspex)
+    "paraffin": {"C": 25, "H": 52},  # CₙH₂ₙ₊₂, n=25 (paraffin wax, ~15 wt% H)
 }
 
 #: Bulk density (g/cm³) for materials with NO attenuation file (neutron-only shields). Cited
@@ -85,12 +85,19 @@ DENSITY_INLINE: dict[str, tuple[float, str]] = {
 #: hydrogen-presence validity gate and is the published composition's value (auditable, not 0).
 PUBLISHED_REMOVAL: dict[str, dict] = {
     "concrete": {
-        "published_sigma_r_cm1": 0.09989,   # Ahmed et al. (2023) OC-2, ordinary concrete
-        "published_rho_g_cm3": 2.35,        # the density that value was reported at
-        "h_weight_fraction": 0.0056,        # OC-2 Table 1: 0.56 wt% H (lowest of 5 → conservative)
-        "composition_weight_fractions": {   # Ahmed et al. (2023), Table 1 (OC-2), for provenance
-            "H": 0.0056, "O": 0.4956, "Na": 0.0171, "Mg": 0.0011, "Al": 0.0456,
-            "Si": 0.3135, "K": 0.0192, "Ca": 0.0826, "Fe": 0.0122,
+        "published_sigma_r_cm1": 0.09989,  # Ahmed et al. (2023) OC-2, ordinary concrete
+        "published_rho_g_cm3": 2.35,  # the density that value was reported at
+        "h_weight_fraction": 0.0056,  # OC-2 Table 1: 0.56 wt% H (lowest of 5 → conservative)
+        "composition_weight_fractions": {  # Ahmed et al. (2023), Table 1 (OC-2), for provenance
+            "H": 0.0056,
+            "O": 0.4956,
+            "Na": 0.0171,
+            "Mg": 0.0011,
+            "Al": 0.0456,
+            "Si": 0.3135,
+            "K": 0.0192,
+            "Ca": 0.0826,
+            "Fe": 0.0122,
         },
         "method": (
             "published whole-material Σ_R (ordinary concrete, OC-2), mass-normalized and "
@@ -202,7 +209,9 @@ def build_published_material(material: str, spec: dict) -> dict:
         "material": material,
         "rho_g_cm3": rho,
         "rho_source": rho_src,
-        "weight_fractions": {el: round(f, 6) for el, f in spec["composition_weight_fractions"].items()},
+        "weight_fractions": {
+            el: round(f, 6) for el, f in spec["composition_weight_fractions"].items()
+        },
         "hydrogen_weight_fraction": round(wh, 6),
         "sigma_r_mass_cm2_g": round(sigma_mass, 6),
         "sigma_r_cm1": round(sigma_r, 6),
@@ -244,15 +253,19 @@ def main() -> int:
         rec = build_material(material, stoich)
         out = OUT_DIR / f"{material}.json"
         out.write_text(json.dumps(rec, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        print(f"  {material:14s} rho={rec['rho_g_cm3']:.3f}  SigmaR/rho={rec['sigma_r_mass_cm2_g']:.4f} "
-              f"cm2/g  SigmaR={rec['sigma_r_cm1']:.4f} cm-1  (w_H={rec['hydrogen_weight_fraction']:.3f})")
+        print(
+            f"  {material:14s} rho={rec['rho_g_cm3']:.3f}  SigmaR/rho={rec['sigma_r_mass_cm2_g']:.4f} "
+            f"cm2/g  SigmaR={rec['sigma_r_cm1']:.4f} cm-1  (w_H={rec['hydrogen_weight_fraction']:.3f})"
+        )
         written += 1
     for material, spec in PUBLISHED_REMOVAL.items():
         rec = build_published_material(material, spec)
         out = OUT_DIR / f"{material}.json"
         out.write_text(json.dumps(rec, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        print(f"  {material:14s} rho={rec['rho_g_cm3']:.3f}  SigmaR/rho={rec['sigma_r_mass_cm2_g']:.4f} "
-              f"cm2/g  SigmaR={rec['sigma_r_cm1']:.4f} cm-1  (w_H={rec['hydrogen_weight_fraction']:.3f}) [published]")
+        print(
+            f"  {material:14s} rho={rec['rho_g_cm3']:.3f}  SigmaR/rho={rec['sigma_r_mass_cm2_g']:.4f} "
+            f"cm2/g  SigmaR={rec['sigma_r_cm1']:.4f} cm-1  (w_H={rec['hydrogen_weight_fraction']:.3f}) [published]"
+        )
         written += 1
     print(f"Wrote {written} removal-cross-section files to {OUT_DIR}")
     return 0

@@ -34,7 +34,7 @@ SOURCE = (
 )
 RESPONSE = "exposure"
 
-DATA_DIR = Path(__file__).resolve().parents[1]               # .../data
+DATA_DIR = Path(__file__).resolve().parents[1]  # .../data
 VENDOR_DIR = DATA_DIR / "vendor" / "ans643"
 PDF_PATH = VENDOR_DIR / "NUREG-CR-5740.pdf"
 TRANSCRIPTION_PATH = VENDOR_DIR / "gp_exposure_transcription.json"
@@ -42,9 +42,7 @@ OUT_DIR = DATA_DIR / "buildup"
 
 # Pinned hash of the vendored source-of-record PDF. Re-keying from a different scan
 # (or a corrupted file) must fail rather than silently rebuild.
-EXPECTED_PDF_SHA256 = (
-    "96e102faee3b40c93f78b0ca9d190c6b10bf602b9f6a8cde01cfff8d9df68aa8"
-)
+EXPECTED_PDF_SHA256 = "96e102faee3b40c93f78b0ca9d190c6b10bf602b9f6a8cde01cfff8d9df68aa8"
 
 # The ANS-6.4.3 source-energy span (15 keV – 15 MeV). Rows outside are not data.
 E_MIN_MEV, E_MAX_MEV = 0.015, 15.0

@@ -36,11 +36,12 @@ from engine.neutron_dose import (
     neutron_transmission,
 )
 
-SV_S_TO_MREM_H = 3.6e8        # Sv/s → mrem/h  (×3600 s/h × 1e5 mrem/Sv)
-SV_S_TO_USV_H = 3.6e9         # Sv/s → µSv/h
+SV_S_TO_MREM_H = 3.6e8  # Sv/s → mrem/h  (×3600 s/h × 1e5 mrem/Sv)
+SV_S_TO_USV_H = 3.6e9  # Sv/s → µSv/h
 
 
 # --- the validation triangle ---------------------------------------------------------
+
 
 def test_cf252_spectrum_averaged_h10_matches_published():
     # Fold (reconstructed Maxwellian × vendored ICRP-74 neutron table) vs an EXTERNALLY READ
@@ -94,6 +95,7 @@ def test_cf252_dose_rate_constant_per_microgram_at_1m():
 
 # --- quantities: both Sv, w_R not double-counted, geometry asymmetry ------------------
 
+
 def test_both_quantities_are_sv_and_effective_below_h10():
     h10 = NeutronDoseModel("Cf-252", "ambient_H10")
     eff_iso = NeutronDoseModel("Cf-252", "effective", geometry="ISO")
@@ -111,14 +113,15 @@ def test_both_quantities_are_sv_and_effective_below_h10():
 
 def test_quantity_geometry_guards():
     with pytest.raises(NeutronDoseError):
-        NeutronDoseModel("Cf-252", "effective")              # effective needs a geometry
+        NeutronDoseModel("Cf-252", "effective")  # effective needs a geometry
     with pytest.raises(NeutronDoseError):
         NeutronDoseModel("Cf-252", "ambient_H10", geometry="AP")  # H*(10) takes none
     with pytest.raises(NeutronDoseError):
-        NeutronDoseModel("Cf-252", "equivalent")             # unknown quantity
+        NeutronDoseModel("Cf-252", "equivalent")  # unknown quantity
 
 
 # --- gray-out gate / missing-data loudness -------------------------------------------
+
 
 def test_unknown_source_raises_loudly():
     with pytest.raises(NeutronDoseError):
@@ -128,17 +131,18 @@ def test_unknown_source_raises_loudly():
 def test_missing_parent_activity_raises():
     m = NeutronDoseModel("Cf-252", "ambient_H10")
     with pytest.raises(NeutronDoseError):
-        m.dose_rate({"Co-60": 1.0e9}, 1.0)                   # parent Cf-252 absent
+        m.dose_rate({"Co-60": 1.0e9}, 1.0)  # parent Cf-252 absent
     with pytest.raises(NeutronDoseError):
-        m.dose_rate({"Cf-252": 1.0e9}, 0.0)                  # singular at d=0
+        m.dose_rate({"Cf-252": 1.0e9}, 0.0)  # singular at d=0
 
 
 # --- solve-once / evaluate-many: the per-decay coeff matvec over a time grid ----------
 
+
 def test_dose_rate_series_tracks_parent_activity_over_grid():
     inv = SolvedInventory.from_spec({"Cf-252": 1.0}, "ug")
     yr = 365.25 * 24 * 3600.0
-    grid = [0.0, 2.645 * yr, 2 * 2.645 * yr]   # 0, 1, 2 Cf-252 half-lives
+    grid = [0.0, 2.645 * yr, 2 * 2.645 * yr]  # 0, 1, 2 Cf-252 half-lives
     res = inv.evaluate(grid, axis="activity", unit="Bq")
     m = NeutronDoseModel("Cf-252", "ambient_H10")
     out = m.dose_rate_series(res, 1.0)
@@ -161,6 +165,7 @@ def test_dose_rate_series_rejects_non_activity_result():
 
 # --- source-correlated gamma override -------------------------------------------------
 
+
 def test_cf252_source_gamma_override_empty():
     # Cf-252 prompt-fission γ is a continuum, not modeled in M5 (honesty register); the
     # override is empty (AmBe's discrete 4.438 MeV line would populate it).
@@ -169,6 +174,7 @@ def test_cf252_source_gamma_override_empty():
 
 
 # --- off-grid: above the 20 MeV neutron H*(10) grid is a loud error -------------------
+
 
 def test_above_grid_spectrum_bin_raises(monkeypatch):
     # Dropping flux above the grid UNDERESTIMATES dose — the dangerous direction. Inject a
@@ -229,8 +235,8 @@ def test_mixed_stack_attenuates_only_hydrogenous_with_composite_caveat():
     # The lead layer contributes nothing (transparent); only the water removes neutrons.
     assert T == pytest.approx(math.exp(-sig * 10.0), rel=1e-12)
     reasons = {w.get("reason") for w in warns}
-    assert "neutron_transparent" in reasons          # the lead layer is flagged, not silent
-    assert "composite_order_unmodeled" in reasons    # mixed-stack order caveat (parallels M8)
+    assert "neutron_transparent" in reasons  # the lead layer is flagged, not silent
+    assert "composite_order_unmodeled" in reasons  # mixed-stack order caveat (parallels M8)
 
 
 def test_model_folds_transmission_into_coeff_leaving_hbar_untouched():
@@ -250,9 +256,9 @@ def test_model_dose_rate_scales_by_transmission():
     acts = {n: res["series"][n][0] for n in res["nuclides"]}
     sig = nr.sigma_r_cm1("water")
     bare = NeutronDoseModel("Cf-252", "ambient_H10").dose_rate(acts, 1.0)
-    shielded = NeutronDoseModel(
-        "Cf-252", "ambient_H10", shield=[("water", 9.6)]
-    ).dose_rate(acts, 1.0)
+    shielded = NeutronDoseModel("Cf-252", "ambient_H10", shield=[("water", 9.6)]).dose_rate(
+        acts, 1.0
+    )
     assert shielded / bare == pytest.approx(math.exp(-sig * 9.6), rel=1e-9)
 
 

@@ -82,7 +82,9 @@ def load(source_key: str) -> dict:
         raise NeutronSourceError(f"{source_key}: missing/empty parent_nuclide")
     npd = data.get("neutrons_per_decay")
     if not isinstance(npd, (int, float)) or not (math.isfinite(npd) and npd > 0):
-        raise NeutronSourceError(f"{source_key}: neutrons_per_decay must be a positive number, got {npd!r}")
+        raise NeutronSourceError(
+            f"{source_key}: neutrons_per_decay must be a positive number, got {npd!r}"
+        )
 
     spec = data.get("spectrum") or {}
     lo, hi, frac = spec.get("E_lo_MeV"), spec.get("E_hi_MeV"), spec.get("fluence_frac")

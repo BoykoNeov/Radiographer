@@ -63,7 +63,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-SCHEMA_VERSION = 2  # v2 adds gas/vapour chemical forms (H-3 HTO/OBT, iodine elemental/methyl vapour)
+SCHEMA_VERSION = (
+    2  # v2 adds gas/vapour chemical forms (H-3 HTO/OBT, iodine elemental/methyl vapour)
+)
 UNITS = "Sv_per_Bq"
 PROGENY_CONVENTION = "parent_only_in_vivo_ingrowth"  # NOT the "+"-bundled equilibrium entries
 
@@ -88,54 +90,80 @@ WORKER = {
         # lists Polonium "Unspecified compounds" = Type F (f1 0.1) — the LOCKED catch-all rule —
         # while the original micro-slice chose M as "commonly-cited". A re-verify against Table E.1
         # caught the rule violation; switched to F (folds 7.1E-07 not 2.2E-06). See PROVENANCE.md.
-        "Po-210": {"ingestion": {"e_Sv_Bq": 2.4e-07, "f1": 0.1},
-                   "inhalation": {"default_type": "F", "types": {"F": 7.1e-07, "M": 2.2e-06}}},
+        "Po-210": {
+            "ingestion": {"e_Sv_Bq": 2.4e-07, "f1": 0.1},
+            "inhalation": {"default_type": "F", "types": {"F": 7.1e-07, "M": 2.2e-06}},
+        },
         # Ra-226  (printed p.53): ingestion f1 0.2; inhalation 5µm M only
-        "Ra-226": {"ingestion": {"e_Sv_Bq": 2.8e-07, "f1": 0.2},
-                   "inhalation": {"default_type": "M", "types": {"M": 2.2e-06}}},
+        "Ra-226": {
+            "ingestion": {"e_Sv_Bq": 2.8e-07, "f1": 0.2},
+            "inhalation": {"default_type": "M", "types": {"M": 2.2e-06}},
+        },
         # U-238   (printed p.54): ingestion f1 0.02; inhalation 5µm F/M/S
         # NOTE (M13 actinide-expansion batch): worker 5µm S CORRECTED 6.3E-06 -> 5.7E-06. The
         # 6.3E-06 was U-236's 5µm S (adjacent row); a 300-DPI crop of printed p.54 gives U-238
         # 5µm S = 5.7E-06 (1µm S = 7.3E-06). This shipped value was never cross-checked because
         # the build's inhalation check validates the 1µm column, not the shipped worker 5µm, and
         # S is a non-default type (never folded in v1). See PROVENANCE.md.
-        "U-238": {"ingestion": {"e_Sv_Bq": 4.4e-08, "f1": 0.02},
-                  "inhalation": {"default_type": "M",
-                                 "types": {"F": 5.8e-07, "M": 1.6e-06, "S": 5.7e-06}}},
+        "U-238": {
+            "ingestion": {"e_Sv_Bq": 4.4e-08, "f1": 0.02},
+            "inhalation": {
+                "default_type": "M",
+                "types": {"F": 5.8e-07, "M": 1.6e-06, "S": 5.7e-06},
+            },
+        },
         # Pu-239  (printed p.55): ingestion f1 0.0005; inhalation 5µm M/S
-        "Pu-239": {"ingestion": {"e_Sv_Bq": 2.5e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 3.2e-05, "S": 8.3e-06}}},
+        "Pu-239": {
+            "ingestion": {"e_Sv_Bq": 2.5e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 3.2e-05, "S": 8.3e-06}},
+        },
         # Am-241  (printed p.56): ingestion f1 0.0005; inhalation 5µm M only
-        "Am-241": {"ingestion": {"e_Sv_Bq": 2.0e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 2.7e-05}}},
-
+        "Am-241": {
+            "ingestion": {"e_Sv_Bq": 2.0e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 2.7e-05}},
+        },
         # --- M13 fission/activation-product batch (default-type-only inhalation, 5 µm) ---
         # default_type = ICRP-119 Annex E "unspecified compounds" catch-all per element.
         # Co-60  (Annex A printed p.28): ingestion f1 0.1; inhalation 5µm M (Annex E: Co M)
-        "Co-60": {"ingestion": {"e_Sv_Bq": 3.4e-09, "f1": 0.1},
-                  "inhalation": {"default_type": "M", "types": {"M": 7.1e-09}}},
+        "Co-60": {
+            "ingestion": {"e_Sv_Bq": 3.4e-09, "f1": 0.1},
+            "inhalation": {"default_type": "M", "types": {"M": 7.1e-09}},
+        },
         # Se-79  (printed p.30): ingestion f1 0.8; inhalation 5µm F (Annex E: Se F)
-        "Se-79": {"ingestion": {"e_Sv_Bq": 2.9e-09, "f1": 0.8},
-                  "inhalation": {"default_type": "F", "types": {"F": 1.6e-09}}},
+        "Se-79": {
+            "ingestion": {"e_Sv_Bq": 2.9e-09, "f1": 0.8},
+            "inhalation": {"default_type": "F", "types": {"F": 1.6e-09}},
+        },
         # Sr-90  (printed p.31): ingestion f1 0.3; inhalation 5µm F (Annex E: Sr F)
-        "Sr-90": {"ingestion": {"e_Sv_Bq": 2.8e-08, "f1": 0.3},
-                  "inhalation": {"default_type": "F", "types": {"F": 3.0e-08}}},
+        "Sr-90": {
+            "ingestion": {"e_Sv_Bq": 2.8e-08, "f1": 0.3},
+            "inhalation": {"default_type": "F", "types": {"F": 3.0e-08}},
+        },
         # Tc-99  (printed p.33): ingestion f1 0.8; inhalation 5µm F (Annex E: Tc F)
-        "Tc-99": {"ingestion": {"e_Sv_Bq": 7.8e-10, "f1": 0.8},
-                  "inhalation": {"default_type": "F", "types": {"F": 4.0e-10}}},
+        "Tc-99": {
+            "ingestion": {"e_Sv_Bq": 7.8e-10, "f1": 0.8},
+            "inhalation": {"default_type": "F", "types": {"F": 4.0e-10}},
+        },
         # Ru-106 (printed p.34): ingestion f1 0.05; inhalation 5µm F (Annex E: Ru F)
-        "Ru-106": {"ingestion": {"e_Sv_Bq": 7.0e-09, "f1": 0.05},
-                   "inhalation": {"default_type": "F", "types": {"F": 9.8e-09}}},
+        "Ru-106": {
+            "ingestion": {"e_Sv_Bq": 7.0e-09, "f1": 0.05},
+            "inhalation": {"default_type": "F", "types": {"F": 9.8e-09}},
+        },
         # Cs-134 (printed p.40): ingestion f1 1.0; inhalation 5µm F (Annex E: Cs F, all compounds)
-        "Cs-134": {"ingestion": {"e_Sv_Bq": 1.9e-08, "f1": 1.0},
-                   "inhalation": {"default_type": "F", "types": {"F": 9.6e-09}}},
+        "Cs-134": {
+            "ingestion": {"e_Sv_Bq": 1.9e-08, "f1": 1.0},
+            "inhalation": {"default_type": "F", "types": {"F": 9.6e-09}},
+        },
         # Cs-137 (printed p.40): ingestion f1 1.0; inhalation 5µm F
-        "Cs-137": {"ingestion": {"e_Sv_Bq": 1.3e-08, "f1": 1.0},
-                   "inhalation": {"default_type": "F", "types": {"F": 6.7e-09}}},
+        "Cs-137": {
+            "ingestion": {"e_Sv_Bq": 1.3e-08, "f1": 1.0},
+            "inhalation": {"default_type": "F", "types": {"F": 6.7e-09}},
+        },
         # Ce-144 (printed p.41): ingestion f1 0.0005; inhalation 5µm M (Annex E: Ce M)
-        "Ce-144": {"ingestion": {"e_Sv_Bq": 5.2e-09, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 2.3e-08}}},
-
+        "Ce-144": {
+            "ingestion": {"e_Sv_Bq": 5.2e-09, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 2.3e-08}},
+        },
         # ============ M13 ACTINIDE-EXPANSION BATCH (all tabulated F/M/S) ============
         # User chose full F/M/S capture (extension-ready for the per-nuclide type toggle), so
         # every tabulated type ships and gets a worker-1µm counterpart in _WORKER_1UM. Worker
@@ -143,41 +171,74 @@ WORKER = {
         # values 300-DPI crop-verified (the full-page Annex G adult column miscounts — see
         # PROVENANCE). default_type per element from Annex E (U: M).
         # --- Uranium (printed p.54; Annex A) ---
-        "U-234": {"ingestion": {"e_Sv_Bq": 4.9e-08, "f1": 0.02},
-                  "inhalation": {"default_type": "M",
-                                 "types": {"F": 6.4e-07, "M": 2.1e-06, "S": 6.8e-06}}},
-        "U-235": {"ingestion": {"e_Sv_Bq": 4.6e-08, "f1": 0.02},
-                  "inhalation": {"default_type": "M",
-                                 "types": {"F": 6.0e-07, "M": 1.8e-06, "S": 6.1e-06}}},
-        "U-236": {"ingestion": {"e_Sv_Bq": 4.6e-08, "f1": 0.02},
-                  "inhalation": {"default_type": "M",
-                                 "types": {"F": 6.1e-07, "M": 1.9e-06, "S": 6.3e-06}}},
+        "U-234": {
+            "ingestion": {"e_Sv_Bq": 4.9e-08, "f1": 0.02},
+            "inhalation": {
+                "default_type": "M",
+                "types": {"F": 6.4e-07, "M": 2.1e-06, "S": 6.8e-06},
+            },
+        },
+        "U-235": {
+            "ingestion": {"e_Sv_Bq": 4.6e-08, "f1": 0.02},
+            "inhalation": {
+                "default_type": "M",
+                "types": {"F": 6.0e-07, "M": 1.8e-06, "S": 6.1e-06},
+            },
+        },
+        "U-236": {
+            "ingestion": {"e_Sv_Bq": 4.6e-08, "f1": 0.02},
+            "inhalation": {
+                "default_type": "M",
+                "types": {"F": 6.1e-07, "M": 1.9e-06, "S": 6.3e-06},
+            },
+        },
         # --- Neptunium (printed p.55; Annex A) — worker tabulates Type M ONLY (no F/S to ship) ---
-        "Np-237": {"ingestion": {"e_Sv_Bq": 1.1e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 1.5e-05}}},
+        "Np-237": {
+            "ingestion": {"e_Sv_Bq": 1.1e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 1.5e-05}},
+        },
         # --- Plutonium (printed p.55; Annex A) — worker tabulates M & S only (no F); default M ---
-        "Pu-238": {"ingestion": {"e_Sv_Bq": 2.3e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 3.0e-05, "S": 1.1e-05}}},
-        "Pu-240": {"ingestion": {"e_Sv_Bq": 2.5e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 3.2e-05, "S": 8.3e-06}}},
-        "Pu-241": {"ingestion": {"e_Sv_Bq": 4.7e-09, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 5.8e-07, "S": 8.4e-08}}},
-        "Pu-242": {"ingestion": {"e_Sv_Bq": 2.4e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 3.1e-05, "S": 7.7e-06}}},
+        "Pu-238": {
+            "ingestion": {"e_Sv_Bq": 2.3e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 3.0e-05, "S": 1.1e-05}},
+        },
+        "Pu-240": {
+            "ingestion": {"e_Sv_Bq": 2.5e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 3.2e-05, "S": 8.3e-06}},
+        },
+        "Pu-241": {
+            "ingestion": {"e_Sv_Bq": 4.7e-09, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 5.8e-07, "S": 8.4e-08}},
+        },
+        "Pu-242": {
+            "ingestion": {"e_Sv_Bq": 2.4e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 3.1e-05, "S": 7.7e-06}},
+        },
         # --- Americium & Curium (printed p.56; Annex A) — worker tabulates Type M ONLY ---
-        "Am-243": {"ingestion": {"e_Sv_Bq": 2.0e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 2.7e-05}}},
-        "Cm-242": {"ingestion": {"e_Sv_Bq": 1.2e-08, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 3.7e-06}}},
-        "Cm-243": {"ingestion": {"e_Sv_Bq": 1.5e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 2.0e-05}}},
-        "Cm-244": {"ingestion": {"e_Sv_Bq": 1.2e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 1.7e-05}}},
-        "Cm-245": {"ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 2.7e-05}}},
-        "Cm-246": {"ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 2.7e-05}}},
-
+        "Am-243": {
+            "ingestion": {"e_Sv_Bq": 2.0e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 2.7e-05}},
+        },
+        "Cm-242": {
+            "ingestion": {"e_Sv_Bq": 1.2e-08, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 3.7e-06}},
+        },
+        "Cm-243": {
+            "ingestion": {"e_Sv_Bq": 1.5e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 2.0e-05}},
+        },
+        "Cm-244": {
+            "ingestion": {"e_Sv_Bq": 1.2e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 1.7e-05}},
+        },
+        "Cm-245": {
+            "ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 2.7e-05}},
+        },
+        "Cm-246": {
+            "ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 2.7e-05}},
+        },
         # ===== M13 ACTINIDE REMAINDER — Thorium & Protactinium (worker Annex A, 5 µm) =====
         # Th (printed p.53) / Pa (printed p.54). Worker tabulates Type M & S only (no F); default
         # M per Annex E (Th & Pa "unspecified compounds" = Type M, f1 5E-04). The shipped 5 µm
@@ -187,15 +248,22 @@ WORKER = {
         # ingestion ships the f1 5E-04 value (== public Annex F → equal-f1 check holds). A full-page
         # read of Pa-231 S had miscounted Pa-230's row (5.7E-07/7.1E-07); the crop gives the true
         # Pa-231 S 5µm 1.7E-05 (1µm 3.2E-05). See PROVENANCE "errors caught".
-        "Th-228": {"ingestion": {"e_Sv_Bq": 7.2e-08, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 2.2e-05, "S": 2.5e-05}}},
-        "Th-230": {"ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 2.8e-05, "S": 7.2e-06}}},
-        "Th-232": {"ingestion": {"e_Sv_Bq": 2.2e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 2.9e-05, "S": 1.2e-05}}},
-        "Pa-231": {"ingestion": {"e_Sv_Bq": 7.1e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 8.9e-05, "S": 1.7e-05}}},
-
+        "Th-228": {
+            "ingestion": {"e_Sv_Bq": 7.2e-08, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 2.2e-05, "S": 2.5e-05}},
+        },
+        "Th-230": {
+            "ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 2.8e-05, "S": 7.2e-06}},
+        },
+        "Th-232": {
+            "ingestion": {"e_Sv_Bq": 2.2e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 2.9e-05, "S": 1.2e-05}},
+        },
+        "Pa-231": {
+            "ingestion": {"e_Sv_Bq": 7.1e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 8.9e-05, "S": 1.7e-05}},
+        },
         # ============ M13 NON-ACTINIDE EXPANSION (default type only, 5 µm) ============
         # Fission/activation products outside the actinides. Ship the ICRP default type ONLY
         # (Annex E "unspecified compounds" catch-all per element: Pb F, Sb F, Sn F, Pm M, Eu M),
@@ -205,19 +273,30 @@ WORKER = {
         # The shipped 5 µm value was 300-DPI crop-read TWICE (it is the one column the build's
         # inhalation cross-check never touches — the U-238 soft spot; see PROVENANCE.md).
         # Pb-210 (printed p.51), Sb-125 (p.38), Sn-126 (p.37), Pm-147 (p.42), Eu-154/155 (p.43).
-        "Pb-210": {"ingestion": {"e_Sv_Bq": 6.8e-07, "f1": 0.2},
-                   "inhalation": {"default_type": "F", "types": {"F": 1.1e-06}}},
-        "Sb-125": {"ingestion": {"e_Sv_Bq": 1.1e-09, "f1": 0.1},
-                   "inhalation": {"default_type": "F", "types": {"F": 1.7e-09}}},
-        "Sn-126": {"ingestion": {"e_Sv_Bq": 4.7e-09, "f1": 0.02},
-                   "inhalation": {"default_type": "F", "types": {"F": 1.4e-08}}},
-        "Pm-147": {"ingestion": {"e_Sv_Bq": 2.6e-10, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 3.5e-09}}},
-        "Eu-154": {"ingestion": {"e_Sv_Bq": 2.0e-09, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 3.5e-08}}},
-        "Eu-155": {"ingestion": {"e_Sv_Bq": 3.2e-10, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 4.7e-09}}},
-
+        "Pb-210": {
+            "ingestion": {"e_Sv_Bq": 6.8e-07, "f1": 0.2},
+            "inhalation": {"default_type": "F", "types": {"F": 1.1e-06}},
+        },
+        "Sb-125": {
+            "ingestion": {"e_Sv_Bq": 1.1e-09, "f1": 0.1},
+            "inhalation": {"default_type": "F", "types": {"F": 1.7e-09}},
+        },
+        "Sn-126": {
+            "ingestion": {"e_Sv_Bq": 4.7e-09, "f1": 0.02},
+            "inhalation": {"default_type": "F", "types": {"F": 1.4e-08}},
+        },
+        "Pm-147": {
+            "ingestion": {"e_Sv_Bq": 2.6e-10, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 3.5e-09}},
+        },
+        "Eu-154": {
+            "ingestion": {"e_Sv_Bq": 2.0e-09, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 3.5e-08}},
+        },
+        "Eu-155": {
+            "ingestion": {"e_Sv_Bq": 3.2e-10, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 4.7e-09}},
+        },
         # ============ M13 GAS/VAPOUR BATCH (schema v2 — chemical forms, NOT F/M/S) ============
         # H-3 and iodine are inhaled/ingested as gases/vapours, not particulate aerosols, so they
         # carry chemical-FORM tokens (no AMAD): H-3 inhalation/ingestion HTO vs OBT (ICRP-119 Annex
@@ -229,17 +308,30 @@ WORKER = {
         # Worker (ICRP-68) and public-adult (ICRP-72) values are IDENTICAL for these forms — the
         # gas/vapour coefficient is reference-adult and age-independent (ICRP-72 Annex H "Adult"
         # column == ICRP-68 Annex B/H value); the cross-check below confirms it form-by-form.
-        "H-3": {"ingestion": {"default_form": "HTO",
-                              "forms": {"HTO": {"e_Sv_Bq": 1.8e-11, "f1": 1.0},
-                                        "OBT": {"e_Sv_Bq": 4.2e-11, "f1": 1.0}}},
-                "inhalation": {"default_type": "HTO",
-                               "types": {"HTO": 1.8e-11, "OBT": 4.1e-11}}},
-        "I-129": {"ingestion": {"e_Sv_Bq": 1.1e-07, "f1": 1.0},
-                  "inhalation": {"default_type": "vapour_elemental",
-                                 "types": {"vapour_elemental": 9.6e-08, "vapour_methyl": 7.4e-08}}},
-        "I-131": {"ingestion": {"e_Sv_Bq": 2.2e-08, "f1": 1.0},
-                  "inhalation": {"default_type": "vapour_elemental",
-                                 "types": {"vapour_elemental": 2.0e-08, "vapour_methyl": 1.5e-08}}},
+        "H-3": {
+            "ingestion": {
+                "default_form": "HTO",
+                "forms": {
+                    "HTO": {"e_Sv_Bq": 1.8e-11, "f1": 1.0},
+                    "OBT": {"e_Sv_Bq": 4.2e-11, "f1": 1.0},
+                },
+            },
+            "inhalation": {"default_type": "HTO", "types": {"HTO": 1.8e-11, "OBT": 4.1e-11}},
+        },
+        "I-129": {
+            "ingestion": {"e_Sv_Bq": 1.1e-07, "f1": 1.0},
+            "inhalation": {
+                "default_type": "vapour_elemental",
+                "types": {"vapour_elemental": 9.6e-08, "vapour_methyl": 7.4e-08},
+            },
+        },
+        "I-131": {
+            "ingestion": {"e_Sv_Bq": 2.2e-08, "f1": 1.0},
+            "inhalation": {
+                "default_type": "vapour_elemental",
+                "types": {"vapour_elemental": 2.0e-08, "vapour_methyl": 1.5e-08},
+            },
+        },
     },
 }
 
@@ -256,133 +348,219 @@ PUBLIC_ADULT = {
     "coefficients": {
         # Po-210  (Annex F printed p.84 / Annex G printed p.114): ingestion f1 0.5
         # default_type F (corrected from M; Annex E catch-all — see worker block). Folds 6.0E-07.
-        "Po-210": {"ingestion": {"e_Sv_Bq": 1.2e-06, "f1": 0.5},
-                   "inhalation": {"default_type": "F",
-                                  "types": {"F": 6.0e-07, "M": 3.3e-06}}},   # dropped S (no worker S)
-        "Ra-226": {"ingestion": {"e_Sv_Bq": 2.8e-07, "f1": 0.2},
-                   "inhalation": {"default_type": "M",
-                                  "types": {"M": 3.5e-06}}},                 # dropped F,S (no worker F,S)
-        "U-238": {"ingestion": {"e_Sv_Bq": 4.5e-08, "f1": 0.02},
-                  "inhalation": {"default_type": "M",
-                                 "types": {"F": 5.0e-07, "M": 2.9e-06, "S": 8.0e-06}}},
-        "Pu-239": {"ingestion": {"e_Sv_Bq": 2.5e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M",
-                                  "types": {"M": 5.0e-05, "S": 1.6e-05}}},   # dropped suspect F
+        "Po-210": {
+            "ingestion": {"e_Sv_Bq": 1.2e-06, "f1": 0.5},
+            "inhalation": {"default_type": "F", "types": {"F": 6.0e-07, "M": 3.3e-06}},
+        },  # dropped S (no worker S)
+        "Ra-226": {
+            "ingestion": {"e_Sv_Bq": 2.8e-07, "f1": 0.2},
+            "inhalation": {"default_type": "M", "types": {"M": 3.5e-06}},
+        },  # dropped F,S (no worker F,S)
+        "U-238": {
+            "ingestion": {"e_Sv_Bq": 4.5e-08, "f1": 0.02},
+            "inhalation": {
+                "default_type": "M",
+                "types": {"F": 5.0e-07, "M": 2.9e-06, "S": 8.0e-06},
+            },
+        },
+        "Pu-239": {
+            "ingestion": {"e_Sv_Bq": 2.5e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 5.0e-05, "S": 1.6e-05}},
+        },  # dropped suspect F
         # Am-241: M adult = 4.2E-05 (corrected from a first-pass misread of 9.6E-05 = the F row)
-        "Am-241": {"ingestion": {"e_Sv_Bq": 2.0e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M",
-                                  "types": {"M": 4.2e-05}}},                 # dropped F,S (no worker F,S)
-
+        "Am-241": {
+            "ingestion": {"e_Sv_Bq": 2.0e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 4.2e-05}},
+        },  # dropped F,S (no worker F,S)
         # --- M13 fission/activation-product batch (default-type-only inhalation, 1 µm adult) ---
         # Ingestion = Annex F "Adult" column + the adult f1 (footnote-adjusted where flagged).
         # Inhalation = Annex G "Adult" column, default type only (crop-read; cross-checked vs the
         # worker 1 µm column in _WORKER_1UM below). Co-60 (printed p.72/89), Se-79 (73/91),
         # Sr-90 (74/93), Tc-99 (75/95), Ru-106 (75/96), Cs-134/137 (77/102), Ce-144 (78/103).
-        "Co-60": {"ingestion": {"e_Sv_Bq": 3.4e-09, "f1": 0.1},     # adult f1 0.1 (Annex F **)
-                  "inhalation": {"default_type": "M", "types": {"M": 1.0e-08}}},
-        "Se-79": {"ingestion": {"e_Sv_Bq": 2.9e-09, "f1": 0.8},
-                  "inhalation": {"default_type": "F", "types": {"F": 1.1e-09}}},
-        "Sr-90": {"ingestion": {"e_Sv_Bq": 2.8e-08, "f1": 0.3},     # adult f1 0.3 (Annex F *)
-                  "inhalation": {"default_type": "F", "types": {"F": 2.4e-08}}},
+        "Co-60": {
+            "ingestion": {"e_Sv_Bq": 3.4e-09, "f1": 0.1},  # adult f1 0.1 (Annex F **)
+            "inhalation": {"default_type": "M", "types": {"M": 1.0e-08}},
+        },
+        "Se-79": {
+            "ingestion": {"e_Sv_Bq": 2.9e-09, "f1": 0.8},
+            "inhalation": {"default_type": "F", "types": {"F": 1.1e-09}},
+        },
+        "Sr-90": {
+            "ingestion": {"e_Sv_Bq": 2.8e-08, "f1": 0.3},  # adult f1 0.3 (Annex F *)
+            "inhalation": {"default_type": "F", "types": {"F": 2.4e-08}},
+        },
         # Tc-99 DIFFERING-f1 exception: public adult ingestion f1 0.5 vs worker 0.8 (see set below)
-        "Tc-99": {"ingestion": {"e_Sv_Bq": 6.4e-10, "f1": 0.5},
-                  "inhalation": {"default_type": "F", "types": {"F": 2.9e-10}}},
-        "Ru-106": {"ingestion": {"e_Sv_Bq": 7.0e-09, "f1": 0.05},
-                   "inhalation": {"default_type": "F", "types": {"F": 7.9e-09}}},
-        "Cs-134": {"ingestion": {"e_Sv_Bq": 1.9e-08, "f1": 1.0},
-                   "inhalation": {"default_type": "F", "types": {"F": 6.6e-09}}},
-        "Cs-137": {"ingestion": {"e_Sv_Bq": 1.3e-08, "f1": 1.0},
-                   "inhalation": {"default_type": "F", "types": {"F": 4.6e-09}}},
-        "Ce-144": {"ingestion": {"e_Sv_Bq": 5.2e-09, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 3.6e-08}}},
-
+        "Tc-99": {
+            "ingestion": {"e_Sv_Bq": 6.4e-10, "f1": 0.5},
+            "inhalation": {"default_type": "F", "types": {"F": 2.9e-10}},
+        },
+        "Ru-106": {
+            "ingestion": {"e_Sv_Bq": 7.0e-09, "f1": 0.05},
+            "inhalation": {"default_type": "F", "types": {"F": 7.9e-09}},
+        },
+        "Cs-134": {
+            "ingestion": {"e_Sv_Bq": 1.9e-08, "f1": 1.0},
+            "inhalation": {"default_type": "F", "types": {"F": 6.6e-09}},
+        },
+        "Cs-137": {
+            "ingestion": {"e_Sv_Bq": 1.3e-08, "f1": 1.0},
+            "inhalation": {"default_type": "F", "types": {"F": 4.6e-09}},
+        },
+        "Ce-144": {
+            "ingestion": {"e_Sv_Bq": 5.2e-09, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 3.6e-08}},
+        },
         # ============ M13 ACTINIDE-EXPANSION BATCH (all tabulated F/M/S) ============
         # Public adult: Annex F (ingestion, "Adult" column) + Annex G (inhalation, 1 µm "Adult"
         # column). Inhalation adult values are 300-DPI crop-verified (full-page reads miscount the
         # adult vs 15y column). Each type cross-checked vs the worker 1 µm column (_WORKER_1UM).
         # --- Uranium (ingestion f1 0.02 == worker f1 → equal-e check; default M) ---
-        "U-234": {"ingestion": {"e_Sv_Bq": 4.9e-08, "f1": 0.02},
-                  "inhalation": {"default_type": "M",
-                                 "types": {"F": 5.6e-07, "M": 3.5e-06, "S": 9.4e-06}}},
-        "U-235": {"ingestion": {"e_Sv_Bq": 4.7e-08, "f1": 0.02},
-                  "inhalation": {"default_type": "M",
-                                 "types": {"F": 5.2e-07, "M": 3.1e-06, "S": 8.5e-06}}},
-        "U-236": {"ingestion": {"e_Sv_Bq": 4.6e-08, "f1": 0.02},
-                  "inhalation": {"default_type": "M",
-                                 "types": {"F": 5.3e-07, "M": 3.2e-06, "S": 8.7e-06}}},
+        "U-234": {
+            "ingestion": {"e_Sv_Bq": 4.9e-08, "f1": 0.02},
+            "inhalation": {
+                "default_type": "M",
+                "types": {"F": 5.6e-07, "M": 3.5e-06, "S": 9.4e-06},
+            },
+        },
+        "U-235": {
+            "ingestion": {"e_Sv_Bq": 4.7e-08, "f1": 0.02},
+            "inhalation": {
+                "default_type": "M",
+                "types": {"F": 5.2e-07, "M": 3.1e-06, "S": 8.5e-06},
+            },
+        },
+        "U-236": {
+            "ingestion": {"e_Sv_Bq": 4.6e-08, "f1": 0.02},
+            "inhalation": {
+                "default_type": "M",
+                "types": {"F": 5.3e-07, "M": 3.2e-06, "S": 8.7e-06},
+            },
+        },
         # --- Neptunium (Annex F ingest + Annex G inhal Adult) — ship M only (worker M-only) ---
-        "Np-237": {"ingestion": {"e_Sv_Bq": 1.1e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 2.3e-05}}},
+        "Np-237": {
+            "ingestion": {"e_Sv_Bq": 1.1e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 2.3e-05}},
+        },
         # --- Plutonium (ingestion f1 5e-4 == worker; default M; ship M & S, public F dropped) ---
-        "Pu-238": {"ingestion": {"e_Sv_Bq": 2.3e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 4.6e-05, "S": 1.6e-05}}},
-        "Pu-240": {"ingestion": {"e_Sv_Bq": 2.5e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 5.0e-05, "S": 1.6e-05}}},
-        "Pu-241": {"ingestion": {"e_Sv_Bq": 4.8e-09, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 9.0e-07, "S": 1.7e-07}}},
-        "Pu-242": {"ingestion": {"e_Sv_Bq": 2.4e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 4.8e-05, "S": 1.5e-05}}},
+        "Pu-238": {
+            "ingestion": {"e_Sv_Bq": 2.3e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 4.6e-05, "S": 1.6e-05}},
+        },
+        "Pu-240": {
+            "ingestion": {"e_Sv_Bq": 2.5e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 5.0e-05, "S": 1.6e-05}},
+        },
+        "Pu-241": {
+            "ingestion": {"e_Sv_Bq": 4.8e-09, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 9.0e-07, "S": 1.7e-07}},
+        },
+        "Pu-242": {
+            "ingestion": {"e_Sv_Bq": 2.4e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 4.8e-05, "S": 1.5e-05}},
+        },
         # --- Americium & Curium (Annex F ingest + Annex G inhal Adult) — ship M only ---
-        "Am-243": {"ingestion": {"e_Sv_Bq": 2.0e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 4.1e-05}}},
-        "Cm-242": {"ingestion": {"e_Sv_Bq": 1.2e-08, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 5.2e-06}}},
-        "Cm-243": {"ingestion": {"e_Sv_Bq": 1.5e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 3.1e-05}}},
-        "Cm-244": {"ingestion": {"e_Sv_Bq": 1.2e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 2.7e-05}}},
-        "Cm-245": {"ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 4.2e-05}}},
-        "Cm-246": {"ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 4.2e-05}}},
-
+        "Am-243": {
+            "ingestion": {"e_Sv_Bq": 2.0e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 4.1e-05}},
+        },
+        "Cm-242": {
+            "ingestion": {"e_Sv_Bq": 1.2e-08, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 5.2e-06}},
+        },
+        "Cm-243": {
+            "ingestion": {"e_Sv_Bq": 1.5e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 3.1e-05}},
+        },
+        "Cm-244": {
+            "ingestion": {"e_Sv_Bq": 1.2e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 2.7e-05}},
+        },
+        "Cm-245": {
+            "ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 4.2e-05}},
+        },
+        "Cm-246": {
+            "ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 4.2e-05}},
+        },
         # ===== M13 ACTINIDE REMAINDER — Thorium & Protactinium =====
         # Annex F (ingestion, Adult, f1 0.0005 == worker → equal-e check) + Annex G (inhalation,
         # 1 µm Adult). Ship M & S; public Annex G also lists Type F (dropped — no worker-1µm F
         # counterpart to cross-check). Every M & S cross-checks vs the worker 1 µm column at
         # 1.06-1.09×. default_type M (Annex E catch-all).
-        "Th-228": {"ingestion": {"e_Sv_Bq": 7.2e-08, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 3.2e-05, "S": 4.0e-05}}},
-        "Th-230": {"ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 4.3e-05, "S": 1.4e-05}}},
-        "Th-232": {"ingestion": {"e_Sv_Bq": 2.3e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 4.5e-05, "S": 2.5e-05}}},
-        "Pa-231": {"ingestion": {"e_Sv_Bq": 7.1e-07, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 1.4e-04, "S": 3.4e-05}}},
-
+        "Th-228": {
+            "ingestion": {"e_Sv_Bq": 7.2e-08, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 3.2e-05, "S": 4.0e-05}},
+        },
+        "Th-230": {
+            "ingestion": {"e_Sv_Bq": 2.1e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 4.3e-05, "S": 1.4e-05}},
+        },
+        "Th-232": {
+            "ingestion": {"e_Sv_Bq": 2.3e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 4.5e-05, "S": 2.5e-05}},
+        },
+        "Pa-231": {
+            "ingestion": {"e_Sv_Bq": 7.1e-07, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 1.4e-04, "S": 3.4e-05}},
+        },
         # ============ M13 NON-ACTINIDE EXPANSION (default type only, 1 µm adult) ============
         # Annex F (ingestion, Adult column + the adult f1) + Annex G (inhalation, 1 µm Adult column,
         # default type only — crop-read; cross-checked vs the worker 1 µm column in _WORKER_1UM).
         # Pb-210's adult ingestion f1 is 0.2 (Annex F footnote ††, NOT the 0.4 child column) →
         # matches worker 0.2, so the equal-f1 check applies. Pb-210 (Annex F p.83 / Annex G p.113),
         # Sb-125 (p.76/99), Sn-126 (p.76/99), Pm-147 (p.79/105), Eu-154/155 (p.79/105).
-        "Pb-210": {"ingestion": {"e_Sv_Bq": 6.9e-07, "f1": 0.2},
-                   "inhalation": {"default_type": "F", "types": {"F": 9.0e-07}}},
-        "Sb-125": {"ingestion": {"e_Sv_Bq": 1.1e-09, "f1": 0.1},
-                   "inhalation": {"default_type": "F", "types": {"F": 1.4e-09}}},
-        "Sn-126": {"ingestion": {"e_Sv_Bq": 4.7e-09, "f1": 0.02},
-                   "inhalation": {"default_type": "F", "types": {"F": 1.1e-08}}},
-        "Pm-147": {"ingestion": {"e_Sv_Bq": 2.6e-10, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 5.0e-09}}},
-        "Eu-154": {"ingestion": {"e_Sv_Bq": 2.0e-09, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 5.3e-08}}},
-        "Eu-155": {"ingestion": {"e_Sv_Bq": 3.2e-10, "f1": 5e-04},
-                   "inhalation": {"default_type": "M", "types": {"M": 6.9e-09}}},
-
+        "Pb-210": {
+            "ingestion": {"e_Sv_Bq": 6.9e-07, "f1": 0.2},
+            "inhalation": {"default_type": "F", "types": {"F": 9.0e-07}},
+        },
+        "Sb-125": {
+            "ingestion": {"e_Sv_Bq": 1.1e-09, "f1": 0.1},
+            "inhalation": {"default_type": "F", "types": {"F": 1.4e-09}},
+        },
+        "Sn-126": {
+            "ingestion": {"e_Sv_Bq": 4.7e-09, "f1": 0.02},
+            "inhalation": {"default_type": "F", "types": {"F": 1.1e-08}},
+        },
+        "Pm-147": {
+            "ingestion": {"e_Sv_Bq": 2.6e-10, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 5.0e-09}},
+        },
+        "Eu-154": {
+            "ingestion": {"e_Sv_Bq": 2.0e-09, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 5.3e-08}},
+        },
+        "Eu-155": {
+            "ingestion": {"e_Sv_Bq": 3.2e-10, "f1": 5e-04},
+            "inhalation": {"default_type": "M", "types": {"M": 6.9e-09}},
+        },
         # ============ M13 GAS/VAPOUR BATCH (schema v2) ============ (see worker block for rationale)
         # Public-adult values == worker (gas/vapour is reference-adult, age-independent): ICRP-72
         # Annex H "Adult" column (inhalation) + Annex F "Adult" column (ingestion) match ICRP-68.
-        "H-3": {"ingestion": {"default_form": "HTO",
-                              "forms": {"HTO": {"e_Sv_Bq": 1.8e-11, "f1": 1.0},
-                                        "OBT": {"e_Sv_Bq": 4.2e-11, "f1": 1.0}}},
-                "inhalation": {"default_type": "HTO",
-                               "types": {"HTO": 1.8e-11, "OBT": 4.1e-11}}},
-        "I-129": {"ingestion": {"e_Sv_Bq": 1.1e-07, "f1": 1.0},
-                  "inhalation": {"default_type": "vapour_elemental",
-                                 "types": {"vapour_elemental": 9.6e-08, "vapour_methyl": 7.4e-08}}},
-        "I-131": {"ingestion": {"e_Sv_Bq": 2.2e-08, "f1": 1.0},
-                  "inhalation": {"default_type": "vapour_elemental",
-                                 "types": {"vapour_elemental": 2.0e-08, "vapour_methyl": 1.5e-08}}},
+        "H-3": {
+            "ingestion": {
+                "default_form": "HTO",
+                "forms": {
+                    "HTO": {"e_Sv_Bq": 1.8e-11, "f1": 1.0},
+                    "OBT": {"e_Sv_Bq": 4.2e-11, "f1": 1.0},
+                },
+            },
+            "inhalation": {"default_type": "HTO", "types": {"HTO": 1.8e-11, "OBT": 4.1e-11}},
+        },
+        "I-129": {
+            "ingestion": {"e_Sv_Bq": 1.1e-07, "f1": 1.0},
+            "inhalation": {
+                "default_type": "vapour_elemental",
+                "types": {"vapour_elemental": 9.6e-08, "vapour_methyl": 7.4e-08},
+            },
+        },
+        "I-131": {
+            "ingestion": {"e_Sv_Bq": 2.2e-08, "f1": 1.0},
+            "inhalation": {
+                "default_type": "vapour_elemental",
+                "types": {"vapour_elemental": 2.0e-08, "vapour_methyl": 1.5e-08},
+            },
+        },
     },
 }
 
@@ -483,7 +661,9 @@ def _validate_gas_vapour() -> None:
         # inhalation: every form present in both, equal value
         wt, pt = wc[nuc]["inhalation"]["types"], pc[nuc]["inhalation"]["types"]
         if set(wt) != set(pt):
-            raise BuildError(f"{nuc} gas/vapour inhalation form sets differ: {set(wt)} vs {set(pt)}")
+            raise BuildError(
+                f"{nuc} gas/vapour inhalation form sets differ: {set(wt)} vs {set(pt)}"
+            )
         for form in wt:
             if wt[form] != pt[form]:
                 raise BuildError(
@@ -525,9 +705,9 @@ def _validate_consistency() -> None:
         else:
             # Affine sanity for a documented differing-f1 nuclide: e = G + f1·(S−G); solving the
             # two populations must give G >= 0 and S > 0 (catches gross/sign/decade misreads).
-            slope = (pe - we) / (pf - wf)            # = S − G
-            g = we - wf * slope                      # GI-transit (f1-independent) intercept
-            s = g + slope                            # f1=1 (fully absorbed) coefficient
+            slope = (pe - we) / (pf - wf)  # = S − G
+            g = we - wf * slope  # GI-transit (f1-independent) intercept
+            s = g + slope  # f1=1 (fully absorbed) coefficient
             if not (g >= -1e-12 and s > 0.0):
                 raise BuildError(
                     f"{nuc} differing-f1 affine solve nonphysical: G={g:.3g}, S={s:.3g} "
@@ -560,7 +740,7 @@ def _build_one(spec: dict) -> dict:
         "units": UNITS,
         "progeny_convention": PROGENY_CONVENTION,
         "source_ref": "ICRP Publication 119 (2012), Compendium of Dose Coefficients based on "
-                      "ICRP Publication 60; e(50) committed effective dose, Sv/Bq.",
+        "ICRP Publication 60; e(50) committed effective dose, Sv/Bq.",
         "coefficients": spec["coefficients"],
     }
     # Structural sanity: every coefficient positive and in a physical range.

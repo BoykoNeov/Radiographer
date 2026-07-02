@@ -29,6 +29,7 @@ from engine.buildup import BuildupError
 
 # --- log–log correctness -------------------------------------------------------------
 
+
 def _loglog(e_lo, y_lo, e_hi, y_hi, e):
     f = (math.log(e) - math.log(e_lo)) / (math.log(e_hi) - math.log(e_lo))
     return math.exp(math.log(y_lo) + f * (math.log(y_hi) - math.log(y_lo)))
@@ -71,6 +72,7 @@ def test_muen_rho_interpolates_too():
 
 # --- edge-aware bracket selection (the one that bites) --------------------------------
 
+
 def test_mu_rho_below_pb_k_edge_uses_pre_edge_branch():
     # 0.085 MeV is between 0.08 (μ/ρ 2.419) and the K-edge 0.0880045 (pre-edge 1.91).
     # Edge-aware interp stays on the LOW branch: result in (1.91, 2.419), nowhere near
@@ -99,6 +101,7 @@ def test_exact_edge_energy_returns_post_edge_value():
 
 
 # --- off-grid signalling (pure: reason, no policy) ------------------------------------
+
 
 def test_attenuation_below_floor_raises_below_floor():
     # Air grid floor is 1 keV (0.001 MeV); 0.5 keV is below it.
@@ -135,6 +138,7 @@ def test_conversion_effective_reaches_higher_energies():
 
 
 # --- buildup: interpolate B, not the coefficients -------------------------------------
+
 
 def test_buildup_mfp_zero_is_unity():
     assert pi.interp_buildup("lead", 0.662, 0.0) == pytest.approx(1.0, abs=1e-12)

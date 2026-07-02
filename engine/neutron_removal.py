@@ -57,15 +57,11 @@ def load_removal(material: str) -> dict:
     """Load and validate one material's canonical removal-cross-section record."""
     path = _data_root / f"{material}.json"
     if not path.is_file():
-        raise RemovalError(
-            f"no removal-cross-section data for {material!r} (expected {path})"
-        )
+        raise RemovalError(f"no removal-cross-section data for {material!r} (expected {path})")
     data = json.loads(path.read_text(encoding="utf-8"))
     version = data.get("schema_version")
     if version != SCHEMA_VERSION:
-        raise RemovalError(
-            f"{material}: removal schema_version {version!r} != {SCHEMA_VERSION}"
-        )
+        raise RemovalError(f"{material}: removal schema_version {version!r} != {SCHEMA_VERSION}")
     if data.get("material") != material:
         raise RemovalError(
             f"{path.name}: embedded material {data.get('material')!r} != {material!r}"

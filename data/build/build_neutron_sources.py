@@ -36,7 +36,7 @@ import sys
 from pathlib import Path
 
 SCHEMA_VERSION = 1
-DATA_DIR = Path(__file__).resolve().parents[1]              # .../data
+DATA_DIR = Path(__file__).resolve().parents[1]  # .../data
 OUT_DIR = DATA_DIR / "neutron_sources"
 
 #: Stored spectrum binning: log-spaced edges over the neutron H*(10) grid (1 keV–20 MeV).
@@ -108,6 +108,7 @@ def _maxwellian_bin_fractions(
     integral over the bin, not a midpoint sample — this is what makes the stored fractions
     independent of the bin count.
     """
+
     def chi(e: float) -> float:
         return math.sqrt(e) * math.exp(-e / temperature_MeV)
 
@@ -152,16 +153,16 @@ def _write(path: Path, record: dict) -> None:
 def build_cf252() -> dict:
     """Cf-252 spontaneous-fission source: ISO-8529 Maxwellian spectrum + derived n/decay."""
     # --- neutrons per decay: SF branch × prompt-fission ν̄ (cited constants) ---------------
-    sf_branch = 0.03092          # ²⁵²Cf spontaneous-fission branching fraction (NNDC: SF 3.092%)
-    nubar = 3.7676               # mean prompt neutrons per ²⁵²Cf SF (evaluated standard, Holden)
+    sf_branch = 0.03092  # ²⁵²Cf spontaneous-fission branching fraction (NNDC: SF 3.092%)
+    nubar = 3.7676  # mean prompt neutrons per ²⁵²Cf SF (evaluated standard, Holden)
     n_per_decay = sf_branch * nubar
 
     # Self-check: reproduce the canonical specific yield 2.30×10¹² n/(s·g).
-    half_life_y = 2.645          # ²⁵²Cf half-life (NNDC)
-    atomic_mass = 252.0816       # g/mol
-    lam = math.log(2.0) / (half_life_y * SECONDS_PER_YEAR)         # s⁻¹
-    activity_per_g = lam * N_AVOGADRO / atomic_mass               # Bq/g
-    specific_yield = activity_per_g * n_per_decay                  # n/(s·g)
+    half_life_y = 2.645  # ²⁵²Cf half-life (NNDC)
+    atomic_mass = 252.0816  # g/mol
+    lam = math.log(2.0) / (half_life_y * SECONDS_PER_YEAR)  # s⁻¹
+    activity_per_g = lam * N_AVOGADRO / atomic_mass  # Bq/g
+    specific_yield = activity_per_g * n_per_decay  # n/(s·g)
     if not math.isclose(specific_yield, 2.30e12, rel_tol=0.03):
         raise BuildError(
             f"Cf-252 specific yield {specific_yield:.3e} n/s/g disagrees with the canonical "
@@ -210,11 +211,26 @@ def build_cf252() -> dict:
 # bins, so direct normalization → per-bin fluence fractions (asserted in _centered_log_edges).
 # (E_eV, per-lethargy spectral value)
 ISO_AMBE_SPECTRUM_TRS403: list[tuple[float, float]] = [
-    (1.00e5, 1.66e-2), (1.25e5, 2.21e-2), (1.58e5, 2.87e-2), (1.99e5, 3.67e-2),
-    (2.51e5, 4.65e-2), (3.16e5, 5.77e-2), (3.98e5, 7.06e-2), (5.01e5, 8.48e-2),
-    (6.30e5, 9.61e-2), (7.94e5, 1.06e-1), (1.00e6, 1.18e-1), (1.25e6, 1.27e-1),
-    (1.58e6, 1.81e-1), (1.99e6, 2.43e-1), (2.51e6, 4.21e-1), (3.16e6, 5.71e-1),
-    (3.98e6, 6.86e-1), (5.01e6, 6.50e-1), (6.30e6, 5.78e-1), (7.94e6, 1.66e-1),
+    (1.00e5, 1.66e-2),
+    (1.25e5, 2.21e-2),
+    (1.58e5, 2.87e-2),
+    (1.99e5, 3.67e-2),
+    (2.51e5, 4.65e-2),
+    (3.16e5, 5.77e-2),
+    (3.98e5, 7.06e-2),
+    (5.01e5, 8.48e-2),
+    (6.30e5, 9.61e-2),
+    (7.94e5, 1.06e-1),
+    (1.00e6, 1.18e-1),
+    (1.25e6, 1.27e-1),
+    (1.58e6, 1.81e-1),
+    (1.99e6, 2.43e-1),
+    (2.51e6, 4.21e-1),
+    (3.16e6, 5.71e-1),
+    (3.98e6, 6.86e-1),
+    (5.01e6, 6.50e-1),
+    (6.30e6, 5.78e-1),
+    (7.94e6, 1.66e-1),
     (1.00e7, 1.72e-2),
 ]
 

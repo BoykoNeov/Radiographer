@@ -40,7 +40,7 @@ SCHEMA_VERSION = 1
 GEOMETRIES = ("AP", "PA", "LLAT", "RLAT", "ROT", "ISO")
 UNITS = "pSv_cm2"
 
-DATA_DIR = Path(__file__).resolve().parents[1]              # .../data
+DATA_DIR = Path(__file__).resolve().parents[1]  # .../data
 VENDOR_DIR = DATA_DIR / "vendor" / "openmc_dose"
 OUT_DIR = DATA_DIR / "conversion"
 
@@ -96,7 +96,11 @@ class BuildError(Exception):
 
 def _effective_filename(particle: str, geometry: str) -> str:
     """Canonical effective-dose filename — must match ``engine.conversion._filename``."""
-    return f"effective_{geometry}.json" if particle == "photon" else f"effective_neutron_{geometry}.json"
+    return (
+        f"effective_{geometry}.json"
+        if particle == "photon"
+        else f"effective_neutron_{geometry}.json"
+    )
 
 
 def _ambient_filename(particle: str) -> str:
@@ -164,9 +168,7 @@ def _validate_series(tag: str, e: list[float], coeff: list[float]) -> None:
 
 
 def _write(path: Path, record: dict) -> None:
-    path.write_text(
-        json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
+    path.write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def _build_effective(particle: str) -> int:

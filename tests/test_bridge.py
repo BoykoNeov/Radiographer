@@ -423,11 +423,21 @@ def test_dose_multilayer_order_matters_through_bridge():
     res = json.loads(bridge.solve(json.dumps({"nuclides": {"Co-60": 1.0e9}, "unit": "Bq"})))
     handle = res["handle"]
     try:
+
         def total(layers):
-            out = json.loads(bridge.dose(handle, json.dumps({
-                "times_s": [0.0], "quantity": "ambient_H10", "distance_m": 1.0,
-                "shield": layers,
-            })))
+            out = json.loads(
+                bridge.dose(
+                    handle,
+                    json.dumps(
+                        {
+                            "times_s": [0.0],
+                            "quantity": "ambient_H10",
+                            "distance_m": 1.0,
+                            "shield": layers,
+                        }
+                    ),
+                )
+            )
             assert out["ok"] is True
             return out["rate_si"][0]
 
@@ -450,17 +460,34 @@ def test_dose_thickness_multilayer_zero_point_is_rest_of_stack():
     handle = res["handle"]
     try:
         xs = [0.0, 2.0, 5.0]
-        sweep = json.loads(bridge.dose_thickness(handle, json.dumps({
-            "layers": [["lead", 1.0], ["water", 5.0]], "sweep_index": 1,
-            "thicknesses_cm": xs, "quantity": "ambient_H10",
-        })))
+        sweep = json.loads(
+            bridge.dose_thickness(
+                handle,
+                json.dumps(
+                    {
+                        "layers": [["lead", 1.0], ["water", 5.0]],
+                        "sweep_index": 1,
+                        "thicknesses_cm": xs,
+                        "quantity": "ambient_H10",
+                    }
+                ),
+            )
+        )
         assert sweep["ok"] is True and sweep["material"] == "water"
         co = sweep["coeff_by_nuclide"]["Co-60"]
 
         # x=0 zero point == lead-only stack (rest-of-stack), NOT unshielded.
-        lead_only = json.loads(bridge.dose_lines(handle, json.dumps({
-            "quantity": "ambient_H10", "shield": [["lead", 1.0]],
-        })))
+        lead_only = json.loads(
+            bridge.dose_lines(
+                handle,
+                json.dumps(
+                    {
+                        "quantity": "ambient_H10",
+                        "shield": [["lead", 1.0]],
+                    }
+                ),
+            )
+        )
         lead_co = sum(ln["coeff_si"] for ln in lead_only["lines"] if ln["nuclide"] == "Co-60")
         assert co[0] == pytest.approx(lead_co, rel=1e-12)
         bare = json.loads(bridge.dose_lines(handle, json.dumps({"quantity": "ambient_H10"})))
@@ -469,16 +496,26 @@ def test_dose_thickness_multilayer_zero_point_is_rest_of_stack():
 
         # reconciliation at the held thickness x=5: folded curve == dose(full stack).
         t, d = 0.0, 1.0
-        ev = json.loads(bridge.evaluate(handle, json.dumps(
-            {"times_s": [t], "axis": "activity", "unit": "Bq"})))
+        ev = json.loads(
+            bridge.evaluate(handle, json.dumps({"times_s": [t], "axis": "activity", "unit": "Bq"}))
+        )
         acts = {n: ev["series"][n][0] for n in ev["nuclides"]}
         geom = 1.0 / (4.0 * math.pi * d * d)
         idx = xs.index(5.0)
         recon = geom * sum(sweep["coeff_by_nuclide"][n][idx] * acts.get(n, 0.0) for n in acts)
-        full = json.loads(bridge.dose(handle, json.dumps({
-            "times_s": [t], "quantity": "ambient_H10", "distance_m": d,
-            "shield": [["lead", 1.0], ["water", 5.0]],
-        })))
+        full = json.loads(
+            bridge.dose(
+                handle,
+                json.dumps(
+                    {
+                        "times_s": [t],
+                        "quantity": "ambient_H10",
+                        "distance_m": d,
+                        "shield": [["lead", 1.0], ["water", 5.0]],
+                    }
+                ),
+            )
+        )
         assert recon == pytest.approx(full["rate_si"][0], rel=1e-9)
     finally:
         bridge.release(handle)
@@ -565,23 +602,42 @@ def test_neutron_dose_shield_through_bridge():
     handle = res["handle"]
     try:
         bare = json.loads(
-            bridge.neutron_dose(handle, json.dumps(
-                {"times_s": [0.0], "source": "Cf-252", "distance_m": 1.0}))
+            bridge.neutron_dose(
+                handle, json.dumps({"times_s": [0.0], "source": "Cf-252", "distance_m": 1.0})
+            )
         )
         water = json.loads(
-            bridge.neutron_dose(handle, json.dumps(
-                {"times_s": [0.0], "source": "Cf-252", "distance_m": 1.0,
-                 "shield": [["water", 20.0]]}))
+            bridge.neutron_dose(
+                handle,
+                json.dumps(
+                    {
+                        "times_s": [0.0],
+                        "source": "Cf-252",
+                        "distance_m": 1.0,
+                        "shield": [["water", 20.0]],
+                    }
+                ),
+            )
         )
         lead = json.loads(
-            bridge.neutron_dose(handle, json.dumps(
-                {"times_s": [0.0], "source": "Cf-252", "distance_m": 1.0,
-                 "shield": [["lead", 20.0]]}))
+            bridge.neutron_dose(
+                handle,
+                json.dumps(
+                    {
+                        "times_s": [0.0],
+                        "source": "Cf-252",
+                        "distance_m": 1.0,
+                        "shield": [["lead", 20.0]],
+                    }
+                ),
+            )
         )
         assert bare["ok"] and water["ok"] and lead["ok"]
         # 20 cm water removes ~7× (Σ_R≈0.104 → exp(−2.08)); the dose drops accordingly.
         assert 0.0 < water["neutron_transmission"] < 0.2
-        assert water["rate_si"][0] == pytest.approx(bare["rate_si"][0] * water["neutron_transmission"], rel=1e-9)
+        assert water["rate_si"][0] == pytest.approx(
+            bare["rate_si"][0] * water["neutron_transmission"], rel=1e-9
+        )
         # Lead does NOTHING to neutrons — same dose as bare + a loud steer-to-hydrogenous warning.
         assert lead["neutron_transmission"] == 1.0
         assert lead["rate_si"][0] == pytest.approx(bare["rate_si"][0], rel=1e-12)
@@ -637,8 +693,15 @@ def test_neutron_dose_source_gamma_failure_does_not_blank_neutron(monkeypatch):
         out = json.loads(
             bridge.neutron_dose(
                 handle,
-                json.dumps({"times_s": [0.0], "source": "AmBe", "quantity": "ambient_H10",
-                            "distance_m": 1.0, "shield": [["lead", 30.0]]}),
+                json.dumps(
+                    {
+                        "times_s": [0.0],
+                        "source": "AmBe",
+                        "quantity": "ambient_H10",
+                        "distance_m": 1.0,
+                        "shield": [["lead", 30.0]],
+                    }
+                ),
             )
         )
         assert out["ok"] is True, "a source-γ failure must NOT discard the neutron dose"
@@ -843,17 +906,25 @@ def test_internal_dose_gas_vapour_default_forms():
     """Schema-v2 gas/vapour fold the default chemical FORM (not F/M/S): H-3 ingestion -> HTO
     (1.8e-11, reported in forms_used), iodine inhalation -> elemental vapour (I-131 2.0e-08,
     reported in types_used). Confirms the v2 form plumbing reaches the bridge output."""
-    solved = json.loads(bridge.solve(json.dumps(
-        {"nuclides": {"H-3": 1.0e9, "I-131": 1.0e8}, "unit": "Bq"})))
+    solved = json.loads(
+        bridge.solve(json.dumps({"nuclides": {"H-3": 1.0e9, "I-131": 1.0e8}, "unit": "Bq"}))
+    )
     handle = solved["handle"]
     try:
-        ing = json.loads(bridge.internal_dose(
-            handle, json.dumps({"times_s": [0.0], "route": "ingestion", "population": "worker"})))
+        ing = json.loads(
+            bridge.internal_dose(
+                handle, json.dumps({"times_s": [0.0], "route": "ingestion", "population": "worker"})
+            )
+        )
         assert ing["ok"] is True
         assert ing["forms_used"]["H-3"] == "HTO"  # default ingestion form
         assert ing["per_nuclide_coeff"]["H-3"] == pytest.approx(1.8e-11)
-        inh = json.loads(bridge.internal_dose(
-            handle, json.dumps({"times_s": [0.0], "route": "inhalation", "population": "worker"})))
+        inh = json.loads(
+            bridge.internal_dose(
+                handle,
+                json.dumps({"times_s": [0.0], "route": "inhalation", "population": "worker"}),
+            )
+        )
         assert inh["types_used"]["I-131"] == "vapour_elemental"  # default inhalation form
         assert inh["per_nuclide_coeff"]["I-131"] == pytest.approx(2.0e-08)
     finally:

@@ -39,9 +39,22 @@ MICRO_SLICE = ("Po-210", "Ra-226", "U-238", "Pu-239", "Am-241")
 FISSION_PRODUCTS = ("Co-60", "Se-79", "Sr-90", "Tc-99", "Ru-106", "Cs-134", "Cs-137", "Ce-144")
 # M13 actinide-expansion batch (all cross-checkable tabulated types; 300-DPI crop-verified).
 # Grows by element. Np ships M only (worker tabulates M); Pu ships M & S (worker has no F).
-ACTINIDE_EXPANSION = ("U-234", "U-235", "U-236",
-                      "Np-237", "Pu-238", "Pu-240", "Pu-241", "Pu-242",
-                      "Am-243", "Cm-242", "Cm-243", "Cm-244", "Cm-245", "Cm-246")
+ACTINIDE_EXPANSION = (
+    "U-234",
+    "U-235",
+    "U-236",
+    "Np-237",
+    "Pu-238",
+    "Pu-240",
+    "Pu-241",
+    "Pu-242",
+    "Am-243",
+    "Cm-242",
+    "Cm-243",
+    "Cm-244",
+    "Cm-245",
+    "Cm-246",
+)
 # M13 actinide remainder — Thorium & Protactinium (worker ships M & S; default M). Worker 5 µm
 # crop-read twice; the dual thorium ingestion f1 (0.0005 default vs 0.0002 oxide) resolves to the
 # Annex E catch-all f1 5E-04, so equal-f1 holds and no DIFFERING_F1 entry is needed.
@@ -52,8 +65,14 @@ NON_ACTINIDE = ("Pb-210", "Sb-125", "Sn-126", "Pm-147", "Eu-154", "Eu-155")
 # M13 gas/vapour batch (schema v2): chemical-form tokens, not F/M/S particulate types — H-3
 # (HTO/OBT) and iodine (elemental/methyl vapour, vapour-only). Worker==public by construction.
 GAS_VAPOUR = ("H-3", "I-129", "I-131")
-CURATED = (MICRO_SLICE + FISSION_PRODUCTS + ACTINIDE_EXPANSION + ACTINIDE_REMAINDER
-           + NON_ACTINIDE + GAS_VAPOUR)
+CURATED = (
+    MICRO_SLICE
+    + FISSION_PRODUCTS
+    + ACTINIDE_EXPANSION
+    + ACTINIDE_REMAINDER
+    + NON_ACTINIDE
+    + GAS_VAPOUR
+)
 
 # ICRP default absorption type per element (ICRP-119 Annex E "unspecified compounds" catch-all)
 # — what the engine folds, so the anchor below is this type's value. NOT chosen by value/memory.
@@ -61,21 +80,52 @@ DEFAULT_TYPE = {
     # Po-210 = F: Annex E Table E.1 Polonium "Unspecified compounds" is Type F (f1 0.1). The
     # original micro-slice shipped M ("commonly-cited"); the M13 non-actinide re-verify caught the
     # rule violation and corrected it to F (folds 7.1E-07 worker / 6.0E-07 public). See PROVENANCE.
-    "Po-210": "F", "Ra-226": "M", "U-238": "M", "Pu-239": "M", "Am-241": "M",
-    "Co-60": "M", "Se-79": "F", "Sr-90": "F", "Tc-99": "F",
-    "Ru-106": "F", "Cs-134": "F", "Cs-137": "F", "Ce-144": "M",
-    "U-234": "M", "U-235": "M", "U-236": "M",  # uranium catch-all = Type M (same element as U-238)
-    "Np-237": "M", "Pu-238": "M", "Pu-240": "M", "Pu-241": "M", "Pu-242": "M",
-    "Am-243": "M", "Cm-242": "M", "Cm-243": "M", "Cm-244": "M", "Cm-245": "M", "Cm-246": "M",
+    "Po-210": "F",
+    "Ra-226": "M",
+    "U-238": "M",
+    "Pu-239": "M",
+    "Am-241": "M",
+    "Co-60": "M",
+    "Se-79": "F",
+    "Sr-90": "F",
+    "Tc-99": "F",
+    "Ru-106": "F",
+    "Cs-134": "F",
+    "Cs-137": "F",
+    "Ce-144": "M",
+    "U-234": "M",
+    "U-235": "M",
+    "U-236": "M",  # uranium catch-all = Type M (same element as U-238)
+    "Np-237": "M",
+    "Pu-238": "M",
+    "Pu-240": "M",
+    "Pu-241": "M",
+    "Pu-242": "M",
+    "Am-243": "M",
+    "Cm-242": "M",
+    "Cm-243": "M",
+    "Cm-244": "M",
+    "Cm-245": "M",
+    "Cm-246": "M",
     # Thorium & Protactinium catch-all = Type M (Annex E "unspecified compounds", f1 5E-04):
-    "Th-228": "M", "Th-230": "M", "Th-232": "M", "Pa-231": "M",
+    "Th-228": "M",
+    "Th-230": "M",
+    "Th-232": "M",
+    "Pa-231": "M",
     # Non-actinides (Annex E: Pb F, Sb F, Sn F, Pm M, Eu M):
-    "Pb-210": "F", "Sb-125": "F", "Sn-126": "F", "Pm-147": "M", "Eu-154": "M", "Eu-155": "M",
+    "Pb-210": "F",
+    "Sb-125": "F",
+    "Sn-126": "F",
+    "Pm-147": "M",
+    "Eu-154": "M",
+    "Eu-155": "M",
     # Gas/vapour (schema v2): default is a chemical FORM, not an Annex-E particulate type —
     # H-3 -> HTO (tritiated water), iodine -> elemental (I2) vapour. (NOT from Annex E; that table
     # classifies particulate absorption types only. Iodine ships vapour-only, so the Annex-E
     # iodine-particulate-F entry does not bind the default — see test_gas_vapour_default_forms.)
-    "H-3": "HTO", "I-129": "vapour_elemental", "I-131": "vapour_elemental",
+    "H-3": "HTO",
+    "I-129": "vapour_elemental",
+    "I-131": "vapour_elemental",
 }
 # Gas/vapour nuclides whose inhalation "default_type" is a chemical form, NOT an Annex-E type.
 GAS_VAPOUR_FORMS = {"H-3", "I-129", "I-131"}
@@ -86,20 +136,20 @@ ANCHORS = {
     "worker": {
         "Po-210": {"ingestion": 2.4e-07, "inhalation": 7.1e-07},  # F (corrected from M; Annex E)
         "Ra-226": {"ingestion": 2.8e-07, "inhalation": 2.2e-06},  # M
-        "U-238":  {"ingestion": 4.4e-08, "inhalation": 1.6e-06},  # M (5 µm)
+        "U-238": {"ingestion": 4.4e-08, "inhalation": 1.6e-06},  # M (5 µm)
         "Pu-239": {"ingestion": 2.5e-07, "inhalation": 3.2e-05},  # M
         "Am-241": {"ingestion": 2.0e-07, "inhalation": 2.7e-05},  # M
-        "Co-60":  {"ingestion": 3.4e-09, "inhalation": 7.1e-09},  # M
-        "Se-79":  {"ingestion": 2.9e-09, "inhalation": 1.6e-09},  # F
-        "Sr-90":  {"ingestion": 2.8e-08, "inhalation": 3.0e-08},  # F
-        "Tc-99":  {"ingestion": 7.8e-10, "inhalation": 4.0e-10},  # F
+        "Co-60": {"ingestion": 3.4e-09, "inhalation": 7.1e-09},  # M
+        "Se-79": {"ingestion": 2.9e-09, "inhalation": 1.6e-09},  # F
+        "Sr-90": {"ingestion": 2.8e-08, "inhalation": 3.0e-08},  # F
+        "Tc-99": {"ingestion": 7.8e-10, "inhalation": 4.0e-10},  # F
         "Ru-106": {"ingestion": 7.0e-09, "inhalation": 9.8e-09},  # F
         "Cs-134": {"ingestion": 1.9e-08, "inhalation": 9.6e-09},  # F
         "Cs-137": {"ingestion": 1.3e-08, "inhalation": 6.7e-09},  # F
         "Ce-144": {"ingestion": 5.2e-09, "inhalation": 2.3e-08},  # M
-        "U-234":  {"ingestion": 4.9e-08, "inhalation": 2.1e-06},  # M (5 µm)
-        "U-235":  {"ingestion": 4.6e-08, "inhalation": 1.8e-06},  # M (5 µm)
-        "U-236":  {"ingestion": 4.6e-08, "inhalation": 1.9e-06},  # M (5 µm)
+        "U-234": {"ingestion": 4.9e-08, "inhalation": 2.1e-06},  # M (5 µm)
+        "U-235": {"ingestion": 4.6e-08, "inhalation": 1.8e-06},  # M (5 µm)
+        "U-236": {"ingestion": 4.6e-08, "inhalation": 1.9e-06},  # M (5 µm)
         "Np-237": {"ingestion": 1.1e-07, "inhalation": 1.5e-05},  # M (5 µm)
         "Pu-238": {"ingestion": 2.3e-07, "inhalation": 3.0e-05},  # M (5 µm)
         "Pu-240": {"ingestion": 2.5e-07, "inhalation": 3.2e-05},  # M (5 µm)
@@ -124,27 +174,27 @@ ANCHORS = {
         "Eu-154": {"ingestion": 2.0e-09, "inhalation": 3.5e-08},  # M
         "Eu-155": {"ingestion": 3.2e-10, "inhalation": 4.7e-09},  # M
         # Gas/vapour (default form): H-3 ingestion=HTO, inhalation=HTO; iodine inhalation=elemental.
-        "H-3":   {"ingestion": 1.8e-11, "inhalation": 1.8e-11},  # HTO (OBT ingestion 4.2e-11)
+        "H-3": {"ingestion": 1.8e-11, "inhalation": 1.8e-11},  # HTO (OBT ingestion 4.2e-11)
         "I-129": {"ingestion": 1.1e-07, "inhalation": 9.6e-08},  # elemental vapour (methyl 7.4e-08)
         "I-131": {"ingestion": 2.2e-08, "inhalation": 2.0e-08},  # elemental vapour (methyl 1.5e-08)
     },
     "public_adult": {
         "Po-210": {"ingestion": 1.2e-06, "inhalation": 6.0e-07},  # F (corrected from M; Annex E)
         "Ra-226": {"ingestion": 2.8e-07, "inhalation": 3.5e-06},  # M
-        "U-238":  {"ingestion": 4.5e-08, "inhalation": 2.9e-06},  # M
+        "U-238": {"ingestion": 4.5e-08, "inhalation": 2.9e-06},  # M
         "Pu-239": {"ingestion": 2.5e-07, "inhalation": 5.0e-05},  # M
         "Am-241": {"ingestion": 2.0e-07, "inhalation": 4.2e-05},  # M
-        "Co-60":  {"ingestion": 3.4e-09, "inhalation": 1.0e-08},  # M
-        "Se-79":  {"ingestion": 2.9e-09, "inhalation": 1.1e-09},  # F
-        "Sr-90":  {"ingestion": 2.8e-08, "inhalation": 2.4e-08},  # F
-        "Tc-99":  {"ingestion": 6.4e-10, "inhalation": 2.9e-10},  # F (differing-f1 ingestion)
+        "Co-60": {"ingestion": 3.4e-09, "inhalation": 1.0e-08},  # M
+        "Se-79": {"ingestion": 2.9e-09, "inhalation": 1.1e-09},  # F
+        "Sr-90": {"ingestion": 2.8e-08, "inhalation": 2.4e-08},  # F
+        "Tc-99": {"ingestion": 6.4e-10, "inhalation": 2.9e-10},  # F (differing-f1 ingestion)
         "Ru-106": {"ingestion": 7.0e-09, "inhalation": 7.9e-09},  # F
         "Cs-134": {"ingestion": 1.9e-08, "inhalation": 6.6e-09},  # F
         "Cs-137": {"ingestion": 1.3e-08, "inhalation": 4.6e-09},  # F
         "Ce-144": {"ingestion": 5.2e-09, "inhalation": 3.6e-08},  # M
-        "U-234":  {"ingestion": 4.9e-08, "inhalation": 3.5e-06},  # M (1 µm adult)
-        "U-235":  {"ingestion": 4.7e-08, "inhalation": 3.1e-06},  # M (1 µm adult)
-        "U-236":  {"ingestion": 4.6e-08, "inhalation": 3.2e-06},  # M (1 µm adult)
+        "U-234": {"ingestion": 4.9e-08, "inhalation": 3.5e-06},  # M (1 µm adult)
+        "U-235": {"ingestion": 4.7e-08, "inhalation": 3.1e-06},  # M (1 µm adult)
+        "U-236": {"ingestion": 4.6e-08, "inhalation": 3.2e-06},  # M (1 µm adult)
         "Np-237": {"ingestion": 1.1e-07, "inhalation": 2.3e-05},  # M (1 µm adult)
         "Pu-238": {"ingestion": 2.3e-07, "inhalation": 4.6e-05},  # M (1 µm adult)
         "Pu-240": {"ingestion": 2.5e-07, "inhalation": 5.0e-05},  # M (1 µm adult)
@@ -169,7 +219,7 @@ ANCHORS = {
         "Eu-154": {"ingestion": 2.0e-09, "inhalation": 5.3e-08},  # M
         "Eu-155": {"ingestion": 3.2e-10, "inhalation": 6.9e-09},  # M
         # Gas/vapour — IDENTICAL to worker (age-independent reference-adult values):
-        "H-3":   {"ingestion": 1.8e-11, "inhalation": 1.8e-11},  # HTO
+        "H-3": {"ingestion": 1.8e-11, "inhalation": 1.8e-11},  # HTO
         "I-129": {"ingestion": 1.1e-07, "inhalation": 9.6e-08},  # elemental vapour
         "I-131": {"ingestion": 2.2e-08, "inhalation": 2.0e-08},  # elemental vapour
     },
@@ -185,6 +235,7 @@ def _load_raw(population: str) -> dict:
 
 
 # -- Pillar 1: structural ---------------------------------------------------
+
 
 @pytest.mark.parametrize("population", idose.POPULATIONS)
 def test_structural_invariants(population):
@@ -222,6 +273,7 @@ def test_loader_validates_and_caches(population):
 
 # -- Pillar 2: anchor goldens ----------------------------------------------
 
+
 @pytest.mark.parametrize("population", idose.POPULATIONS)
 @pytest.mark.parametrize("nuclide", CURATED)
 def test_anchor_values(population, nuclide):
@@ -243,7 +295,9 @@ def test_default_type_matches_annex_e_catchall():
             inh = d["coefficients"][nuc]["inhalation"]
             assert inh["default_type"] in idose.ABSORPTION_TYPES, f"{nuc}: not an F/M/S type"
             assert inh["default_type"] == DEFAULT_TYPE[nuc], f"{nuc}: default_type drift"
-            assert idose.coefficient(nuc, "inhalation", population) == inh["types"][DEFAULT_TYPE[nuc]]
+            assert (
+                idose.coefficient(nuc, "inhalation", population) == inh["types"][DEFAULT_TYPE[nuc]]
+            )
 
 
 def test_gas_vapour_default_forms():
@@ -256,7 +310,9 @@ def test_gas_vapour_default_forms():
             inh = d["coefficients"][nuc]["inhalation"]
             assert inh["default_type"] == DEFAULT_TYPE[nuc], f"{nuc}: gas/vapour default drift"
             assert inh["default_type"] in idose.VAPOUR_INHALATION_FORMS, f"{nuc}: not a vapour form"
-            assert idose.coefficient(nuc, "inhalation", population) == inh["types"][DEFAULT_TYPE[nuc]]
+            assert (
+                idose.coefficient(nuc, "inhalation", population) == inh["types"][DEFAULT_TYPE[nuc]]
+            )
     # H-3 ingestion likewise defaults to a form (HTO); OBT is the higher alternative.
     for population in idose.POPULATIONS:
         ing = _load_raw(population)["coefficients"]["H-3"]["ingestion"]
@@ -269,7 +325,7 @@ def test_gas_vapour_default_forms():
 
 def test_iodine_vapour_forms_and_override():
     # Iodine ships elemental (I2, default) + methyl (CH3I) vapour; methyl is the lower value.
-    el = idose.coefficient("I-131", "inhalation", "worker")                          # default elemental
+    el = idose.coefficient("I-131", "inhalation", "worker")  # default elemental
     me = idose.coefficient("I-131", "inhalation", "worker", absorption_type="vapour_methyl")
     assert el == 2.0e-08 and me == 1.5e-08 and me < el
     # An F/M/S particulate type is NOT tabulated for iodine (vapour-only scope) → loud raise.
@@ -278,6 +334,7 @@ def test_iodine_vapour_forms_and_override():
 
 
 # -- Pillar 3: cross-table consistency (transcription fidelity) -------------
+
 
 def test_ingestion_equal_f1_implies_equal_e():
     # The assumption-free transcription check: where worker and public-adult ingestion f1 are
@@ -341,6 +398,7 @@ def test_po210_population_difference_is_the_f1_ratio():
 
 # -- Pillar 4: engine semantics --------------------------------------------
 
+
 def _evaluate_stub(series: dict[str, list[float]], times=(0.0, 1.0)) -> dict:
     return {"axis": "activity", "unit": "Bq", "times_s": list(times), "series": series}
 
@@ -350,9 +408,7 @@ def test_three_coverage_states():
     # common fission product that is genuinely outside the internal-dose coverage roadmap, so it
     # stays a real coverage gap even as future batches land. NB: I-131 is now COVERED (gas/vapour
     # batch), so it can no longer serve as the uncovered example.)
-    model = idose.InternalDoseModel(
-        ["Pu-239", "Am-241", "Kr-85", "Zr-95"], "inhalation", "worker"
-    )
+    model = idose.InternalDoseModel(["Pu-239", "Am-241", "Kr-85", "Zr-95"], "inhalation", "worker")
     assert set(model.covered) == {"Pu-239", "Am-241"}
     assert model.noble_gas_na == ["Kr-85"]
     assert model.uncovered == ["Zr-95"]
@@ -360,16 +416,18 @@ def test_three_coverage_states():
 
 def test_lower_bound_only_from_uncovered_not_noble_gas():
     series = _evaluate_stub({"Pu-239": [1e6, 1e6], "Kr-85": [1e9, 1e9]})
-    out = idose.InternalDoseModel(["Pu-239", "Kr-85"], "inhalation", "worker") \
-        .committed_dose_series(series)
+    out = idose.InternalDoseModel(
+        ["Pu-239", "Kr-85"], "inhalation", "worker"
+    ).committed_dose_series(series)
     # Kr-85 is N/A, not uncovered → NOT a lower bound.
     assert out["lower_bound"] is False
     assert out["noble_gas_na"] == ["Kr-85"]
     assert any(w["reason"] == "noble_gas_no_intake_pathway" for w in out["warnings"])
 
     series2 = _evaluate_stub({"Pu-239": [1e6, 1e6], "Zr-95": [1e9, 1e9]})
-    out2 = idose.InternalDoseModel(["Pu-239", "Zr-95"], "inhalation", "worker") \
-        .committed_dose_series(series2)
+    out2 = idose.InternalDoseModel(
+        ["Pu-239", "Zr-95"], "inhalation", "worker"
+    ).committed_dose_series(series2)
     assert out2["lower_bound"] is True
     assert any(w["reason"] == "uncovered_nuclides" for w in out2["warnings"])
 
@@ -435,6 +493,7 @@ def test_thorium_protactinium_ship_M_and_S():
 
 
 # -- no silent errors -------------------------------------------------------
+
 
 def test_unknown_route_population_type_raise():
     with pytest.raises(idose.InternalDoseError):

@@ -43,8 +43,7 @@ CANON = ROOT / "data" / "buildup"
 VENDOR = ROOT / "data" / "vendor" / "ans643"
 
 # Materials that MUST have buildup (the shields ANS-6.4.3 covers + dose media).
-REQUIRED = {"lead", "tungsten", "iron", "copper", "aluminium", "concrete",
-            "water", "air"}
+REQUIRED = {"lead", "tungsten", "iron", "copper", "aluminium", "concrete", "water", "air"}
 # Low-Z shields ANS-6.4.3 does NOT tabulate — their ABSENCE is the honest contract
 # (the M3 dose engine must handle it loudly, never with a silent surrogate).
 ABSENT_BY_DESIGN = {"pmma", "polyethylene", "tissue_soft"}
@@ -56,6 +55,7 @@ ALL = sorted(p.stem for p in CANON.glob("*.json"))
 # --------------------------------------------------------------------------- #
 # 0/1. Presence, coverage, structure.
 # --------------------------------------------------------------------------- #
+
 
 def test_dataset_present_and_complete():
     missing = sorted(REQUIRED - set(ALL))
@@ -94,6 +94,7 @@ def test_schema_and_structural():
 # --------------------------------------------------------------------------- #
 # 2. Algebraic goldens — validate the evaluator independent of coefficient values.
 # --------------------------------------------------------------------------- #
+
 
 def test_algebraic_identities():
     for m in REQUIRED:
@@ -141,6 +142,7 @@ def test_reconstructed_B_is_physical():
 # 4. Smoothness — b is smooth in log-E above the K-edge region.
 # --------------------------------------------------------------------------- #
 
+
 def test_b_smoothness_above_kedge():
     """No interior `b` (for E >= 0.2 MeV) deviates from its log-E neighbour interp by a
     lot. The K-edge spike region (E < 0.2 for high-Z) is excluded — that spike is real
@@ -169,10 +171,10 @@ def test_b_smoothness_above_kedge():
 # source and intentionally excluded (a cross-source value can itself be corrupt).
 EPJ_IRON = [
     (0.015, 1.004, 1.561, -0.554, 5.60, 0.352),
-    (0.05,  1.099, 0.366,  0.232, 14.01, -0.135),
-    (0.10,  1.389, 0.557,  0.144, 14.11, -0.079),
-    (1.00,  1.841, 1.250, -0.048, 19.49, 0.014),
-    (5.00,  1.483, 1.009,  0.012, 13.12, -0.026),
+    (0.05, 1.099, 0.366, 0.232, 14.01, -0.135),
+    (0.10, 1.389, 0.557, 0.144, 14.11, -0.079),
+    (1.00, 1.841, 1.250, -0.048, 19.49, 0.014),
+    (5.00, 1.483, 1.009, 0.012, 13.12, -0.026),
 ]
 
 
@@ -192,6 +194,7 @@ def test_iron_coefficients_match_independent_source():
 # --------------------------------------------------------------------------- #
 # 6. Within-source reconstruction — coefficients reproduce the report's Table 3 B.
 # --------------------------------------------------------------------------- #
+
 
 def _spotchecks():
     return json.loads((VENDOR / "b_value_spotchecks.json").read_text(encoding="utf-8"))["points"]
@@ -225,6 +228,7 @@ def test_reconstruction_matches_table3_B_values():
 # Loader contracts.
 # --------------------------------------------------------------------------- #
 
+
 def test_loader_raises_on_missing_material():
     with pytest.raises(bu.BuildupError):
         bu.load_buildup("unobtainium")
@@ -233,7 +237,7 @@ def test_loader_raises_on_missing_material():
 def test_off_grid_energy_raises():
     """Energy interpolation is M3's job; the loader evaluates only at grid energies."""
     with pytest.raises(bu.BuildupError):
-        bu.buildup_factor("water", 1.234, 5.0)   # 1.234 MeV is not a tabulated point
+        bu.buildup_factor("water", 1.234, 5.0)  # 1.234 MeV is not a tabulated point
 
 
 # --------------------------------------------------------------------------- #
@@ -241,6 +245,7 @@ def test_off_grid_energy_raises():
 # physically invalid (extrapolation). B is frozen at B(MFP_FIT_MAX), finite, no raise.
 # docs/plans/gamma-buildup-overflow.md.
 # --------------------------------------------------------------------------- #
+
 
 def test_gp_buildup_capped_beyond_fit_range():
     """At a few hundred mfp the raw ``K**mfp`` overflows; the cap must make B finite and

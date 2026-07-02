@@ -32,16 +32,14 @@ SOURCE = (
     "reformatted via OpenGATE/icrp107-database 0.0.3"
 )
 
-DATA_DIR = Path(__file__).resolve().parents[1]          # .../data
+DATA_DIR = Path(__file__).resolve().parents[1]  # .../data
 VENDOR_DIR = DATA_DIR / "vendor" / "icrp107"
 MANIFEST_PATH = DATA_DIR / "vendor" / "MANIFEST.sha256"
 OUT_DIR = DATA_DIR / "emissions"
 
 # Pinned combined hash of the vendored upstream (sha256 over the sorted
 # "<sha256>  <name>" manifest lines). Regenerating from drifted bytes must fail.
-EXPECTED_MANIFEST_SHA256 = (
-    "e47776c9f46440a4445ccc275630a4a930a17f710fa527936a2d11786331c14d"
-)
+EXPECTED_MANIFEST_SHA256 = "e47776c9f46440a4445ccc275630a4a930a17f710fa527936a2d11786331c14d"
 
 # Every ICRP-107 emission category must map to exactly one canonical destination.
 # A category seen in the data but absent here is a loud error, not a silent drop.
@@ -49,8 +47,8 @@ EXPECTED_MANIFEST_SHA256 = (
 # with provenance via `origin`; annihilation yields are already per-photon (verified
 # on Na-22: 0.511 MeV at ~1.798 ~= 2 x the 0.899 beta+ branch).
 PHOTON_ORIGINS = {"gamma", "X", "annihilation"}
-ELECTRON_ORIGINS = {"auger", "IE"}            # IE = internal-conversion electrons
-BETA_KINDS = {"beta-", "beta+"}               # discrete lines; ICRP energy is the MEAN
+ELECTRON_ORIGINS = {"auger", "IE"}  # IE = internal-conversion electrons
+BETA_KINDS = {"beta-", "beta+"}  # discrete lines; ICRP energy is the MEAN
 # Continuous beta spectrum (dN/dE, summed over branches -- see M2 dev-doc).
 SPECTRUM_CATEGORIES = {"b-spectra"}
 ALPHA_CATEGORIES = {"alpha"}
@@ -107,9 +105,7 @@ def load_upstream(path: Path) -> dict:
         raise BuildError(f"{path.name}: missing top-level keys {sorted(missing)}")
     stem = path.stem
     if data["name"] != stem:
-        raise BuildError(
-            f"{path.name}: embedded name {data['name']!r} != filename stem {stem!r}"
-        )
+        raise BuildError(f"{path.name}: embedded name {data['name']!r} != filename stem {stem!r}")
     return data
 
 
@@ -140,9 +136,7 @@ def transform(data: dict) -> dict:
 
     for cat, rows in emissions.items():
         if cat not in KNOWN_CATEGORIES:
-            raise BuildError(
-                f"{name}: unknown emission category {cat!r} -- refusing to drop it"
-            )
+            raise BuildError(f"{name}: unknown emission category {cat!r} -- refusing to drop it")
         if not rows:
             continue
         if cat in PHOTON_ORIGINS:
