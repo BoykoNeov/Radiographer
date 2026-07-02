@@ -183,9 +183,9 @@ Each source = a named inventory (or parameterized inventory) + optional tabulate
 
 - **Co-60 medical/industrial source** — strong dual-gamma; the gamma-dose reference case.
 - **Cs-137 source** — Cs-137 → Ba-137m secular equilibrium; classic 0.662 MeV line.
-- **Spent reactor fuel — PARAMETERIZED (LOCKED).** Inputs: enrichment + burnup (GWd/tU) → pick/interpolate a precomputed **discharge vector**; **cooling time = the definable reference time (§9)** — the same t=0 / source-age control, here pre-labelled "cooling time" (just forward decay — free). Show how gamma/decay-heat change by orders of magnitude over cooling. — OPEN: choose the (enrichment, burnup) grid points to ship.
+- **Spent reactor fuel — PARAMETERIZED (LOCKED).** Inputs: enrichment + burnup (GWd/tU) → pick/interpolate a precomputed **discharge vector**; **cooling time = the definable reference time (§9)** — the same t=0 / source-age control, here pre-labelled "cooling time" (just forward decay — free). Show how gamma/decay-heat change by orders of magnitude over cooling. — ~~OPEN: choose the (enrichment, burnup) grid points to ship.~~ **RESOLVED at M7c (see §13 #4):** ships a burnup×enrichment cross (20/45/60 GWd/tHM @ 4.0% × 3/4/5% @ 45 GWd/tHM).
 - **Fresh/unspent reactor fuel** — mostly U-238/U-235 α, weak gamma; surprisingly benign externally (good teaching contrast).
-- **Nuclear-weapon fragment** — AMBIGUOUS, must disambiguate: (a) Pu/U **pit** (α emitter, low external dose, deadly if inhaled) vs (b) **fresh fission-product fallout** (the 7:10 decay rule). Recommend shipping **both** as separate, clearly-labelled sources. — OPEN.
+- **Nuclear-weapon fragment** — AMBIGUOUS, must disambiguate: (a) Pu/U **pit** (α emitter, low external dose, deadly if inhaled) vs (b) **fresh fission-product fallout** (the 7:10 decay rule). Recommend shipping **both** as separate, clearly-labelled sources. — ~~OPEN.~~ **RESOLVED at M7d (see §13 #5):** both ship as separate, clearly-labelled sources (Pu pit + fresh fission-product fallout).
 - **Am-241 smoke detector** — α + 59.5 keV gamma; everyday source.
 - **K-40 "banana"** — scale anchor / banana-equivalent-dose teaching.
 - **Mo-99 / Tc-99m generator** — transient equilibrium demo.
