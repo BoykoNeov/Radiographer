@@ -33,6 +33,7 @@ import pytest
 from engine.beta_dose import (
     BetaDoseError,
     BetaSkinDoseModel,
+    _loevinger_J_array,
     bremsstrahlung_lines,
     loevinger_c,
     loevinger_J,
@@ -62,6 +63,20 @@ def test_loevinger_kernel_conserves_energy(E_max, Ebar):
     J = np.array([loevinger_J(x, E_max, Ebar, rho) for x in xs])
     absorbed = np.trapezoid(J * rho * 4 * math.pi * xs**2, xs)
     assert absorbed == pytest.approx(Ebar, rel=2e-3)
+
+
+@pytest.mark.parametrize("E_max,Ebar", [(2.28, 0.93), (1.71, 0.695), (0.546, 0.196), (0.318, 0.096)])
+def test_loevinger_array_matches_scalar_kernel(E_max, Ebar):
+    # The vectorized kernel `_loevinger_J_array` (the beta-dose hotspot fix) must be
+    # float-identical to the scalar `loevinger_J` it replaced — otherwise the 30s→2s
+    # speedup would have silently moved the dose numbers. Grid mimics the contact
+    # integral's transformed distances (all > 0). Guards against a future divergence.
+    rho = 1.06
+    s = np.concatenate(([0.0], np.geomspace(0.007 / rho / 200.0, 0.564, 8000)))
+    x = np.sqrt(s**2 + (0.007 / rho) ** 2)
+    scalar = np.array([loevinger_J(xi, E_max, Ebar, rho) for xi in x])
+    vector = _loevinger_J_array(x, E_max, Ebar, rho)
+    np.testing.assert_allclose(vector, scalar, rtol=1e-12, atol=0.0)
 
 
 def test_loevinger_c_breaks_at_named_energies():

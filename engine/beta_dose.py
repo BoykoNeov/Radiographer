@@ -108,6 +108,31 @@ def loevinger_J(x_cm: float, E_max_MeV: float, Ebar_MeV: float, rho_g_cm3: float
     return val if val > 0.0 else 0.0
 
 
+def _loevinger_J_array(
+    x_cm: np.ndarray, E_max_MeV: float, Ebar_MeV: float, rho_g_cm3: float
+) -> np.ndarray:
+    """Vectorized twin of :func:`loevinger_J` over a grid of distances ``x_cm`` (all > 0).
+
+    The per-branch constants (ν, c, z, t, α, B) are independent of ``x``, so they are computed
+    once and only the two distance-dependent terms are evaluated over the array. ``np.exp`` and
+    ``np.where`` reproduce ``math.exp`` and the scalar ``x < t`` branch element-for-element, so
+    the result is float-identical to calling :func:`loevinger_J` per point — this replaces the
+    per-point Python loop that made the 8000-point contact integral the beta-dose hotspot
+    (~200× slower than the γ path for the 177-nuclide fallout inventory; see
+    ``docs/plans/beta-dose-vectorization.md``). ``x_cm`` is always ≥ the basal-layer depth > 0,
+    so ``B / x_cm`` never divides by zero."""
+    nu = loevinger_nu(E_max_MeV)
+    c = loevinger_c(E_max_MeV)
+    z = 1.0 / (rho_g_cm3 * nu)
+    t = c * z
+    alpha = 1.0 / (3.0 * c * c - (c * c - 1.0) * math.e)
+    B = (rho_g_cm3 * nu * nu * alpha * Ebar_MeV) / (4.0 * math.pi)
+    T2 = (B / x_cm) * np.exp(1.0 - x_cm / z)
+    T1 = np.where(x_cm < t, (B * t / x_cm**2) - (B / x_cm) * np.exp(1.0 - x_cm / t), 0.0)
+    val = T1 + T2
+    return np.where(val > 0.0, val, 0.0)
+
+
 def _branch_kernels(nuclide: str, spectrum_endpoint: float) -> list[tuple[float, float, float]]:
     """``[(E_max_i, Ebar_i, yield_i)]`` per beta branch.
 
@@ -312,7 +337,7 @@ class BetaSkinDoseModel:
         x = np.sqrt(s**2 + (self.depth_cm + offset_cm) ** 2)
         total = np.zeros_like(s)
         for e_max, ebar, y in branches:
-            total += y * np.array([loevinger_J(xi, e_max, ebar, self.rho_t) for xi in x])
+            total += y * _loevinger_J_array(x, e_max, ebar, self.rho_t)
         integral = np.trapezoid(total * 2.0 * math.pi * s, s) / (math.pi * self.disk_radius_cm**2)
         return float(integral) * MEV_G_TO_GY
 
