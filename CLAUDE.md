@@ -38,8 +38,9 @@ No server; all computation on-device.
   Bq vs Ci, air kerma vs exposure. Store internally in SI.
 - **Type safety.** Python: type hints on the engine/dose APIs that cross the
   Pyodide bridge. JS: prefer typed/branded IDs over bare strings.
-- **Don't auto-format inside hooks** (token bloat). Run formatters manually
-  between sessions — `ruff`/`black` for Python, `prettier` for JS.
+- **Don't auto-format inside hooks** (token bloat). Run `ruff format` on the
+  Python tree manually between sessions (the tree is kept clean). No JS/Svelte
+  formatter is configured — style the frontend by hand to match surrounding code.
 - **Search with ripgrep / Glob / Grep**, not a RAG or index layer.
 - **Keep one main thread.** Spawn a subagent only for a genuinely separable,
   well-scoped task, and merge its result yourself.
