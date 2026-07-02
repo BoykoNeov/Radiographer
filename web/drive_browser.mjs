@@ -65,6 +65,19 @@ async function launchBrowser() {
   return await chromium.launch({ headless: true });
 }
 
+// Loading a prebuilt source runs a full Bateman solve SYNCHRONOUSLY on the main
+// thread (Pyodide is in-page, not in a worker). The heaviest — fresh
+// fission-product fallout (~177 nuclides) — freezes the renderer for ~30 s, which
+// races Playwright's DEFAULT 30 s action timeout on the click's own event dispatch
+// (and can spill into the paired solve-wait). Give source-card clicks and their
+// paired solve-waits a generous timeout (4× the measured freeze) so the gate
+// measures the app's RESULT, not the freeze-vs-timeout coin flip. This fixes GATE
+// MEASUREMENT only — the ~30 s UX freeze itself is a real, separate defect
+// (progress feedback / off-thread solve), tracked in HANDOFF_PLAN §11. Cheap UI
+// toggles (no solve) keep the default fast-fail timeout on purpose.
+const SOURCE_LOAD_TIMEOUT_MS = 120_000;
+const clickSource = (page, sel) => page.click(sel, { timeout: SOURCE_LOAD_TIMEOUT_MS });
+
 // --- M6b: drive the inventory panel and assert through the rendered app path ---
 
 async function runM6b(page) {
@@ -1733,11 +1746,11 @@ async function runM7(page) {
 
   // 1) A simple INVENTORY-ONLY preset loads via the rendered picker card: Cs-137 → solved
   //    closure incl. Ba-137m, neutron stays GRAYED (no source key), ONE solve (registry==1).
-  await page.click(CS137);
+  await clickSource(page, CS137);
   await page.waitForFunction(
     "window.__APP__.status === 'solved' && window.__APP__.closure.includes('Ba-137m')",
     null,
-    { timeout: 30_000 },
+    { timeout: SOURCE_LOAD_TIMEOUT_MS },
   );
   const simple = await page.evaluate(() => {
     const app = window.__APP__;
@@ -1773,11 +1786,11 @@ async function runM7(page) {
       ? { found: true, neutronSource: p.neutronSource ?? null, caveat: p.caveat || "" }
       : { found: false };
   });
-  await page.click(PIT);
+  await clickSource(page, PIT);
   await page.waitForFunction(
     "window.__APP__.status === 'solved' && window.__APP__.closure.includes('Am-241')",
     null,
-    { timeout: 30_000 },
+    { timeout: SOURCE_LOAD_TIMEOUT_MS },
   );
   const pit = await page.evaluate(() => {
     const app = window.__APP__;
@@ -1806,11 +1819,11 @@ async function runM7(page) {
   //    set, the spectrum-averaged coefficient matches the M5 validated triangle (H*(10) ≈ 383
   //    pSv·cm²), the neutron card shows a positive rate, the breakdown bar gains an n trace on
   //    the SAME Sv axis as γ (they sum), all off ONE solve (registry==1, §3).
-  await page.click(CF252);
+  await clickSource(page, CF252);
   await page.waitForFunction(
     "window.__APP__.status === 'solved' && window.__APP__.neutronSource === 'Cf-252' && window.__APP__.neutronDoseSeries",
     null,
-    { timeout: 30_000 },
+    { timeout: SOURCE_LOAD_TIMEOUT_MS },
   );
   await page.waitForSelector(NEUTRON);
   // The bar's neutron trace lands a tick after the series (the Plotly effect) — wait for it.
@@ -2010,11 +2023,11 @@ async function runM7(page) {
   // 4) PERSIST v3 round-trip: reload Cf-252, the saved file is v3 carrying the neutron_source;
   //    clear → loadFromText restores the source key AND the live neutron card (a dropped key
   //    would re-gray it — the round-trip asserts the rendered view, not just the string).
-  await page.click(CF252);
+  await clickSource(page, CF252);
   await page.waitForFunction(
     "window.__APP__.neutronSource === 'Cf-252' && window.__APP__.neutronDoseSeries",
     null,
-    { timeout: 30_000 },
+    { timeout: SOURCE_LOAD_TIMEOUT_MS },
   );
   const saved = await page.evaluate(() => window.__APP__.serialize());
   const parsed = JSON.parse(saved);
@@ -2025,7 +2038,7 @@ async function runM7(page) {
   await page.waitForFunction(
     "window.__APP__.status === 'solved' && window.__APP__.neutronSource === 'Cf-252' && window.__APP__.neutronDoseSeries",
     null,
-    { timeout: 30_000 },
+    { timeout: SOURCE_LOAD_TIMEOUT_MS },
   );
   const restored = await page.evaluate(() => {
     const card = document.querySelector('[data-testid="dose-neutron"]');
@@ -2045,12 +2058,12 @@ async function runM7(page) {
   //     first non-empty source_gamma path — Cf-252's is null) appears BOTH as a γ-card sub-line
   //     and as its own stacked-bar segment summing into the Sv total. One solve (§3).
   const AMBE = '[data-testid="source-ambe-source"]';
-  await page.click(AMBE);
+  await clickSource(page, AMBE);
   await page.waitForFunction(
     "window.__APP__.status === 'solved' && window.__APP__.neutronSource === 'AmBe' && " +
       "window.__APP__.neutronDoseSeries && window.__APP__.neutronDoseSeries.source_gamma",
     null,
-    { timeout: 30_000 },
+    { timeout: SOURCE_LOAD_TIMEOUT_MS },
   );
   // the γ-source bar segment lands a tick after the series (the Plotly effect) — wait for it.
   await page.waitForFunction(
@@ -2128,11 +2141,11 @@ async function runM7(page) {
     `n=${sfCat.n}, ids=${JSON.stringify(sfCat.ids)}, hasNeutron=${sfCat.hasNeutron}`,
   );
 
-  await page.click(SF45);
+  await clickSource(page, SF45);
   await page.waitForFunction(
     "window.__APP__.status === 'solved' && window.__APP__.decayHeatSeries && window.__APP__.neutronDoseSeries",
     null,
-    { timeout: 60_000 },
+    { timeout: SOURCE_LOAD_TIMEOUT_MS },
   );
   const sf = await page.evaluate(() => {
     const app = window.__APP__;
@@ -2256,12 +2269,12 @@ async function runM7(page) {
     `n=${foCat.n}, ids=${JSON.stringify(foCat.ids)}`,
   );
 
-  await page.click(FALLOUT);
+  await clickSource(page, FALLOUT);
   await page.waitForFunction(
     "window.__APP__.status === 'solved' && window.__APP__.gammaDoseSeries && " +
       "window.__APP__.closure.includes('Cs-137')",
     null,
-    { timeout: 60_000 },
+    { timeout: SOURCE_LOAD_TIMEOUT_MS },
   );
   const fallout = await page.evaluate(() => {
     const app = window.__APP__;
