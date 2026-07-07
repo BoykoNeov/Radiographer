@@ -148,3 +148,7 @@ both report `✅ M6a PASS (real browser)`, all 5 self-checks green:
   rebuilding the zip silently runs old code (a self-inflicted silent-error). Mitigated:
   the mtime-aware builder runs on `npm run dev` and in the gate, rebuilding only when a
   source is newer than the zip.
+- **Fully offline/self-hosted boot (no CDN, no PyPI) is deferred, not designed** —
+  scoped as candidate open item 7 in `HANDOFF_PLAN.md` §13. Would vendor the Pyodide
+  `full/` dist + resolved wheels into `build-archive.mjs`'s output instead of the
+  runtime CDN/PyPI fetches above; revisits load-bearing decision #3.
