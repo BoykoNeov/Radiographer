@@ -1,13 +1,14 @@
 <script lang="ts">
   // The prebuilt source catalog picker (M7 / §8): SELECT a named source from a compact
-  // list, review its exact composition (incl. a summed TOTAL — how much of it you're
-  // about to add, e.g. "962,112 g (962.1 kg)" for a spent-fuel vector), optionally
-  // scale it, then commit with "Add". Loading replaces the inventory (mirrors
-  // loadFromText) — its source-age, and (for neutron sources) its tabulated neutron
-  // term populate, then every view evolves live off the one Bateman solve.
+  // list, review its exact composition (incl. a summed TOTAL — how much of it "Load"
+  // would bring in, e.g. "962,112 g (962 kg)" for a spent-fuel vector), optionally
+  // scale it, then commit with "Load". "Load" REPLACES the whole inventory (mirrors
+  // loadFromText, not an append — the button says so) — its source-age, and (for
+  // neutron sources) its tabulated neutron term populate, then every view evolves
+  // live off the one Bateman solve.
   //
-  // Two-step (select → Add) rather than one-click-loads, on purpose: a click on the
-  // list is free to browse (nothing changes until "Add"), and it's where the scale
+  // Two-step (select → Load) rather than one-click-loads, on purpose: a click on the
+  // list is free to browse (nothing changes until "Load"), and it's where the scale
   // control and the total-amount preview live (§9 ask: "what amount is actually
   // added?" was previously invisible — the per-isotope table alone doesn't answer it
   // for a many-nuclide source like spent fuel).
@@ -51,7 +52,7 @@
     loadError = "";
   }
 
-  async function onAdd() {
+  async function onLoadClick() {
     const s = selected;
     if (!s) return;
     const sc = Number.isFinite(scale) && scale > 0 ? scale : 1;
@@ -101,10 +102,10 @@
 <section class="sources">
   <h2>Prebuilt sources</h2>
   <p class="muted intro">
-    Select a curated source to review its composition, adjust how much of it to add, then
-    commit with "Add" — the inventory, source-age, and (for neutron sources) the tabulated
-    neutron term populate, then every view evolves live.
-    <strong>Educational/reference only</strong>, not for safety decisions (§11).
+    Select a curated source to review its composition, adjust how much of it to load, then
+    commit with "Load". <strong>Loading REPLACES the current inventory</strong> (source-age,
+    and for neutron sources the tabulated neutron term, populate too), then every view
+    evolves live. <strong>Educational/reference only</strong>, not for safety decisions (§11).
   </p>
 
   {#if !appState.ready}
@@ -171,18 +172,23 @@
               type="number"
               min="0"
               step="any"
-              aria-label="Scale factor — how much of this source to add"
+              aria-label="Scale factor — how much of this source to load"
               bind:value={scale}
               disabled={loadingId !== null}
             />
             <span class="muted">× the amounts above</span>
           </label>
-          <button data-testid="source-add" onclick={onAdd} disabled={!appState.ready || loadingId !== null}>
-            {loadingId === selected.id ? "Adding…" : "Add"}
+          <button
+            data-testid="source-add"
+            onclick={onLoadClick}
+            disabled={!appState.ready || loadingId !== null}
+            title="Replaces the current inventory with this source"
+          >
+            {loadingId === selected.id ? "Loading…" : "Load (replaces inventory)"}
           </button>
         </div>
       {:else}
-        <p class="muted">Select a source on the left to see its composition and add it.</p>
+        <p class="muted">Select a source on the left to see its composition before loading it.</p>
       {/if}
 
       {#if loadError}
