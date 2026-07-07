@@ -46,7 +46,9 @@
   const OP_MAX = 1.0;
   const ENC_DECADES = 6;
   const SIZE_NEUTRAL = 44; // topology-only fallback when there is no activity (all-stable)
-  const NZ_SPACING = 70; // px per (N or Z) unit in the chart-of-nuclides preset
+  const NZ_SPACING = 100; // px per (N or Z) unit in the chart-of-nuclides preset — wide
+  // enough that a short parent→daughter edge (adjacent (N,Z) cell) still has room for its
+  // label chip without the chip covering the target node (advisor: chip↔node collision).
 
   type LayoutMode = "dagre" | "chart";
   let layoutMode = $state<LayoutMode>("dagre");
@@ -141,7 +143,10 @@
         id: `e${i}:${e.source}-${e.mode}-${e.target}`,
         source: e.source,
         target: e.target,
-        label: `${e.mode} ${fmtPct(e.branching)}`,
+        // Two lines (mode / branching%), not one — a narrower chip collides with fewer
+        // sibling-edge chips and covers less of a short chart(N,Z) edge's target node.
+        // The gate's edge-label check (`/%/` + length>1) is format-agnostic, so this is safe.
+        label: `${e.mode}\n${fmtPct(e.branching)}`,
       },
     }));
     return [...nodes, ...edges];
@@ -188,7 +193,13 @@
         "target-arrow-shape": "triangle",
         "curve-style": "bezier",
         label: "data(label)",
-        "font-size": 10,
+        "font-size": 9,
+        // Two-line label (see `label` above) kept narrow via a hard wrap width — a
+        // smaller chip footprint collides with fewer sibling-edge chips (Dagre) and
+        // covers less of a short edge's target node (Chart N,Z).
+        "text-wrap": "wrap",
+        "text-max-width": "52px",
+        "line-height": 1.1,
         // An opaque rounded chip with dark text: the edge line ran THROUGH the old
         // translucent gray-on-gray label, obscuring the mode + branching %. A fully
         // opaque background hides the line behind the text; the border keeps the chip
@@ -197,7 +208,13 @@
         "text-background-color": "#ffffff",
         "text-background-opacity": 1,
         "text-background-shape": "roundrectangle",
-        "text-background-padding": "3px",
+        // Cytoscape's wrapped-multi-line + center-valign layout centers the
+        // background box on textH/2 but draws the glyphs offset by fontSize/2 from
+        // that same center, so the box's bottom edge clips the last line by
+        // (fontSize/2 − padding) regardless of line count (traced in
+        // labels.mjs applyPrefixedLabelDimensions vs drawing-label-text.mjs's
+        // per-line draw loop). padding must be ≥ fontSize/2 (4.5px here) to absorb it.
+        "text-background-padding": "6px",
         "text-border-color": "#9aa0a6",
         "text-border-width": 0.6,
         "text-border-opacity": 0.8,
@@ -214,11 +231,14 @@
       return { name: "preset", positions, fit: true, padding: 30 };
     }
     // dagre: top→bottom layered DAG (parents above daughters), re-convergence handled.
+    // nodeSep/rankSep widened (was 30/50) so sibling-branch edge label chips (e.g. a
+    // two-way decay off one parent) have room to sit apart instead of butting together
+    // (advisor: chip↔chip collision) — `fit: true` rescales to the container regardless.
     return {
       name: "dagre",
       rankDir: "TB",
-      nodeSep: 30,
-      rankSep: 50,
+      nodeSep: 60,
+      rankSep: 70,
       fit: true,
       padding: 30,
     } as cytoscape.LayoutOptions;
