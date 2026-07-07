@@ -29,7 +29,7 @@ from engine.decay_heat import DecayHeatError, DecayHeatModel
 from engine.dose import SCORING_FLOOR_MEV, DoseError, GammaDoseModel
 from engine.emissions import EmissionsError
 from engine.internal_dose import InternalDoseError, InternalDoseModel
-from engine.inventory import EngineError, SolvedInventory
+from engine.inventory import EngineError, SolvedInventory, convert_quantity
 from engine.neutron_dose import NeutronDoseError, NeutronDoseModel
 from engine.neutron_source import NeutronSourceError
 from engine.spent_fuel_neutron import SpentFuelNeutronModel
@@ -156,6 +156,21 @@ def materials() -> str:
                 }
             )
         return _ok({"materials": out})
+    except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
+        return _err(exc)
+
+
+def convert_unit(payload_json: str) -> str:
+    """``{"name","quantity","from_unit","to_unit"}`` -> ``{ok, quantity}`` — convert one
+    inventory entry's amount between input units (Bq/Ci/g/kg/mg/ug/atoms) via
+    ``engine.inventory.convert_quantity`` (rd's validated half-life/atomic-mass
+    conversions), so the §9 inventory panel's unit dropdown re-expresses the SAME
+    physical amount rather than relabeling the stored number. Stateless — no
+    solve/handle involved."""
+    try:
+        req = json.loads(payload_json)
+        q = convert_quantity(req["name"], float(req["quantity"]), req["from_unit"], req["to_unit"])
+        return _ok({"quantity": q})
     except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
         return _err(exc)
 

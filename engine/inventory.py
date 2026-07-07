@@ -89,6 +89,33 @@ def _rd_input_unit(unit: str) -> str:
     return unit
 
 
+def convert_quantity(name: str, quantity: float, from_unit: str, to_unit: str) -> float:
+    """Convert one nuclide's amount between input units (Bq/Ci/g/kg/mg/ug/atoms),
+    reusing rd's validated conversions (half-life for activity, atomic mass for
+    mass/atoms) — the physical amount re-expressed in ``to_unit``, never a bare
+    relabel of the stored number. The §9 inventory panel's unit dropdown is the
+    caller: switching units must not change the total (a longstanding UI bug this
+    closes). Loud (``EngineError``) on an unknown nuclide/unit, or a unit rd itself
+    rejects (e.g. an activity unit for a stable nuclide — physically meaningless,
+    never silently zeroed)."""
+    try:
+        rd.Nuclide(name)
+    except Exception as exc:  # noqa: BLE001 - re-raise loudly, don't swallow
+        raise EngineError(f"unknown nuclide {name!r}: {exc}") from exc
+    to_u = _rd_input_unit(to_unit)
+    if to_u not in ("num", "Bq", "Ci", "g", "kg", "mg", "ug"):
+        raise EngineError(f"unknown unit {to_unit!r}")
+    try:
+        inv = rd.Inventory({name: float(quantity)}, _rd_input_unit(from_unit))
+        if to_u == "num":
+            return float(inv.numbers()[name])
+        if to_u in ("Bq", "Ci"):
+            return float(inv.activities(to_u)[name])
+        return float(inv.masses(to_u)[name])
+    except Exception as exc:  # noqa: BLE001 - re-raise loudly, don't swallow
+        raise EngineError(f"cannot convert {name} from {from_unit!r} to {to_unit!r}: {exc}") from exc
+
+
 def _apply_validity_floor(
     N: np.ndarray,
     noise: np.ndarray,

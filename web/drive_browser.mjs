@@ -69,14 +69,22 @@ async function launchBrowser() {
 // thread (Pyodide is in-page, not in a worker). The heaviest — fresh
 // fission-product fallout (~177 nuclides) — freezes the renderer for ~30 s, which
 // races Playwright's DEFAULT 30 s action timeout on the click's own event dispatch
-// (and can spill into the paired solve-wait). Give source-card clicks and their
-// paired solve-waits a generous timeout (4× the measured freeze) so the gate
+// (and can spill into the paired solve-wait). Give the commit click and its
+// paired solve-wait a generous timeout (4× the measured freeze) so the gate
 // measures the app's RESULT, not the freeze-vs-timeout coin flip. This fixes GATE
 // MEASUREMENT only — the ~30 s UX freeze itself is a real, separate defect
 // (progress feedback / off-thread solve), tracked in HANDOFF_PLAN §11. Cheap UI
 // toggles (no solve) keep the default fast-fail timeout on purpose.
+//
+// The picker is select → Add (not one-click-loads, §9): clicking a source row only
+// SELECTS it (cheap, no solve — default timeout is fine), and the shared
+// `[data-testid="source-add"]` button is what actually loads/re-solves, so ONLY that
+// second click needs the generous timeout.
 const SOURCE_LOAD_TIMEOUT_MS = 120_000;
-const clickSource = (page, sel) => page.click(sel, { timeout: SOURCE_LOAD_TIMEOUT_MS });
+const clickSource = async (page, sel) => {
+  await page.click(sel);
+  await page.click('[data-testid="source-add"]', { timeout: SOURCE_LOAD_TIMEOUT_MS });
+};
 
 // --- M6b: drive the inventory panel and assert through the rendered app path ---
 
@@ -2718,6 +2726,117 @@ async function runViews(page) {
   return { ok: checks.every((c) => c.pass), checks };
 }
 
+// Follow-up fixes (post-M13, no milestone number): (1) the unit dropdown used to
+// RELABEL the raw quantity instead of converting it — a ~3.7e10× bug switching
+// Bq→Ci; (2) a global "change all units at once" control; (3) the prebuilt-source
+// picker reworked to select → review (entries + a summed TOTAL — "how much is
+// actually added") → Add, with a scale multiplier ("how much of this source").
+async function runUnitsAndSources(page) {
+  const checks = [];
+  const record = (name, pass, detail) => checks.push({ name, pass, detail });
+
+  await page.evaluate(async () => {
+    const app = window.__APP__;
+    await app.clear();
+    app.setReferenceTimeS(0);
+    await app.addEntry("Co-60", 1e9, "Bq");
+  });
+  await page.waitForFunction("window.__APP__.status === 'solved'", null, { timeout: 30_000 });
+
+  // 1) Per-entry unit switch (driven through the REAL <select>) RE-EXPRESSES the
+  //    amount — physical γ rate UNCHANGED, stored quantity converted, not relabeled.
+  const beforeUnit = await page.evaluate(() => {
+    const app = window.__APP__;
+    return { qty: app.entries[0].quantity, gamma: app.gammaRateAtCursor, registry: window.__BRIDGE__.registry_size().size };
+  });
+  await page.selectOption('[aria-label="Unit for Co-60"]', "Ci");
+  await page.waitForFunction("window.__APP__.entries[0].unit === 'Ci'", null, { timeout: 30_000 });
+  const afterUnit = await page.evaluate(() => {
+    const app = window.__APP__;
+    return { qty: app.entries[0].quantity, gamma: app.gammaRateAtCursor, registry: window.__BRIDGE__.registry_size().size };
+  });
+  const wantCi = beforeUnit.qty / 3.7e10;
+  record(
+    "unit dropdown RE-EXPRESSES the amount (Bq→Ci): physical γ rate UNCHANGED, quantity converted not relabeled",
+    Math.abs(afterUnit.qty - wantCi) / wantCi < 1e-6 &&
+      afterUnit.qty !== beforeUnit.qty &&
+      afterUnit.gamma === beforeUnit.gamma &&
+      afterUnit.registry === 1,
+    `qty ${beforeUnit.qty} Bq → ${afterUnit.qty} Ci (want ${wantCi.toExponential(6)}), γ ${beforeUnit.gamma}→${afterUnit.gamma} (unchanged=${afterUnit.gamma === beforeUnit.gamma}), registry=${afterUnit.registry}`,
+  );
+
+  // 2) Global "change all units" (real <select>) across a MIXED-unit inventory (Ci +
+  //    µg, different unit FAMILIES): every entry ends up in Bq, γ rate unchanged.
+  await page.evaluate(async () => {
+    await window.__APP__.addEntry("Am-241", 0.3, "ug");
+  });
+  await page.waitForFunction(
+    "window.__APP__.entries.length === 2 && window.__APP__.status === 'solved'",
+    null,
+    { timeout: 30_000 },
+  );
+  const beforeAll = await page.evaluate(() => ({
+    gamma: window.__APP__.gammaRateAtCursor,
+    units: window.__APP__.entries.map((e) => e.unit),
+  }));
+  await page.selectOption('[aria-label="Change all units to"]', "Bq");
+  await page.waitForFunction("window.__APP__.entries.every((e) => e.unit === 'Bq')", null, {
+    timeout: 30_000,
+  });
+  const afterAll = await page.evaluate(() => ({
+    gamma: window.__APP__.gammaRateAtCursor,
+    units: window.__APP__.entries.map((e) => e.unit),
+  }));
+  record(
+    "global 'change all units' converts a MIXED-unit inventory (Ci+µg) to one unit, γ rate unchanged",
+    beforeAll.units.join(",") === "Ci,ug" &&
+      afterAll.units.every((u) => u === "Bq") &&
+      afterAll.gamma === beforeAll.gamma,
+    `before=[${beforeAll.units.join(", ")}] → after=[${afterAll.units.join(", ")}], γ unchanged=${afterAll.gamma === beforeAll.gamma}`,
+  );
+
+  // 3) Sources picker: SELECTING a row renders its entries + a summed TOTAL (the
+  //    "how much is actually added" ask) WITHOUT loading it — the inventory above
+  //    (still 2 entries) must be untouched by the mere selection.
+  const CS137 = '[data-testid="source-cs137-source"]';
+  await page.click(CS137);
+  const detail = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll(".detail table.entries tbody tr")];
+    const total = document.querySelector(".detail .total");
+    return {
+      stillTwoEntries: window.__APP__.entries.length === 2,
+      rowText: rows.map((r) => r.textContent.trim()),
+      totalText: total ? total.textContent.trim() : null,
+    };
+  });
+  record(
+    "selecting a source shows its entries + a summed total WITHOUT loading it yet",
+    detail.stillTwoEntries &&
+      detail.rowText.length === 1 &&
+      /Cs-137/.test(detail.rowText[0]) &&
+      /Total/.test(detail.totalText || ""),
+    `stillTwoEntries=${detail.stillTwoEntries}, rows=${JSON.stringify(detail.rowText)}, total="${detail.totalText}"`,
+  );
+
+  // 4) Scale multiplier (§9 "how much of this source to add"), driven through the real
+  //    scale input + Add button: scale=2 on the Cs-137 manifest (1 Ci) commits 2 Ci.
+  await page.fill('.detail input[aria-label*="Scale factor"]', "2");
+  await page.click('[data-testid="source-add"]', { timeout: SOURCE_LOAD_TIMEOUT_MS });
+  await page.waitForFunction(
+    "window.__APP__.status === 'solved' && window.__APP__.entries.length === 1",
+    null,
+    { timeout: SOURCE_LOAD_TIMEOUT_MS },
+  );
+  const scaled = await page.evaluate(() => window.__APP__.entries[0]);
+  record(
+    "scale=2 on the Cs-137 source (1 Ci manifest) loads exactly 2 Ci — the 'how much to add' control",
+    scaled.name === "Cs-137" && scaled.unit === "Ci" && Math.abs(scaled.quantity - 2) < 1e-9,
+    `entry=${JSON.stringify(scaled)}`,
+  );
+
+  return { ok: checks.every((c) => c.pass), checks };
+}
+
 let exitCode = 1;
 let browser;
 let server;
@@ -2751,6 +2870,7 @@ try {
   let m7 = { ok: false, checks: [] };
   let m13 = { ok: false, checks: [] };
   let views = { ok: false, checks: [] };
+  let unitsAndSources = { ok: false, checks: [] };
   if (m6aOk) {
     m6b = await runM6b(page);
     if (m6b.ok) {
@@ -2771,6 +2891,11 @@ try {
                     m13 = await runM13(page);
                     if (m13.ok) {
                       views = await runViews(page);
+                      if (views.ok) {
+                        unitsAndSources = await runUnitsAndSources(page);
+                      } else {
+                        console.log("[gate] skipping units/sources follow-up — Views checks failed");
+                      }
                     } else {
                       console.log("[gate] skipping Views — M13 checks failed");
                     }
@@ -2852,6 +2977,11 @@ try {
     console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
   }
 
+  console.log("\n===== Units + sources follow-up: unit conversion, global unit change, scaled prebuilt add =====");
+  for (const c of unitsAndSources.checks) {
+    console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
+  }
+
   exitCode =
     m6aOk &&
     m6b.ok &&
@@ -2863,12 +2993,13 @@ try {
     m6h.ok &&
     m7.ok &&
     m13.ok &&
-    views.ok
+    views.ok &&
+    unitsAndSources.ok
       ? 0
       : 1;
   console.log(
     exitCode === 0
-      ? "\n✅ PASS (real browser): boot + inventory + curves + time + chain + dose + shield + honesty/round-trip + sources/neutron + spent-fuel/decay-heat + internal/committed dose + views (hide-show + time-unit)"
+      ? "\n✅ PASS (real browser): boot + inventory + curves + time + chain + dose + shield + honesty/round-trip + sources/neutron + spent-fuel/decay-heat + internal/committed dose + views (hide-show + time-unit) + units/sources follow-up"
       : "\n❌ FAIL (real browser)",
   );
 } catch (err) {

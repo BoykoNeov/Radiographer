@@ -342,6 +342,33 @@ def test_materials_lists_buildup_flag_and_density():
     assert by_id["paraffin"]["density_g_cm3"] > 0.0
 
 
+def test_convert_unit_round_trip_and_solve_identity():
+    # The §9 unit-dropdown fix: convert_unit must re-express the SAME physical amount,
+    # not relabel the number — proven by solving both forms and getting identical atoms.
+    res = json.loads(
+        bridge.convert_unit(json.dumps({"name": "Co-60", "quantity": 1e9, "from_unit": "Bq", "to_unit": "Ci"}))
+    )
+    assert res["ok"] is True
+    ci = res["quantity"]
+    assert ci == pytest.approx(1e9 / 3.7e10, rel=1e-9)
+
+    from_bq = json.loads(bridge.solve(json.dumps({"nuclides": {"Co-60": 1e9}, "unit": "Bq"})))
+    from_ci = json.loads(bridge.solve(json.dumps({"nuclides": {"Co-60": ci}, "unit": "Ci"})))
+    assert _atoms_at_t0(from_bq["handle"], "Co-60") == pytest.approx(
+        _atoms_at_t0(from_ci["handle"], "Co-60"), rel=1e-9
+    )
+    bridge.release(from_bq["handle"])
+    bridge.release(from_ci["handle"])
+
+
+def test_convert_unit_unknown_nuclide_is_structured_error():
+    res = json.loads(
+        bridge.convert_unit(json.dumps({"name": "Zz-000", "quantity": 1.0, "from_unit": "Bq", "to_unit": "Ci"}))
+    )
+    assert res["ok"] is False
+    assert res["error"]["type"] == "EngineError"
+
+
 def test_dose_thickness_sweep_reconciles_and_attenuates():
     # The §9 dose-vs-thickness sweep (Design-A): per-nuclide, distance/time-free γ
     # coefficients C_n(x). x=0 == the unshielded baseline EXACTLY; the curve is monotone

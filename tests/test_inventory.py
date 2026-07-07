@@ -26,6 +26,7 @@ from engine.inventory import (
     EngineError,
     SolvedInventory,
     _apply_validity_floor,
+    convert_quantity,
 )
 
 DAY_S = 86400.0
@@ -203,6 +204,74 @@ def test_input_unit_atoms_and_activity():
     from_atoms = SolvedInventory.from_spec({"Cs-137": 1.0 / lam}, "atoms")
     a0 = from_atoms.evaluate([0.0], axis="activity", unit="Bq")["series"]["Cs-137"][0]
     assert a0 == pytest.approx(1.0, rel=1e-12)
+
+
+# --- convert_quantity (§9 unit-dropdown fix: re-express, never relabel) -----
+
+
+def test_convert_quantity_activity_round_trips_exactly():
+    bq = 1e9
+    ci = convert_quantity("Co-60", bq, "Bq", "Ci")
+    back = convert_quantity("Co-60", ci, "Ci", "Bq")
+    assert ci == pytest.approx(bq / 3.7e10, rel=1e-12)
+    assert back == pytest.approx(bq, rel=1e-9)
+
+
+def test_convert_quantity_mass_activity_atoms_round_trip():
+    g = 5.0
+    bq = convert_quantity("Co-60", g, "g", "Bq")
+    atoms = convert_quantity("Co-60", g, "g", "atoms")
+    back_g = convert_quantity("Co-60", atoms, "atoms", "g")
+    assert back_g == pytest.approx(g, rel=1e-9)
+    # cross-check activity against atoms via A = ln2/T half * N (independent of the
+    # rd.Inventory call path exercised above — the point of a non-tautological test)
+    lam = math.log(2) / rd.Nuclide("Co-60").half_life("s")
+    assert bq == pytest.approx(lam * atoms, rel=1e-9)
+
+
+def test_convert_quantity_mass_to_activity_matches_independent_specific_activity_formula():
+    # A = ln2/T_half * N, N = mass_g / atomic_mass_g_per_mol * N_A — computed here from
+    # rd.Nuclide's raw half-life/atomic-mass attributes, NOT via rd.Inventory (the code
+    # path convert_quantity itself uses), so this is a genuine independent check.
+    nuclide = rd.Nuclide("Co-60")
+    mass_g = 1e-6
+    n_atoms = mass_g / nuclide.atomic_mass * 6.02214076e23
+    expected_bq = math.log(2) / nuclide.half_life("s") * n_atoms
+    got_bq = convert_quantity("Co-60", mass_g, "g", "Bq")
+    assert got_bq == pytest.approx(expected_bq, rel=1e-6)
+
+
+def test_convert_quantity_solve_is_physically_identical_after_conversion():
+    # The real invariant: switching units must not change the SOLVED physical state.
+    bq = 1e9
+    ci = convert_quantity("Co-60", bq, "Bq", "Ci")
+    from_bq = SolvedInventory.from_spec({"Co-60": bq}, "Bq")
+    from_ci = SolvedInventory.from_spec({"Co-60": ci}, "Ci")
+    atoms_bq = from_bq.evaluate([0.0], axis="atoms")["series"]["Co-60"][0]
+    atoms_ci = from_ci.evaluate([0.0], axis="atoms")["series"]["Co-60"][0]
+    assert atoms_ci == pytest.approx(atoms_bq, rel=1e-9)
+
+
+def test_convert_quantity_unknown_nuclide_is_loud():
+    with pytest.raises(EngineError):
+        convert_quantity("Zz-000", 1.0, "Bq", "Ci")
+
+
+def test_convert_quantity_unknown_unit_is_loud():
+    with pytest.raises(EngineError):
+        convert_quantity("Co-60", 1.0, "Bq", "parsecs")
+
+
+def test_convert_quantity_stable_nuclide_activity_input_is_loud_not_silent():
+    # rd itself rejects an activity INPUT for a stable nuclide (physically meaningless);
+    # convert_quantity must surface that loudly, not swallow it into a fabricated number.
+    with pytest.raises(EngineError):
+        convert_quantity("Pb-208", 1.0, "Bq", "g")
+
+
+def test_convert_quantity_stable_nuclide_mass_to_activity_is_honest_zero():
+    # Mass -> activity for a stable nuclide is a legitimate physical zero, not an error.
+    assert convert_quantity("Pb-208", 1.0, "g", "Bq") == 0.0
 
 
 # --- metadata (§9) -------------------------------------------------------

@@ -896,19 +896,62 @@ export class AppState {
     await this.solve();
   }
 
-  /** Edit an existing entry's quantity and/or unit (re-solves). */
-  async updateEntry(index: number, patch: { quantity?: number; unit?: string }): Promise<string | null> {
+  /** Edit an existing entry's quantity (re-solves). Unit changes go through
+   *  `convertEntryUnit` / `convertAllUnits` instead — they re-express the amount, they
+   *  don't just relabel it. */
+  async updateEntry(index: number, patch: { quantity: number }): Promise<string | null> {
     if (index < 0 || index >= this.entries.length) return "no such entry";
-    if (patch.quantity !== undefined) {
-      const qErr = this.validateQuantity(patch.quantity);
-      if (qErr) return qErr;
-    }
+    const qErr = this.validateQuantity(patch.quantity);
+    if (qErr) return qErr;
     this.entries = this.entries.map((e, i) => (i === index ? { ...e, ...patch } : e));
-    // NOTE: a quantity/unit edit does NOT drop `neutronSource` (unlike add/remove). `updateEntry`
+    // NOTE: a quantity edit does NOT drop `neutronSource` (unlike add/remove). `updateEntry`
     // cannot change a nuclide's NAME, so the source's parent stays in the inventory — and the
     // neutron dose RIDES that parent's activity (S(t)=n_per_decay·A_parent(t), M5/§6.3), so a
     // strength change must RESCALE neutron, not kill it (advisor). The add/remove guards still
     // cover the only edits that can orphan the parent; the loud `neutronDoseError` is the backstop.
+    await this.solve();
+    return null;
+  }
+
+  /** Change one entry's UNIT, re-expressing the SAME physical amount in the new unit
+   *  (via the engine's validated conversions — half-life for activity, atomic mass for
+   *  mass/atoms) — fixes a bug where the unit dropdown silently relabeled the raw number
+   *  instead of converting it. No-op if the unit is unchanged. Same neutron-source
+   *  survival as `updateEntry` (the physical amount, hence the parent's activity, is
+   *  unchanged — this is a pure re-expression, not even a rescale). */
+  async convertEntryUnit(index: number, toUnit: string): Promise<string | null> {
+    if (index < 0 || index >= this.entries.length) return "no such entry";
+    const e = this.entries[index];
+    if (toUnit === e.unit) return null;
+    if (!this.client) return "engine not ready";
+    const res = this.client.convert_unit({ name: e.name, quantity: e.quantity, from_unit: e.unit, to_unit: toUnit });
+    if (!res.ok) return `${res.error.type}: ${res.error.message}`;
+    this.entries = this.entries.map((entry, i) =>
+      i === index ? { ...entry, quantity: res.quantity, unit: toUnit } : entry,
+    );
+    await this.solve();
+    return null;
+  }
+
+  /** Change EVERY entry's unit to `toUnit` at once (§9 ask: a global unit switch, not
+   *  just per-entry). Each entry converts independently from ITS current unit (entries
+   *  may start in different units) — loud on the first conversion failure, which aborts
+   *  before any entries are mutated (never a partial, half-converted inventory). One
+   *  re-solve for the whole batch. */
+  async convertAllUnits(toUnit: string): Promise<string | null> {
+    if (this.entries.length === 0) return null;
+    if (!this.client) return "engine not ready";
+    const next: InventoryEntry[] = [];
+    for (const e of this.entries) {
+      if (e.unit === toUnit) {
+        next.push(e);
+        continue;
+      }
+      const res = this.client.convert_unit({ name: e.name, quantity: e.quantity, from_unit: e.unit, to_unit: toUnit });
+      if (!res.ok) return `${e.name}: ${res.error.type}: ${res.error.message}`;
+      next.push({ ...e, quantity: res.quantity, unit: toUnit });
+    }
+    this.entries = next;
     await this.solve();
     return null;
   }
@@ -1721,10 +1764,14 @@ export class AppState {
    * the engine validates the entries loudly on solve as the backstop (#3). The cursor is
    * left at `solve()`'s midpoint home, which lands mid-evolution so the §5 equilibrium
    * demos (Cs-137 secular, Mo-99/Tc-99m transient) are visible immediately on load.
-   * Returns the error message on a failed solve, else null.
+   * `scale` (default 1) multiplies every entry's quantity — the §9 "how much of this
+   * source" control; the unit is unchanged, so this is a plain linear rescale of the
+   * physical amount (and, transitively, of any tabulated/multi-parent neutron term,
+   * which rides the parent's activity). Returns the error message on a failed solve,
+   * else null.
    */
-  async loadSource(source: PrebuiltSource): Promise<string | null> {
-    this.entries = source.entries.map((e) => ({ ...e }));
+  async loadSource(source: PrebuiltSource, scale: number = 1): Promise<string | null> {
+    this.entries = source.entries.map((e) => ({ ...e, quantity: e.quantity * scale }));
     this.referenceTimeS = source.referenceTimeS ?? 0;
     // Set AFTER nothing can null these (a load is not a hand-edit). Mutually exclusive: a source
     // is either a single tabulated neutron key OR a spent-fuel multi-parent vector, never both.

@@ -46,6 +46,28 @@
     if (err) input.value = String(prev);
   }
 
+  // Switch one entry's unit — re-expresses the same physical amount (never a relabel).
+  let unitError = $state("");
+  async function onEditUnit(i: number, ev: Event) {
+    unitError = "";
+    const select = ev.target as HTMLSelectElement;
+    const err = await appState.convertEntryUnit(i, select.value);
+    if (err) unitError = err;
+  }
+
+  // Global "change all units at once" control (§9 ask). Action-only: resets to the
+  // placeholder after applying, since entries may again diverge per-entry later.
+  let globalUnitError = $state("");
+  async function onConvertAllUnits(ev: Event) {
+    const select = ev.target as HTMLSelectElement;
+    const unit = select.value;
+    if (!unit) return;
+    globalUnitError = "";
+    const err = await appState.convertAllUnits(unit);
+    if (err) globalUnitError = err;
+    select.value = "";
+  }
+
   // Half-life formatting for the legend (seconds → readable). Engine gives the
   // canonical readable form via chain() in M6e; this is a light helper for M6b.
   const MIN = 60,
@@ -135,11 +157,7 @@
               />
             </td>
             <td>
-              <select
-                aria-label={`Unit for ${e.name}`}
-                value={e.unit}
-                onchange={(ev) => appState.updateEntry(i, { unit: (ev.target as HTMLSelectElement).value })}
-              >
+              <select aria-label={`Unit for ${e.name}`} value={e.unit} onchange={(ev) => onEditUnit(i, ev)}>
                 {#each UNIT_OPTIONS as u (u.value)}
                   <option value={u.value}>{u.label}</option>
                 {/each}
@@ -150,8 +168,25 @@
         {/each}
       </tbody>
     </table>
+    <div class="global-unit">
+      <label>
+        Change all units to:
+        <select aria-label="Change all units to" value="" onchange={onConvertAllUnits}>
+          <option value="" disabled>—</option>
+          {#each UNIT_OPTIONS as u (u.value)}
+            <option value={u.value}>{u.label}</option>
+          {/each}
+        </select>
+      </label>
+    </div>
   {:else}
     <p class="muted">No isotopes loaded. Add one above to solve its decay chain.</p>
+  {/if}
+  {#if unitError}
+    <p class="inline-error" role="alert">⚠ {unitError}</p>
+  {/if}
+  {#if globalUnitError}
+    <p class="inline-error" role="alert">⚠ {globalUnitError}</p>
   {/if}
 
   <!-- Controls: precision, reference time -->
@@ -264,6 +299,15 @@
     border-collapse: collapse;
     width: 100%;
     margin-top: 0.75rem;
+  }
+  .global-unit {
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+  }
+  .global-unit label {
+    display: inline-flex;
+    gap: 0.4rem;
+    align-items: center;
   }
   table.entries th,
   table.entries td {

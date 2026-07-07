@@ -281,6 +281,14 @@ export interface RegistrySizeOk {
   size: number;
 }
 
+/** One entry's amount re-expressed in a new unit (§9 unit-dropdown fix) — the SAME
+ *  physical amount, via rd's validated half-life/atomic-mass conversions, never a
+ *  bare relabel of the stored number. */
+export interface ConvertUnitOk {
+  quantity: number;
+}
+export type ConvertUnitResponse = Result<ConvertUnitOk>;
+
 /** One §8 spent-fuel catalog source — inventory sourced from validated `data/spent_fuel`. */
 export interface SpentFuelSource {
   id: string;
@@ -373,6 +381,13 @@ export class BridgeClient {
   /** The M6g shield-builder material list (id, has_buildup, density); one fetch, cached. */
   materials(): MaterialsResponse {
     return this.call<MaterialsResponse>("materials");
+  }
+
+  /** Re-express one entry's amount in a new unit (§9 unit-dropdown fix) — stateless,
+   *  no handle involved. The caller (the inventory unit dropdown) applies the returned
+   *  quantity so a unit change never changes the physical total. */
+  convert_unit(req: { name: string; quantity: number; from_unit: string; to_unit: string }): ConvertUnitResponse {
+    return this.call<ConvertUnitResponse>("convert_unit", JSON.stringify(req));
   }
 
   solve(spec: SolveSpec): SolveResponse {
