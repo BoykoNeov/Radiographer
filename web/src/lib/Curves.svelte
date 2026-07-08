@@ -114,8 +114,12 @@
     gd.removeAllListeners?.("plotly_legendclick");
     gd.removeAllListeners?.("plotly_legenddoubleclick");
     gd.on("plotly_legendclick", (ev) => {
-      const name = (ev as { data: { data: Partial<Plotly.PlotData>[] }; curveNumber: number }).data
-        .data[(ev as { curveNumber: number }).curveNumber]?.name as string | undefined;
+      // `curveNumber` is the clicked trace's index. buildTraces() maps `curve.nuclides`
+      // 1:1 in order (trace i ⇒ nuclides[i]), so resolve the name off the store rather
+      // than the event payload — Plotly's legendclick `ev.data` IS the traces array, so
+      // the old `ev.data.data[…]` was a level too deep (undefined → threw → no toggle).
+      const curveNumber = (ev as { curveNumber: number }).curveNumber;
+      const name = appState.curve?.nuclides[curveNumber];
       if (name) appState.toggleHidden(name);
       return false; // suppress Plotly's own legendonly toggle — appState drives it
     });
@@ -376,6 +380,20 @@
   .plot.empty {
     height: 0;
     margin: 0;
+  }
+  /* Move Plotly's (hover-only) modebar to the TOP-LEFT. Its default is the top-RIGHT,
+     directly over our vertical legend — where it silently intercepts clicks on the top
+     legend entries, so those species could not be hidden/shown by clicking the legend
+     (the first/parent nuclide is the top entry, so this hit the species users care about
+     most). :global because Plotly injects this DOM itself and re-creates it on every
+     react(); a CSS rule persists across re-renders where an inline style would be wiped.
+     Left overrides the container's right-anchored default. !important because Plotly
+     injects its own `.modebar { right: 2px }` rule at runtime at equal specificity — a
+     plain rule loses the cascade tie, so the bar stays put (verified: without !important
+     the top entry is still intercepted). */
+  .plot :global(.modebar) {
+    left: 0 !important;
+    right: auto !important;
   }
   .note {
     margin: 0.75rem 0 0;

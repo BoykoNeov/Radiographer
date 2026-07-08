@@ -2959,6 +2959,71 @@ async function runViews(page) {
     `hidden: traces=${bulkHidden.nTraces} allLegendOnly=${bulkHidden.allLegendOnly}, ${bulkHidden.nNodes} nodes faded=${bulkHidden.allFaded}; shown traces=${shownData.length}`,
   );
 
+  // (a4) Click the REAL Plotly legend entry (the DOM path, not emit/buttons) — the blind
+  //      spot that let TWO legend bugs ship: (i) the `ev.data.data` handler bug (a level too
+  //      deep → undefined → threw → no toggle, no clean suppression) and (ii) Plotly's
+  //      hover modebar defaulting to the top-RIGHT, directly over the top legend entry,
+  //      silently intercepting its clicks. We click the TOP entry (Cs-137, the parent) —
+  //      the one bug (ii) blocked — via a real mouse click on its `.legendtoggle` rect
+  //      (Plotly binds legendclick there, not on the `.legendtext`), waiting out Plotly's
+  //      single-vs-double-click timer. Must route through toggleHidden in BOTH directions.
+  const legToggleBox = (nuclide) =>
+    page.evaluate(
+      ({ sel, nuc }) => {
+        const g = [...document.querySelectorAll(`${sel} .legend .traces`)].find(
+          (gr) => gr.querySelector(".legendtext")?.getAttribute("data-unformatted") === nuc,
+        );
+        if (!g) return null;
+        const r = g.querySelector(".legendtoggle").getBoundingClientRect();
+        return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+      },
+      { sel: PLOTV, nuc: nuclide },
+    );
+  const { legHide, legShow } = await guarded(
+    "runViews tail (a4) real-legend-click on the TOP entry",
+    async () => {
+      await page.waitForSelector(`${PLOTV} .legend .traces`, { timeout: 30_000 });
+      await page.$eval(PLOTV, (el) => el.scrollIntoView({ block: "center" }));
+      const clickCs = async () => {
+        const box = await legToggleBox("Cs-137");
+        if (!box) throw new Error("no Cs-137 legend toggle rect");
+        await page.mouse.click(box.x, box.y);
+      };
+      await clickCs(); // enabled → hidden
+      await page.waitForFunction("window.__APP__.hiddenNuclides.has('Cs-137') === true", null, {
+        timeout: 30_000,
+      });
+      const legHide = await page.evaluate((sel) => {
+        const t = document.querySelector(sel).data.find((d) => d.name === "Cs-137");
+        return { hidden: window.__APP__.hiddenNuclides.has("Cs-137"), visible: t.visible };
+      }, PLOTV);
+      await clickCs(); // hidden → enabled (the direction the user reported dead)
+      await page.waitForFunction("window.__APP__.hiddenNuclides.has('Cs-137') === false", null, {
+        timeout: 30_000,
+      });
+      const legShow = await page.evaluate((sel) => {
+        const t = document.querySelector(sel).data.find((d) => d.name === "Cs-137");
+        return { hidden: window.__APP__.hiddenNuclides.has("Cs-137"), visible: t.visible };
+      }, PLOTV);
+      return { legHide, legShow };
+    },
+  );
+  record(
+    "real click on the TOP legend entry routes through toggleHidden BOTH ways (modebar no longer intercepts; handler resolves the name) — the shipped-bug path",
+    legHide.hidden === true &&
+      legHide.visible === "legendonly" &&
+      legShow.hidden === false &&
+      legShow.visible === true,
+    `after 1st click: hidden=${legHide.hidden} visible=${legHide.visible}; after 2nd: hidden=${legShow.hidden} visible=${legShow.visible}`,
+  );
+
+  // NB: the DAG's greyed-node real-mouse-click restore path (Cytoscape canvas hit-test,
+  // not emit("tap")) was manually verified during this fix — a real click on a hidden
+  // 22px node un-hides it. It is intentionally NOT a gate step: clicking a canvas at
+  // computed pixel coordinates is layout/timing-sensitive (passed under the dev server,
+  // timed out under the built preview), and a non-deterministic step is worse than none.
+  // The DAG toggle LOGIC is already covered by the emit("tap") steps (a1/a2) above.
+
   // (b) x-axis time unit s → yr: the x ARRAY rescales by the Julian year (31 557 600 s),
   //     the axis title tracks, the cursor line follows, and the store cursor stays SI s.
   const { beforeUnit, afterUnit } = await guarded(
