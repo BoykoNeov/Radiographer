@@ -24,6 +24,20 @@
 
   cytoscape.use(dagre); // register the dagre layout once (else `layout:"dagre"` throws)
 
+  // Diagnostic only (gate-js-heap-runaway, HANDOFF_PLAN §13 #8): see the matching
+  // comment in Curves.svelte — logged inline (not only via the rAF sampler) so a
+  // microtask-flush storm, which starves rAF, still gets a signal out.
+  let lastCyLog = 0;
+  function logCyRenders(): void {
+    if (!window.__PERF__) return;
+    const now = performance.now();
+    if (now - lastCyLog < 200) return;
+    lastCyLog = now;
+    console.log(
+      `[__PERF__] cyBuild=${window.__PERF__.renders.cyBuild} cyEncode=${window.__PERF__.renders.cyEncode}`,
+    );
+  }
+
   const SF_ID = "SF";
   const SF_COLOR = "#9e9e9e";
 
@@ -318,6 +332,8 @@
     untrack(() => {
       destroyCy();
       presetPositions = buildPresetPositions(dag.nodes);
+      if (window.__PERF__) window.__PERF__.renders.cyBuild++; // gate-js-heap-runaway diagnostic
+      logCyRenders();
       cy = cytoscape({
         container: el,
         elements: elements(),
@@ -358,7 +374,11 @@
     void appState.activityAtCursor; // the tracked dep
     void activityPeak;
     void appState.hiddenNuclides.size; // re-grey on hide/show (advisor #3)
-    if (cy) applyEncoding();
+    if (cy) {
+      if (window.__PERF__) window.__PERF__.renders.cyEncode++; // gate-js-heap-runaway diagnostic
+      logCyRenders();
+      applyEncoding();
+    }
   });
 
   // Layout toggle (imperative): re-run the chosen layout on the existing graph

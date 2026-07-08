@@ -19,13 +19,170 @@
 //   node drive_browser.mjs            # against the Vite dev server (fast loop)
 //   node drive_browser.mjs --built    # against `vite build` + `vite preview`
 
-import { spawnSync } from "node:child_process";
+import { spawnSync, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { chromium } from "playwright";
 
 const WEB_DIR = path.dirname(fileURLToPath(import.meta.url));
 const BUILT = process.argv.includes("--built");
+
+// --- Diagnostics for the gate-js-heap-runaway investigation (HANDOFF_PLAN §13 #8) --
+//
+// Two complementary probes, because a genuine main-thread runaway can make even
+// Playwright's own protocol traffic stop resolving (see the memory: a page.evaluate
+// issued mid-hang never returns):
+//
+// 1) An OS-level RSS poller (PowerShell, Windows-only) watching the bundled
+//    Chromium's OWN process tree (rooted at the PID WE launched, not the user's
+//    other ~40 Chrome windows — that's what confounded the earlier external
+//    Get-Process attempt). This runs in a wholly separate process, so it keeps
+//    sampling even if the renderer's JS main thread is fully monopolized.
+// 2) Fine-grained Node-side step logging around the M6a→M6b boundary (see
+//    runM6b below): a console.log BEFORE each page action, plus a best-effort
+//    __PERF__ snapshot (in-page heap + Plotly/Cytoscape render counters, added to
+//    App.svelte/Curves.svelte/Chain.svelte) raced against a short timeout. If the
+//    page hangs mid-step, the snapshot degrades to "TIMED_OUT" instead of hanging
+//    this diagnostic too — the Node-side log line still tells us which step never
+//    returned.
+// Playwright's `Browser` (from `.launch()`) has no `.process()` — that only exists
+// on `BrowserServer`/`ElectronApplication`. Find the launched Chrome-for-Testing PID(s)
+// by diffing the OS process list before/after launch instead.
+function listChromePids() {
+  if (process.platform !== "win32") return [];
+  try {
+    const r = spawnSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-Command",
+        "(Get-CimInstance Win32_Process -Filter \"Name='chrome.exe' or Name='headless_shell.exe'\" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ProcessId) -join ','",
+      ],
+      { encoding: "utf8" },
+    );
+    return (r.stdout || "")
+      .trim()
+      .split(",")
+      .map((s) => parseInt(s, 10))
+      .filter((n) => Number.isFinite(n));
+  } catch {
+    return [];
+  }
+}
+
+// Only ever kills OUR launched process tree (never a blanket "all chrome.exe" —
+// the user has ~40 unrelated real Chrome windows open on this machine).
+function killProcessTree(rootPids) {
+  if (process.platform !== "win32" || !rootPids || rootPids.length === 0) return;
+  try {
+    spawnSync("powershell.exe", [
+      "-NoProfile",
+      "-Command",
+      `$roots=@(${rootPids.join(",")}); $ids=New-Object System.Collections.Generic.HashSet[int]; foreach($r in $roots){[void]$ids.Add($r)}; $frontier=[int[]]$roots; for($i=0;$i -lt 6;$i++){ if($frontier.Count -eq 0){break}; $filter=($frontier|ForEach-Object{"ParentProcessId=$_"}) -join " or "; $kids=Get-CimInstance Win32_Process -Filter $filter -ErrorAction SilentlyContinue; $next=@(); foreach($k in $kids){ if($ids.Add([int]$k.ProcessId)){$next+=[int]$k.ProcessId} }; $frontier=$next }; foreach($id in $ids){ Stop-Process -Id $id -Force -ErrorAction SilentlyContinue }`,
+    ]);
+  } catch {
+    /* best-effort cleanup only */
+  }
+}
+
+function startRssWatcher(rootPids, intervalMs = 2000) {
+  if (process.platform !== "win32" || !rootPids || rootPids.length === 0) return { stop() {} };
+  const script = `
+$roots = @(${rootPids.join(",")})
+while ($true) {
+  try {
+    $ids = New-Object System.Collections.Generic.HashSet[int]
+    foreach ($r in $roots) { [void]$ids.Add($r) }
+    $frontier = [int[]]$roots
+    for ($i = 0; $i -lt 6; $i++) {
+      if ($frontier.Count -eq 0) { break }
+      $filter = ($frontier | ForEach-Object { "ParentProcessId=$_" }) -join " or "
+      $kids = Get-CimInstance Win32_Process -Filter $filter -ErrorAction SilentlyContinue
+      $next = @()
+      foreach ($k in $kids) { if ($ids.Add([int]$k.ProcessId)) { $next += [int]$k.ProcessId } }
+      $frontier = $next
+    }
+    $filter2 = ($ids | ForEach-Object { "ProcessId=$_" }) -join " or "
+    $procs = Get-CimInstance Win32_Process -Filter $filter2 -ErrorAction SilentlyContinue
+    $sum = ($procs | Measure-Object WorkingSetSize -Sum).Sum
+    Write-Output ("RSS " + [DateTime]::UtcNow.ToString("o") + " n=" + $procs.Count + " MB=" + [math]::Round($sum / 1MB, 1))
+  } catch {
+    Write-Output ("RSS-ERR " + $_.Exception.Message)
+  }
+  Start-Sleep -Milliseconds ${intervalMs}
+}`;
+  const proc = spawn("powershell.exe", ["-NoProfile", "-Command", script]);
+  proc.stdout.on("data", (d) => process.stdout.write(`  [rss] ${d}`));
+  proc.stderr.on("data", (d) => process.stdout.write(`  [rss-err] ${d}`));
+  proc.on("error", (e) => console.log(`  [rss] watcher failed to start: ${e.message}`));
+  return {
+    stop() {
+      try {
+        proc.kill();
+      } catch {
+        /* best-effort */
+      }
+    },
+  };
+}
+
+const PERF_SNAPSHOT_TIMEOUT_MS = 5_000;
+async function perfSnapshot(page) {
+  try {
+    return await Promise.race([
+      page.evaluate(() => (window.__PERF__ ? JSON.parse(JSON.stringify(window.__PERF__)) : null)),
+      new Promise((resolve) => setTimeout(() => resolve("TIMED_OUT"), PERF_SNAPSHOT_TIMEOUT_MS)),
+    ]);
+  } catch (err) {
+    return `ERROR: ${err.message}`;
+  }
+}
+async function logStep(page, label) {
+  const perf = await perfSnapshot(page);
+  let detail;
+  if (perf && typeof perf === "object") {
+    const last = perf.frames[perf.frames.length - 1];
+    const heap = last && last.heap != null ? `${(last.heap / 1e6).toFixed(1)}MB` : "n/a";
+    detail = `heap=${heap} frames=${perf.frames.length} renders=${JSON.stringify(perf.renders)}`;
+  } else {
+    detail = String(perf);
+  }
+  console.log(`  [perf] ${new Date().toISOString()} ${label} — ${detail}`);
+}
+
+// gate-js-heap-runaway (HANDOFF_PLAN §13 item 8): a bare page.evaluate/waitForFunction
+// against a dead/wedged renderer can hang forever — neither resolving nor rejecting —
+// which is how a single crash turns into a multi-hour zombie process instead of a
+// FAIL. Wrap suspect calls in this hard timeout so the gate fails loudly and fast; it
+// also tells us WHICH side hung (the evaluate/compute vs. the wait/render side), since
+// abandoning the await doesn't cancel the in-flight CDP command underneath it.
+const GUARD_TIMEOUT_MS = 25_000;
+async function guarded(label, fn) {
+  const started = Date.now();
+  console.log(`  [guard] ${new Date().toISOString()} → ${label}`);
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve("TIMED_OUT"), GUARD_TIMEOUT_MS);
+  });
+  const result = await Promise.race([
+    fn()
+      .then((v) => ({ v }))
+      .catch((e) => ({ e })),
+    timeout,
+  ]);
+  clearTimeout(timer);
+  const ms = Date.now() - started;
+  if (result === "TIMED_OUT") {
+    console.log(`  [guard] ✗ TIMED OUT after ${ms}ms: ${label} (call is still pending in-page)`);
+    throw new Error(`guarded(${label}) timed out after ${ms}ms`);
+  }
+  if (result.e) {
+    console.log(`  [guard] ✗ ERROR after ${ms}ms in ${label}: ${result.e.message}`);
+    throw result.e;
+  }
+  console.log(`  [guard] ✓ ${label} (${ms}ms)`);
+  return result.v;
+}
 
 function ensureArchive() {
   console.log("[gate] ensuring runtime archive is current…");
@@ -120,19 +277,32 @@ async function runM6b(page) {
   const ADD = ".addrow button";
 
   // Engine attached + nuclide list loaded (add-by-name source).
+  await logStep(page, "runM6b: start");
   await page.waitForFunction("window.__APP__ && window.__APP__.ready === true", null, {
     timeout: 60_000,
   });
+  await logStep(page, "runM6b: app ready");
   const nNuclides = await page.evaluate("window.__APP__.availableNuclides.length");
   record("add-by-name list loaded (nuclides() over the bridge)", nNuclides >= 1252, `${nNuclides} nuclides`);
 
-  // 1) Happy path: add Co-60, the panel solves and the palette legend renders.
+  // 1) Happy path: add Co-60, the panel solves and the palette legend renders. This is
+  // the M6a→M6b boundary where the gate-js-heap-runaway hang has been observed — the
+  // FIRST time appState.curve/chainDag go from empty to populated, so the FIRST real
+  // Plotly.react + Cytoscape build. Step logged individually (see logStep) so a hang
+  // localizes to one of: click Add (solve) / the solved-wait (render effects) / the
+  // legend-DOM wait (Plotly's own render completion).
   await page.fill(NAME, "Co-60");
+  await logStep(page, "after fill NAME");
   await page.fill(QTY, "1e9");
+  await logStep(page, "after fill QTY");
   await page.selectOption(UNIT, "Bq");
+  await logStep(page, "after selectOption UNIT");
   await page.click(ADD);
+  await logStep(page, "after click ADD (solve triggered)");
   await page.waitForFunction("window.__APP__.status === 'solved'", null, { timeout: 30_000 });
+  await logStep(page, "after status==='solved' wait");
   await page.waitForSelector('[data-testid="legend"] li');
+  await logStep(page, "after legend DOM wait");
 
   const co = await page.evaluate(() => {
     const app = window.__APP__;
@@ -2597,24 +2767,31 @@ async function runViews(page) {
 
   // Clean baseline: Cs-137 only (closure Cs-137 → Ba-137m → Ba-137), Activity, t₀=0,
   // nothing hidden. Cursor homed to mid-range (deep in the secular plateau).
-  await page.evaluate(async () => {
-    const app = window.__APP__;
-    await app.clear();
-    app.setReferenceTimeS(0);
-    app.setAxis("activity");
-    app.showAll();
-    await app.addEntry("Cs-137", 1.0e9, "Bq");
-  });
-  await page.waitForFunction(
-    "window.__APP__.status === 'solved' && window.__CY__ && window.__CY__.nodes().length === window.__APP__.closure.length",
-    null,
-    { timeout: 30_000 },
+  await guarded("runViews: clear+setup+addEntry(Cs-137)", () =>
+    page.evaluate(async () => {
+      const app = window.__APP__;
+      await app.clear();
+      app.setReferenceTimeS(0);
+      app.setAxis("activity");
+      app.showAll();
+      await app.addEntry("Cs-137", 1.0e9, "Bq");
+    }),
   );
-  await page.waitForFunction(
-    `(() => { const el = document.querySelector('${PLOTV}');
+  await logStep(page, "runViews: post-addEntry, pre-waits");
+  await guarded("runViews: wait solved && cy nodes === closure", () =>
+    page.waitForFunction(
+      "window.__APP__.status === 'solved' && window.__CY__ && window.__CY__.nodes().length === window.__APP__.closure.length",
+      null,
+      { timeout: 30_000 },
+    ),
+  );
+  await guarded("runViews: wait plot traces === closure", () =>
+    page.waitForFunction(
+      `(() => { const el = document.querySelector('${PLOTV}');
        return el && el.data && el.data.length === window.__APP__.closure.length; })()`,
-    null,
-    { timeout: 30_000 },
+      null,
+      { timeout: 30_000 },
+    ),
   );
 
   const tracesNow = () =>
@@ -2914,15 +3091,28 @@ async function runUnitsAndSources(page) {
 let exitCode = 1;
 let browser;
 let server;
+let rssWatcher = { stop() {} };
+let launchedPids = []; // PIDs of the Chrome-for-Testing instance WE launched (see listChromePids)
 try {
   ensureArchive();
   server = await startServer();
   console.log(`[gate] serving ${BUILT ? "built" : "dev"} app at ${server.url}`);
 
+  const pidsBefore = listChromePids();
   browser = await launchBrowser();
   const page = await browser.newPage();
+  launchedPids = listChromePids().filter((p) => !pidsBefore.includes(p));
+  rssWatcher = startRssWatcher(launchedPids);
+  console.log(`[gate] RSS watcher tracking PIDs [${launchedPids.join(", ")}]`);
   page.on("console", (m) => console.log("  [page] " + m.text()));
   page.on("pageerror", (e) => console.log("  [pageerror] " + e.message));
+  // gate-js-heap-runaway (§13 #8): Playwright emits 'crash' when the renderer process
+  // dies. Without this listener a genuine renderer crash is SILENT — which is exactly
+  // the signature of the multi-hour zombie we caught (RSS spiked to ~4.9GB, process
+  // count dropped 7→6, then total console silence). Log it loudly with a timestamp.
+  page.on("crash", () =>
+    console.log(`  [CRASH] renderer/page crashed at ${new Date().toISOString()}`),
+  );
 
   // ?selfcheck=1 runs the M6a boot self-check (the kill-early benchmarks).
   const url = server.url + (server.url.includes("?") ? "&" : "?") + "selfcheck=1";
@@ -2933,6 +3123,7 @@ try {
   console.log("\n===== M6a boot self-check =====");
   console.log(JSON.stringify(m6a, null, 2));
   const m6aOk = !!(m6a && m6a.ok);
+  await logStep(page, "M6a done, entering M6b");
 
   let m6b = { ok: false, checks: [] };
   let m6c = { ok: false, checks: [] };
@@ -2945,27 +3136,45 @@ try {
   let m13 = { ok: false, checks: [] };
   let views = { ok: false, checks: [] };
   let unitsAndSources = { ok: false, checks: [] };
+  // Per-suite entering markers (gate-js-heap-runaway, HANDOFF_PLAN §13 #8): none of
+  // M6b..unitsAndSources print anything until their OWN checks section below, which
+  // only runs after this ENTIRE nested chain returns — so "M6a printed, then
+  // silence" is consistent with a hang ANYWHERE from runM6b through
+  // runUnitsAndSources, not just the M6a→M6b boundary (a prior over-narrow reading
+  // of this same silence). These markers + the streaming __PERF__ console log
+  // localize a hang to one suite without waiting for the whole chain to unwind.
   if (m6aOk) {
+    await logStep(page, "entering runM6b");
     m6b = await runM6b(page);
     if (m6b.ok) {
+      await logStep(page, "entering runM6c");
       m6c = await runM6c(page);
       if (m6c.ok) {
+        await logStep(page, "entering runM6d");
         m6d = await runM6d(page);
         if (m6d.ok) {
+          await logStep(page, "entering runM6e");
           m6e = await runM6e(page);
           if (m6e.ok) {
+            await logStep(page, "entering runM6f");
             m6f = await runM6f(page);
             if (m6f.ok) {
+              await logStep(page, "entering runM6g");
               m6g = await runM6g(page);
               if (m6g.ok) {
+                await logStep(page, "entering runM6h");
                 m6h = await runM6h(page);
                 if (m6h.ok) {
+                  await logStep(page, "entering runM7");
                   m7 = await runM7(page);
                   if (m7.ok) {
+                    await logStep(page, "entering runM13");
                     m13 = await runM13(page);
                     if (m13.ok) {
+                      await logStep(page, "entering runViews");
                       views = await runViews(page);
                       if (views.ok) {
+                        await logStep(page, "entering runUnitsAndSources");
                         unitsAndSources = await runUnitsAndSources(page);
                       } else {
                         console.log("[gate] skipping units/sources follow-up — Views checks failed");
@@ -3080,7 +3289,23 @@ try {
   console.error("Driver error:", err);
   exitCode = 1;
 } finally {
-  if (browser) await browser.close();
+  rssWatcher.stop();
+  // A genuine main-thread runaway can leave the renderer unresponsive to CDP, which
+  // has been observed to make even in-flight Playwright calls never settle (see
+  // gate-js-heap-runaway memory) — so browser.close() itself might hang. Race it
+  // against a hard process kill so the diagnostic loop can actually iterate.
+  if (browser) {
+    await Promise.race([
+      browser.close().catch(() => {}),
+      new Promise((resolve) =>
+        setTimeout(() => {
+          console.log("  [gate] browser.close() did not settle in 15s — force-killing tracked PIDs (and descendants)");
+          killProcessTree(launchedPids);
+          resolve();
+        }, 15_000),
+      ),
+    ]);
+  }
   if (server) await server.close();
   process.exit(exitCode);
 }

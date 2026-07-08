@@ -36,6 +36,13 @@ declare global {
     // M6e: the live Cytoscape instance (canvas → no DOM to assert against), exposed
     // for the headless gate to read node/edge data, sizes, and positions.
     __CY__?: unknown;
+    // Diagnostic only (gate-js-heap-runaway, HANDOFF_PLAN §13 item 8): a rAF-driven
+    // heap + render-count sampler, active only under ?selfcheck=1. Lets the gate
+    // diff a passing run's trajectory against a hanging one instead of guessing.
+    __PERF__?: {
+      renders: { curvesReact: number; cyBuild: number; cyEncode: number };
+      frames: Array<{ t: number; heap: number | null; curvesReact: number; cyBuild: number; cyEncode: number }>;
+    };
   }
 }
 

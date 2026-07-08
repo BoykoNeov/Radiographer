@@ -10,6 +10,22 @@
   import { appState } from "./state.svelte";
   import { ACTIVITY_UNITS, AXIS_OPTIONS, MASS_UNITS, TIME_UNITS } from "./types";
 
+  // Diagnostic only (gate-js-heap-runaway, HANDOFF_PLAN §13 #8): log the render
+  // counter INLINE at the call site, wall-clock-throttled, rather than relying only
+  // on App.svelte's rAF sampler. If the runaway is a microtask-flush storm (the
+  // leading hypothesis), rAF never gets a turn (it runs after microtasks drain), so
+  // it would go dark exactly when this signal is needed most; a console.log made
+  // from inside the effect still queues its CDP event on the IO thread and has a
+  // real chance to flush mid-storm.
+  let lastCurvesLog = 0;
+  function logCurvesReact(): void {
+    if (!window.__PERF__) return;
+    const now = performance.now();
+    if (now - lastCurvesLog < 200) return;
+    lastCurvesLog = now;
+    console.log(`[__PERF__] curvesReact=${window.__PERF__.renders.curvesReact}`);
+  }
+
   // Display floor: clip at peak / 10^D (D decades below the global peak), §9. A
   // SINGLE global floor across ALL series (not per-series) is load-bearing — it is
   // what makes a negligible species read as an honest gap instead of being redrawn
@@ -166,6 +182,8 @@
     }
     const lay = layout();
     lay.shapes = untrack(() => cursorShapes()); // include the current cursor, untracked
+    if (window.__PERF__) window.__PERF__.renders.curvesReact++; // gate-js-heap-runaway diagnostic
+    logCurvesReact();
     Plotly.react(el, buildTraces(), lay, { responsive: true, displaylogo: false });
     attachLegendHandlers(el);
   });

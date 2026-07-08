@@ -34,8 +34,47 @@
     progress = [...progress, p.detail ? `${p.stage}: ${p.detail}` : p.stage];
   }
 
+  // Diagnostic only (gate-js-heap-runaway): a rAF-driven heap + render-count
+  // sampler, active only under ?selfcheck=1. A tight synchronous main-thread loop
+  // starves rAF too, so a stall in the log is itself informative (not just the
+  // heap trend) — see HANDOFF_PLAN §13 item 8.
+  //
+  // The frame history is ALSO console.log'd (throttled to ~200ms), not just kept in
+  // `window.__PERF__.frames` — the gate reads that array via page.evaluate(), which
+  // (per the gate-js-heap-runaway memory) never resolves once a real hang starts. A
+  // console.log call already made before the freeze is queued/flushed independently
+  // and still reaches drive_browser.mjs's `page.on("console")` listener, so it's the
+  // only channel guaranteed to survive up to the moment of the freeze.
+  const PERF_MAX_FRAMES = 4000;
+  const PERF_LOG_THROTTLE_MS = 200;
+  function startPerfSampler(): void {
+    if (typeof window === "undefined") return;
+    window.__PERF__ = { renders: { curvesReact: 0, cyBuild: 0, cyEncode: 0 }, frames: [] };
+    const perfMem = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
+    let lastLog = 0;
+    function tick() {
+      const p = window.__PERF__;
+      if (!p) return;
+      const now = performance.now();
+      const heap = perfMem ? perfMem.usedJSHeapSize : null;
+      if (p.frames.length < PERF_MAX_FRAMES) {
+        p.frames.push({ t: now, heap, ...p.renders });
+      }
+      if (now - lastLog >= PERF_LOG_THROTTLE_MS) {
+        lastLog = now;
+        const mb = heap != null ? (heap / 1e6).toFixed(1) : "n/a";
+        console.log(
+          `[__PERF__] t=${now.toFixed(0)}ms heap=${mb}MB curvesReact=${p.renders.curvesReact} cyBuild=${p.renders.cyBuild} cyEncode=${p.renders.cyEncode}`,
+        );
+      }
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
   onMount(async () => {
     try {
+      if (wantSelfCheck) startPerfSampler();
       const client = await boot(onProgress);
       appState.setClient(client);
       window.__APP__ = appState;
