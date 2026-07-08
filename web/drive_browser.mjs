@@ -2812,37 +2812,50 @@ async function runViews(page) {
   //      hiddenNuclides, grey-but-keep the node, and set the Cs-137 trace to
   //      legendonly (present in `data`, not drawn, legend entry stays clickable) —
   //      while the γ rate + Cs-137 activity at the cursor stay EXACTLY equal (#2).
-  const baseTraces = await tracesNow();
-  const physBefore = await page.evaluate(() => {
-    const app = window.__APP__;
-    return { gamma: app.gammaRateAtCursor, csAct: app.activityAtCursor?.["Cs-137"] ?? null };
-  });
-  await page.evaluate(() => window.__CY__.getElementById("Cs-137").emit("tap"));
-  await page.waitForFunction("window.__APP__.hiddenNuclides.has('Cs-137') === true", null, {
-    timeout: 30_000,
-  });
-  await page.waitForFunction(
-    `(() => { const el = document.querySelector('${PLOTV}');
-       const t = el && el.data ? el.data.find((d) => d.name === 'Cs-137') : null;
-       const op = parseFloat(window.__CY__.getElementById('Cs-137').style('opacity'));
-       return t && t.visible === 'legendonly' && op < 0.3; })()`,
-    null,
-    { timeout: 30_000 },
+  const { baseTraces, physBefore, hiddenState } = await guarded(
+    "runViews tail (a1) click-hide",
+    async () => {
+      const baseTraces = await tracesNow();
+      const physBefore = await page.evaluate(() => {
+        const app = window.__APP__;
+        return { gamma: app.gammaRateAtCursor, csAct: app.activityAtCursor?.["Cs-137"] ?? null };
+      });
+      // NB: statement body (no return). `emit("tap")` returns the Cytoscape node
+      // COLLECTION — a deeply cyclic object (node→core→every node/style/renderer).
+      // Returning it makes page.evaluate serialize the whole graph back over CDP:
+      // ~2GB + ~6s per call, which is what drove the gate's tail-OOM (§13 #8). The
+      // handler's effect (toggleHidden) is what we want; the return value is not.
+      await page.evaluate(() => {
+        window.__CY__.getElementById("Cs-137").emit("tap");
+      });
+      await page.waitForFunction("window.__APP__.hiddenNuclides.has('Cs-137') === true", null, {
+        timeout: 30_000,
+      });
+      await page.waitForFunction(
+        `(() => { const el = document.querySelector('${PLOTV}');
+           const t = el && el.data ? el.data.find((d) => d.name === 'Cs-137') : null;
+           const op = parseFloat(window.__CY__.getElementById('Cs-137').style('opacity'));
+           return t && t.visible === 'legendonly' && op < 0.3; })()`,
+        null,
+        { timeout: 30_000 },
+      );
+      const hiddenState = await page.evaluate((sel) => {
+        const app = window.__APP__;
+        const el = document.querySelector(sel);
+        const node = window.__CY__.getElementById("Cs-137");
+        const t = el.data.find((d) => d.name === "Cs-137");
+        return {
+          present: node.length === 1, // still on-canvas → clickable to restore (advisor #1)
+          opacity: parseFloat(node.style("opacity")),
+          traceLegendOnly: t ? t.visible === "legendonly" : false,
+          nTraces: el.data.length,
+          gamma: app.gammaRateAtCursor,
+          csAct: app.activityAtCursor?.["Cs-137"] ?? null,
+        };
+      }, PLOTV);
+      return { baseTraces, physBefore, hiddenState };
+    },
   );
-  const hiddenState = await page.evaluate((sel) => {
-    const app = window.__APP__;
-    const el = document.querySelector(sel);
-    const node = window.__CY__.getElementById("Cs-137");
-    const t = el.data.find((d) => d.name === "Cs-137");
-    return {
-      present: node.length === 1, // still on-canvas → clickable to restore (advisor #1)
-      opacity: parseFloat(node.style("opacity")),
-      traceLegendOnly: t ? t.visible === "legendonly" : false,
-      nTraces: el.data.length,
-      gamma: app.gammaRateAtCursor,
-      csAct: app.activityAtCursor?.["Cs-137"] ?? null,
-    };
-  }, PLOTV);
   record(
     "click DAG node → hidden: greyed-but-present node + trace set legendonly (stays in legend), physics UNCHANGED (#1/#2)",
     hiddenState.present &&
@@ -2857,22 +2870,28 @@ async function runViews(page) {
   );
 
   // (a2) Click again → restored (trace visible again, node un-greyed). Proves the toggle.
-  await page.evaluate(() => window.__CY__.getElementById("Cs-137").emit("tap"));
-  await page.waitForFunction("window.__APP__.hiddenNuclides.has('Cs-137') === false", null, {
-    timeout: 30_000,
+  const restoredData = await guarded("runViews tail (a2) restore", async () => {
+    // Statement body (no return) — see the (a1) note: returning the emit() collection
+    // serializes the whole Cytoscape graph over CDP (~2GB/~6s). §13 #8.
+    await page.evaluate(() => {
+      window.__CY__.getElementById("Cs-137").emit("tap");
+    });
+    await page.waitForFunction("window.__APP__.hiddenNuclides.has('Cs-137') === false", null, {
+      timeout: 30_000,
+    });
+    await page.waitForFunction(
+      `(() => { const el = document.querySelector('${PLOTV}');
+         const t = el && el.data ? el.data.find((d) => d.name === 'Cs-137') : null;
+         const op = parseFloat(window.__CY__.getElementById('Cs-137').style('opacity'));
+         return t && t.visible === true && op > 0.3; })()`,
+      null,
+      { timeout: 30_000 },
+    );
+    return await page.evaluate(
+      (sel) => document.querySelector(sel).data.map((d) => ({ name: d.name, visible: d.visible })),
+      PLOTV,
+    );
   });
-  await page.waitForFunction(
-    `(() => { const el = document.querySelector('${PLOTV}');
-       const t = el && el.data ? el.data.find((d) => d.name === 'Cs-137') : null;
-       const op = parseFloat(window.__CY__.getElementById('Cs-137').style('opacity'));
-       return t && t.visible === true && op > 0.3; })()`,
-    null,
-    { timeout: 30_000 },
-  );
-  const restoredData = await page.evaluate(
-    (sel) => document.querySelector(sel).data.map((d) => ({ name: d.name, visible: d.visible })),
-    PLOTV,
-  );
   record(
     "click again → restored (trace visible again, node un-greyed): a true toggle",
     restoredData.find((d) => d.name === "Cs-137")?.visible === true &&
@@ -2882,43 +2901,52 @@ async function runViews(page) {
 
   // (a3) Hide all → every trace legendonly (still present/clickable in the legend) +
   //      every (non-SF) DAG node greyed; Show all → restored.
-  await page.click('[data-testid="chain-hide-all"]');
-  await page.waitForFunction(
-    "window.__APP__.hiddenNuclides.size === window.__APP__.closure.length",
-    null,
-    { timeout: 30_000 },
-  );
-  await page.waitForFunction(
-    `(() => { const el = document.querySelector('${PLOTV}');
-       return el && el.data && el.data.length > 0 && el.data.every((d) => d.visible === 'legendonly'); })()`,
-    null,
-    { timeout: 30_000 },
-  );
-  const bulkHidden = await page.evaluate((sel) => {
-    const el = document.querySelector(sel);
-    const cy = window.__CY__;
-    const ops = cy
-      .nodes()
-      .filter((n) => n.id() !== "SF")
-      .map((n) => parseFloat(n.style("opacity")));
-    return {
-      nTraces: el.data.length,
-      allLegendOnly: el.data.every((d) => d.visible === "legendonly"),
-      nNodes: ops.length,
-      allFaded: ops.every((o) => o < 0.3),
-    };
-  }, PLOTV);
-  await page.click('[data-testid="chain-show-all"]');
-  await page.waitForFunction("window.__APP__.hiddenNuclides.size === 0", null, { timeout: 30_000 });
-  await page.waitForFunction(
-    `(() => { const el = document.querySelector('${PLOTV}');
-       return el && el.data && el.data.every((d) => d.visible === true); })()`,
-    null,
-    { timeout: 30_000 },
-  );
-  const shownData = await page.evaluate(
-    (sel) => document.querySelector(sel).data.map((d) => ({ name: d.name, visible: d.visible })),
-    PLOTV,
+  const { bulkHidden, shownData } = await guarded(
+    "runViews tail (a3) hide-all/show-all",
+    async () => {
+      await page.click('[data-testid="chain-hide-all"]');
+      await page.waitForFunction(
+        "window.__APP__.hiddenNuclides.size === window.__APP__.closure.length",
+        null,
+        { timeout: 30_000 },
+      );
+      await page.waitForFunction(
+        `(() => { const el = document.querySelector('${PLOTV}');
+           return el && el.data && el.data.length > 0 && el.data.every((d) => d.visible === 'legendonly'); })()`,
+        null,
+        { timeout: 30_000 },
+      );
+      const bulkHidden = await page.evaluate((sel) => {
+        const el = document.querySelector(sel);
+        const cy = window.__CY__;
+        const ops = cy
+          .nodes()
+          .filter((n) => n.id() !== "SF")
+          .map((n) => parseFloat(n.style("opacity")));
+        return {
+          nTraces: el.data.length,
+          allLegendOnly: el.data.every((d) => d.visible === "legendonly"),
+          nNodes: ops.length,
+          allFaded: ops.every((o) => o < 0.3),
+        };
+      }, PLOTV);
+      await page.click('[data-testid="chain-show-all"]');
+      await page.waitForFunction("window.__APP__.hiddenNuclides.size === 0", null, {
+        timeout: 30_000,
+      });
+      await page.waitForFunction(
+        `(() => { const el = document.querySelector('${PLOTV}');
+           return el && el.data && el.data.every((d) => d.visible === true); })()`,
+        null,
+        { timeout: 30_000 },
+      );
+      const shownData = await page.evaluate(
+        (sel) =>
+          document.querySelector(sel).data.map((d) => ({ name: d.name, visible: d.visible })),
+        PLOTV,
+      );
+      return { bulkHidden, shownData };
+    },
   );
   record(
     "Hide all → all traces legendonly (legend stays clickable) + all DAG nodes greyed; Show all → restored",
@@ -2933,32 +2961,38 @@ async function runViews(page) {
 
   // (b) x-axis time unit s → yr: the x ARRAY rescales by the Julian year (31 557 600 s),
   //     the axis title tracks, the cursor line follows, and the store cursor stays SI s.
-  const beforeUnit = await page.evaluate((sel) => {
-    const el = document.querySelector(sel);
-    const cs = el.data.find((d) => d.name === "Cs-137");
-    return {
-      title: el.layout.xaxis.title.text,
-      maxX: Math.max(...cs.x),
-      cursorOffsetS: window.__APP__.cursorOffsetS,
-    };
-  }, PLOTV);
-  await page.selectOption('[data-testid="curve-time-unit"]', "y");
-  await page.waitForFunction(
-    `document.querySelector('${PLOTV}').layout.xaxis.title.text === 'Time (yr)'`,
-    null,
-    { timeout: 30_000 },
+  const { beforeUnit, afterUnit } = await guarded(
+    "runViews tail (b) time-unit s→yr",
+    async () => {
+      const beforeUnit = await page.evaluate((sel) => {
+        const el = document.querySelector(sel);
+        const cs = el.data.find((d) => d.name === "Cs-137");
+        return {
+          title: el.layout.xaxis.title.text,
+          maxX: Math.max(...cs.x),
+          cursorOffsetS: window.__APP__.cursorOffsetS,
+        };
+      }, PLOTV);
+      await page.selectOption('[data-testid="curve-time-unit"]', "y");
+      await page.waitForFunction(
+        `document.querySelector('${PLOTV}').layout.xaxis.title.text === 'Time (yr)'`,
+        null,
+        { timeout: 30_000 },
+      );
+      const afterUnit = await page.evaluate((sel) => {
+        const el = document.querySelector(sel);
+        const cs = el.data.find((d) => d.name === "Cs-137");
+        const shapeX = el.layout.shapes && el.layout.shapes.length ? el.layout.shapes[0].x0 : null;
+        return {
+          title: el.layout.xaxis.title.text,
+          maxX: Math.max(...cs.x),
+          shapeX,
+          cursorOffsetS: window.__APP__.cursorOffsetS, // unchanged — store is SI seconds (§12)
+        };
+      }, PLOTV);
+      return { beforeUnit, afterUnit };
+    },
   );
-  const afterUnit = await page.evaluate((sel) => {
-    const el = document.querySelector(sel);
-    const cs = el.data.find((d) => d.name === "Cs-137");
-    const shapeX = el.layout.shapes && el.layout.shapes.length ? el.layout.shapes[0].x0 : null;
-    return {
-      title: el.layout.xaxis.title.text,
-      maxX: Math.max(...cs.x),
-      shapeX,
-      cursorOffsetS: window.__APP__.cursorOffsetS, // unchanged — store is SI seconds (§12)
-    };
-  }, PLOTV);
   const SPYR = 31_557_600;
   const ratio = beforeUnit.maxX / afterUnit.maxX;
   const wantShapeX = beforeUnit.cursorOffsetS / SPYR;
@@ -2972,7 +3006,9 @@ async function runViews(page) {
     `title="${afterUnit.title}", maxX ${beforeUnit.maxX.toExponential(2)}s→${afterUnit.maxX.toExponential(2)}yr (ratio=${ratio.toExponential(3)}, want ${SPYR}), ` +
       `cursorOffsetS unchanged=${afterUnit.cursorOffsetS === beforeUnit.cursorOffsetS}`,
   );
-  await page.selectOption('[data-testid="curve-time-unit"]', "s"); // restore
+  await guarded("runViews tail (b) restore s", async () => {
+    await page.selectOption('[data-testid="curve-time-unit"]', "s"); // restore
+  });
 
   return { ok: checks.every((c) => c.pass), checks };
 }
