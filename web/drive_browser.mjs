@@ -54,7 +54,29 @@ async function startServer() {
   return { url, close: () => server.close() };
 }
 
+// Bundled "chromium" channel (Playwright's own Chrome-for-Testing install)
+// first: launching the user's real installed Chrome/Edge via `channel:
+// "chrome"/"msedge"` empirically produced intermittent full hangs (2 of 4
+// back-to-back gate runs froze solid, CPU idle, right after the boot
+// self-check) — likely the installed browser's single-instance profile
+// lock/IPC contending with the user's other open windows of the same
+// browser, or update/crash-reporter/account-sync subsystems stalling under
+// headless:true. Switching to bundled Chromium surfaced a SEPARATE defect:
+// plain `chromium.launch({headless:true})` silently substitutes Playwright's
+// lightweight "chrome-headless-shell" binary, which OOM-crashed (V8
+// "last resort" GC at ~2.2 GB, then GPU/network service crash → "Target
+// crashed") on 3 of 4 runs of this Pyodide+scipy+matplotlib-heavy gate.
+// `channel: "chromium"` launches the full, non-shell Chrome-for-Testing
+// binary from the same bundled install — no shared profile/IPC with the
+// user's real browser, and no shell-binary memory ceiling. Keep the system
+// channels as a last-resort fallback only, in case a CI image ever lacks a
+// bundled Chromium install.
 async function launchBrowser() {
+  try {
+    return await chromium.launch({ channel: "chromium", headless: true });
+  } catch {
+    /* bundled Chrome-for-Testing not installed — fall back to a system channel */
+  }
   for (const channel of ["chrome", "msedge"]) {
     try {
       return await chromium.launch({ channel, headless: true });
@@ -62,7 +84,7 @@ async function launchBrowser() {
       /* channel not installed — try next */
     }
   }
-  return await chromium.launch({ headless: true });
+  throw new Error("no usable Chromium/Chrome/Edge found for Playwright launch");
 }
 
 // Loading a prebuilt source runs a full Bateman solve SYNCHRONOUSLY on the main
