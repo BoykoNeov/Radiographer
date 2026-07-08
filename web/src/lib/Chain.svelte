@@ -49,6 +49,15 @@
   const NZ_SPACING = 100; // px per (N or Z) unit in the chart-of-nuclides preset — wide
   // enough that a short parent→daughter edge (adjacent (N,Z) cell) still has room for its
   // label chip without the chip covering the target node (advisor: chip↔node collision).
+  // A wide-span chain (many generations/isomers, e.g. spent-fuel or fallout) still gets
+  // laid out at this same per-unit spacing, but `fit:true` would then rescale the WHOLE
+  // bounding box down to the container — squeezing every node into an illegible cluster
+  // with only the few longer-range edges still visibly "long" (the reported bug). MIN_ZOOM
+  // stops `fit` from zooming out past a legible floor; a wide chain instead renders wider
+  // than the container and becomes pannable/zoomable, exactly like an oversized map,
+  // rather than being crushed to fit (advisor: adaptive spacing via a zoom floor, not a
+  // new projection — the (N, Z) chart is inherently near-diagonal by the physics, §8).
+  const MIN_ZOOM = 0.4;
 
   type LayoutMode = "dagre" | "chart";
   let layoutMode = $state<LayoutMode>("dagre");
@@ -57,6 +66,18 @@
   let cy: cytoscape.Core | null = null;
   let presetPositions: Record<string, cytoscape.Position> = {};
   let hovered = $state<string | null>(null); // node id under the pointer (tooltip)
+  // The tooltip below the graph shows the full isotope id + details; a short delay
+  // (rather than instant-on-mouseover) means sweeping the pointer across a dense
+  // cluster of nodes (esp. the (N, Z) chart) doesn't flash a tooltip per node passed
+  // over — only the one the pointer actually settles on.
+  const HOVER_DELAY_MS = 500;
+  let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+  function clearHoverTimer(): void {
+    if (hoverTimer !== null) {
+      clearTimeout(hoverTimer);
+      hoverTimer = null;
+    }
+  }
 
   const hasDag = $derived((appState.chainDag?.nodes.length ?? 0) > 0);
 
@@ -273,6 +294,7 @@
   }
 
   function destroyCy(): void {
+    clearHoverTimer();
     if (cy) {
       cy.destroy();
       cy = null;
@@ -301,9 +323,20 @@
         elements: elements(),
         style: STYLE,
         layout: layoutOptions(layoutMode),
+        minZoom: MIN_ZOOM,
       });
-      cy.on("mouseover", "node", (ev) => (hovered = ev.target.id()));
-      cy.on("mouseout", "node", () => (hovered = null));
+      cy.on("mouseover", "node", (ev) => {
+        const id = ev.target.id();
+        clearHoverTimer();
+        hoverTimer = setTimeout(() => {
+          hovered = id;
+          hoverTimer = null;
+        }, HOVER_DELAY_MS);
+      });
+      cy.on("mouseout", "node", () => {
+        clearHoverTimer();
+        hovered = null;
+      });
       // Click toggles a species' visibility (greys it here + drops it from the curves);
       // the SF terminal sink is not a species, so it is not hideable. Keep the tooltip on
       // the just-toggled node so its new (hidden/shown) state is visible immediately.
@@ -311,6 +344,7 @@
         const id = ev.target.id();
         if (id === SF_ID) return;
         appState.toggleHidden(id);
+        clearHoverTimer(); // a click is deliberate — show its tooltip immediately
         hovered = id;
       });
       applyEncoding(); // initial frame at the current cursor
@@ -352,10 +386,6 @@
   <section class="chain" data-testid="chain">
     <header>
       <h2>Decay chain</h2>
-      <div class="visibility" role="group" aria-label="Species visibility" data-testid="chain-visibility">
-        <button data-testid="chain-hide-all" onclick={() => appState.hideAll()}>Hide all</button>
-        <button data-testid="chain-show-all" onclick={() => appState.showAll()}>Show all</button>
-      </div>
       <div class="layout-toggle" role="group" aria-label="Chain layout" data-testid="chain-layout">
         <button
           class:selected={layoutMode === "dagre"}
@@ -420,9 +450,10 @@
       <strong>Chart (N, Z)</strong> places each node by neutron/proton number (α steps
       down-left, β⁻ a diagonal step — re-convergence falls out because a shared daughter is
       one coordinate). Per-emission energies appear in the dose per-line table (M6f-2).
-      <strong>Click a node</strong> to hide that species — it greys out here and drops from
-      the time-evolution plot; click again to show it. <strong>Hide all</strong> /
-      <strong>Show all</strong> bulk-toggle (hide all, then click the few you want to keep).
+      <strong>Click a node</strong> to hide that species — it greys out here and its curve
+      goes legend-only in the time-evolution plot; click again to show it.
+      <strong>Hide all</strong> / <strong>Show all</strong> (in the Time evolution panel
+      above) bulk-toggle the same state (hide all, then click the few you want to keep).
     </p>
   </section>
 {/if}
@@ -444,21 +475,6 @@
     margin: 0;
     font-size: 1.05rem;
     margin-right: auto;
-  }
-  .visibility {
-    display: inline-flex;
-    gap: 0.4rem;
-  }
-  .visibility button {
-    font: inherit;
-    padding: 0.3rem 0.7rem;
-    border: 1px solid #8886;
-    border-radius: 0.4rem;
-    background: transparent;
-    cursor: pointer;
-  }
-  .visibility button:hover {
-    background: #8881;
   }
   .layout-toggle {
     display: inline-flex;

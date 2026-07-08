@@ -891,6 +891,11 @@ async function runM6f(page) {
   );
   await page.waitForSelector(DOSE);
   await page.waitForSelector(DPLOT);
+  // Pin the graph-unit selectors to "base" (factor 1, §9 fix) for the rest of this run's
+  // exact-SI-value assertions; the selector's own scaling behavior gets a dedicated check
+  // right after the benchmark below, then this restores it again.
+  await page.selectOption('[data-testid="dose-graph-unit-sv"]', "base");
+  await page.selectOption('[data-testid="dose-graph-unit-gy"]', "base");
   await page.waitForFunction(
     (sel) => {
       const el = document.querySelector(sel);
@@ -937,6 +942,29 @@ async function runM6f(page) {
       bench.ratio < 1.3,
     `rendered=${bench.renderedH10.toExponential(4)} Sv/s == dose()=${bench.h10Si.toExponential(4)}, ` +
       `Kₐ=${bench.mGyh_perGBq.toFixed(4)} mGy·m²·GBq⁻¹·h⁻¹ (want 0.308), H*(10)/Kₐ=${bench.ratio.toFixed(3)}`,
+  );
+
+  // 1b) γ/n graph-unit selector (§9 fix "no change of units in the dose graphs"):
+  //     switching it to "m" (milli) actually SCALES the plotted bar value ×1000 (Sv→mSv),
+  //     not a bare relabel (§9 unit-fix memory), and the axis title tracks the prefix.
+  const baseVal = await page.evaluate((sel) => document.querySelector(sel).data[0].y[0], DPLOT);
+  await page.selectOption('[data-testid="dose-graph-unit-sv"]', "m");
+  await page.waitForFunction(
+    (sel) => document.querySelector(sel).layout.yaxis.title.text.includes("mSv"),
+    DPLOT,
+    { timeout: 30_000 },
+  );
+  const milliVal = await page.evaluate((sel) => document.querySelector(sel).data[0].y[0], DPLOT);
+  await page.selectOption('[data-testid="dose-graph-unit-sv"]', "base");
+  await page.waitForFunction(
+    (sel) => document.querySelector(sel).layout.yaxis.title.text.includes("(Sv"),
+    DPLOT,
+    { timeout: 30_000 },
+  );
+  record(
+    "γ/n graph-unit selector SCALES the plotted bar value (§9 fix), not a relabel",
+    Math.abs(milliVal / baseVal - 1000) / 1000 < 1e-6,
+    `base=${baseVal.toExponential(4)}, milli=${milliVal.toExponential(4)} (want milli/base ≈ 1000)`,
   );
 
   // 2) Distance 1→2 m through the rendered input: pure evaluate (handle stable,
@@ -2572,10 +2600,18 @@ async function runViews(page) {
       const el = document.querySelector(sel);
       return el && el.data ? el.data.map((d) => d.name) : [];
     }, PLOTV);
+  // Hidden species stay in `el.data` as visible:"legendonly" traces (not dropped) so
+  // the legend always lists every species and stays clickable — a dropped trace has no
+  // legend entry to click back on. `traceHidden` reads that per-trace flag.
+  const traceHidden = (data, name) => {
+    const t = data.find((d) => d.name === name);
+    return t ? t.visible === "legendonly" : null;
+  };
 
   // (a1) Click the Cs-137 DAG node (emit tap on the live Cytoscape instance — canvas,
   //      so we drive the model directly as M6e does). The handler must flip
-  //      hiddenNuclides, grey-but-keep the node, and drop the Cs-137 overlay trace —
+  //      hiddenNuclides, grey-but-keep the node, and set the Cs-137 trace to
+  //      legendonly (present in `data`, not drawn, legend entry stays clickable) —
   //      while the γ rate + Cs-137 activity at the cursor stay EXACTLY equal (#2).
   const baseTraces = await tracesNow();
   const physBefore = await page.evaluate(() => {
@@ -2588,60 +2624,65 @@ async function runViews(page) {
   });
   await page.waitForFunction(
     `(() => { const el = document.querySelector('${PLOTV}');
-       const names = el && el.data ? el.data.map((d) => d.name) : [];
+       const t = el && el.data ? el.data.find((d) => d.name === 'Cs-137') : null;
        const op = parseFloat(window.__CY__.getElementById('Cs-137').style('opacity'));
-       return !names.includes('Cs-137') && op < 0.3; })()`,
+       return t && t.visible === 'legendonly' && op < 0.3; })()`,
     null,
     { timeout: 30_000 },
   );
   const hiddenState = await page.evaluate((sel) => {
     const app = window.__APP__;
     const el = document.querySelector(sel);
-    const names = el.data.map((d) => d.name);
     const node = window.__CY__.getElementById("Cs-137");
+    const t = el.data.find((d) => d.name === "Cs-137");
     return {
       present: node.length === 1, // still on-canvas → clickable to restore (advisor #1)
       opacity: parseFloat(node.style("opacity")),
-      traceGone: !names.includes("Cs-137"),
-      nTraces: names.length,
+      traceLegendOnly: t ? t.visible === "legendonly" : false,
+      nTraces: el.data.length,
       gamma: app.gammaRateAtCursor,
       csAct: app.activityAtCursor?.["Cs-137"] ?? null,
     };
   }, PLOTV);
   record(
-    "click DAG node → hidden: greyed-but-present node + trace dropped, physics UNCHANGED (#1/#2)",
+    "click DAG node → hidden: greyed-but-present node + trace set legendonly (stays in legend), physics UNCHANGED (#1/#2)",
     hiddenState.present &&
       hiddenState.opacity < 0.3 &&
-      hiddenState.traceGone &&
-      hiddenState.nTraces === baseTraces.length - 1 &&
+      hiddenState.traceLegendOnly &&
+      hiddenState.nTraces === baseTraces.length &&
       hiddenState.gamma === physBefore.gamma &&
       hiddenState.csAct === physBefore.csAct,
-    `present=${hiddenState.present}, opacity=${hiddenState.opacity}, traceGone=${hiddenState.traceGone}, ` +
+    `present=${hiddenState.present}, opacity=${hiddenState.opacity}, traceLegendOnly=${hiddenState.traceLegendOnly}, ` +
       `traces=${baseTraces.length}→${hiddenState.nTraces}, γ unchanged=${hiddenState.gamma === physBefore.gamma}, ` +
       `A(Cs-137) unchanged=${hiddenState.csAct === physBefore.csAct}`,
   );
 
-  // (a2) Click again → restored (trace back, node un-greyed). Proves the toggle.
+  // (a2) Click again → restored (trace visible again, node un-greyed). Proves the toggle.
   await page.evaluate(() => window.__CY__.getElementById("Cs-137").emit("tap"));
   await page.waitForFunction("window.__APP__.hiddenNuclides.has('Cs-137') === false", null, {
     timeout: 30_000,
   });
   await page.waitForFunction(
     `(() => { const el = document.querySelector('${PLOTV}');
-       const names = el && el.data ? el.data.map((d) => d.name) : [];
+       const t = el && el.data ? el.data.find((d) => d.name === 'Cs-137') : null;
        const op = parseFloat(window.__CY__.getElementById('Cs-137').style('opacity'));
-       return names.includes('Cs-137') && op > 0.3; })()`,
+       return t && t.visible === true && op > 0.3; })()`,
     null,
     { timeout: 30_000 },
   );
-  const restored = await tracesNow();
+  const restoredData = await page.evaluate(
+    (sel) => document.querySelector(sel).data.map((d) => ({ name: d.name, visible: d.visible })),
+    PLOTV,
+  );
   record(
-    "click again → restored (trace back, node un-greyed): a true toggle",
-    restored.includes("Cs-137") && restored.length === baseTraces.length,
-    `traces=[${restored.join(", ")}]`,
+    "click again → restored (trace visible again, node un-greyed): a true toggle",
+    restoredData.find((d) => d.name === "Cs-137")?.visible === true &&
+      restoredData.length === baseTraces.length,
+    `traces=[${restoredData.map((d) => d.name).join(", ")}]`,
   );
 
-  // (a3) Hide all → 0 traces + every (non-SF) DAG node greyed; Show all → restored.
+  // (a3) Hide all → every trace legendonly (still present/clickable in the legend) +
+  //      every (non-SF) DAG node greyed; Show all → restored.
   await page.click('[data-testid="chain-hide-all"]');
   await page.waitForFunction(
     "window.__APP__.hiddenNuclides.size === window.__APP__.closure.length",
@@ -2649,7 +2690,8 @@ async function runViews(page) {
     { timeout: 30_000 },
   );
   await page.waitForFunction(
-    `(() => { const el = document.querySelector('${PLOTV}'); return el && el.data && el.data.length === 0; })()`,
+    `(() => { const el = document.querySelector('${PLOTV}');
+       return el && el.data && el.data.length > 0 && el.data.every((d) => d.visible === 'legendonly'); })()`,
     null,
     { timeout: 30_000 },
   );
@@ -2660,24 +2702,34 @@ async function runViews(page) {
       .nodes()
       .filter((n) => n.id() !== "SF")
       .map((n) => parseFloat(n.style("opacity")));
-    return { nTraces: el.data.length, nNodes: ops.length, allFaded: ops.every((o) => o < 0.3) };
+    return {
+      nTraces: el.data.length,
+      allLegendOnly: el.data.every((d) => d.visible === "legendonly"),
+      nNodes: ops.length,
+      allFaded: ops.every((o) => o < 0.3),
+    };
   }, PLOTV);
   await page.click('[data-testid="chain-show-all"]');
   await page.waitForFunction("window.__APP__.hiddenNuclides.size === 0", null, { timeout: 30_000 });
   await page.waitForFunction(
     `(() => { const el = document.querySelector('${PLOTV}');
-       return el && el.data && el.data.length === window.__APP__.closure.length; })()`,
+       return el && el.data && el.data.every((d) => d.visible === true); })()`,
     null,
     { timeout: 30_000 },
   );
-  const shown = await tracesNow();
+  const shownData = await page.evaluate(
+    (sel) => document.querySelector(sel).data.map((d) => ({ name: d.name, visible: d.visible })),
+    PLOTV,
+  );
   record(
-    "Hide all → 0 traces + all DAG nodes greyed; Show all → restored",
-    bulkHidden.nTraces === 0 &&
+    "Hide all → all traces legendonly (legend stays clickable) + all DAG nodes greyed; Show all → restored",
+    bulkHidden.nTraces === baseTraces.length &&
+      bulkHidden.allLegendOnly &&
       bulkHidden.nNodes >= 2 &&
       bulkHidden.allFaded &&
-      shown.length === baseTraces.length,
-    `hidden: traces=${bulkHidden.nTraces}, ${bulkHidden.nNodes} nodes faded=${bulkHidden.allFaded}; shown traces=${shown.length}`,
+      shownData.length === baseTraces.length &&
+      shownData.every((d) => d.visible === true),
+    `hidden: traces=${bulkHidden.nTraces} allLegendOnly=${bulkHidden.allLegendOnly}, ${bulkHidden.nNodes} nodes faded=${bulkHidden.allFaded}; shown traces=${shownData.length}`,
   );
 
   // (b) x-axis time unit s → yr: the x ARRAY rescales by the Julian year (31 557 600 s),

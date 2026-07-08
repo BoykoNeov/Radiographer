@@ -106,6 +106,34 @@ const PREFIXES: ReadonlyArray<{ factor: number; symbol: string }> = [
   { factor: 1e3, symbol: "k" },
 ];
 
+/** Pick the metric prefix that puts `value` in [1, 1000) — the same rule `formatDose`
+ *  applies to the numeric cards, exposed so a graph axis can mirror it as its "auto"
+ *  default (§9 dose-graph-units fix). Non-finite / ≤0 falls back to the unscaled prefix. */
+export function pickPrefix(value: number): { factor: number; symbol: string } {
+  if (!Number.isFinite(value) || value <= 0) return PREFIXES[4]; // unscaled ("")
+  let chosen = PREFIXES[0];
+  for (const p of PREFIXES) {
+    if (value >= p.factor) chosen = p;
+  }
+  return chosen;
+}
+
+/** Selectable magnitude prefixes for a dose-graph axis (§9): "auto" mirrors `pickPrefix`
+ *  against the graph's current representative value; the rest are a fixed scale factor. */
+export interface DosePrefixOption {
+  value: string;
+  label: string;
+  factor: number | null; // null ⇒ "auto"
+}
+export const DOSE_PREFIX_OPTIONS: readonly DosePrefixOption[] = [
+  { value: "auto", label: "auto", factor: null },
+  ...PREFIXES.map((p) => ({
+    value: p.symbol === "" ? "base" : p.symbol,
+    label: p.symbol === "" ? "(base)" : p.symbol,
+    factor: p.factor,
+  })),
+];
+
 function sig3(v: number): string {
   if (v >= 100) return v.toPrecision(4).replace(/\.?0+$/, "");
   return v.toPrecision(3).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
@@ -119,10 +147,7 @@ function sig3(v: number): string {
  */
 export function formatDose(value: number, unit: string): string {
   if (!Number.isFinite(value) || value <= 0) return `0 ${unit}`;
-  let chosen = PREFIXES[0];
-  for (const p of PREFIXES) {
-    if (value >= p.factor) chosen = p;
-  }
+  const chosen = pickPrefix(value);
   return `${sig3(value / chosen.factor)} ${chosen.symbol}${unit}`;
 }
 

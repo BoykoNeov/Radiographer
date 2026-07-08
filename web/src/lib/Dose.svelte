@@ -14,7 +14,7 @@
   import Plotly from "plotly.js-basic-dist-min";
   import { onDestroy } from "svelte";
   import { appState } from "./state.svelte";
-  import { formatDose, formatDoseRate } from "./dosemath";
+  import { DOSE_PREFIX_OPTIONS, formatDose, formatDoseRate, pickPrefix } from "./dosemath";
   import {
     DOSE_QUANTITY_OPTIONS,
     GEOMETRY_OPTIONS,
@@ -34,6 +34,21 @@
   // inventory the Sv axis carries γ only, so the toggle mostly switches the scale.
   let mode = $state<"stacked" | "grouped">("stacked");
   const isLog = $derived(mode === "grouped");
+
+  // -- graph axis unit prefix (§9 dose-graph-units fix) --------------------------
+  // The Sv axis (γ, source γ, and n — all the SAME quantity, §6.2) and the Gy axis (β)
+  // each get their OWN magnitude-prefix selector; "auto" mirrors the numeric cards'
+  // `formatDose` behaviour (picks the prefix that puts the current cursor rate in
+  // [1, 1000)). This SCALES the plotted values (never a bare relabel — §9 unit-fix
+  // memory), so it re-derives whenever the reference rate moves (cursor/exposure).
+  let svUnit = $state<string>("auto");
+  let gyUnit = $state<string>("auto");
+
+  function axisScale(prefixValue: string, referenceSiPerHour: number | null): { factor: number; symbol: string } {
+    if (prefixValue === "auto") return pickPrefix(referenceSiPerHour ?? 0);
+    const opt = DOSE_PREFIX_OPTIONS.find((o) => o.value === prefixValue);
+    return { factor: opt?.factor ?? 1, symbol: opt && opt.value !== "base" ? opt.label : "" };
+  }
 
   // Cap the rendered per-line rows: a big chain (e.g. U-238) has 100+ scored lines, almost
   // all negligible, and the table re-renders every animate frame. Show the top contributors
@@ -86,6 +101,11 @@
   const qLabel = $derived(doseQuantityLabel(appState.doseQuantity, appState.doseGeometry));
   const qShort = $derived(appState.doseQuantity === "effective" ? "E" : "H*(10)");
 
+  // γ/n share the Sv axis scale (same quantity, §6.2); β gets its own Gy scale. "auto"
+  // tracks the cursor's γ (resp. β) rate so the axis magnitude follows the numeric cards.
+  const svScale = $derived(axisScale(svUnit, gRate == null ? null : gRate * 3600));
+  const gyScale = $derived(axisScale(gyUnit, bRate == null ? null : bRate * 3600));
+
   // Neutron (M7b, §6.3): live ONLY for a prebuilt neutron source (the gray-out gate). γ and
   // n are the SAME quantity (both Sv) so they stack in the breakdown total — unlike β (Gy).
   const nRate = $derived(appState.neutronRateAtCursor); // Sv/s, null when no neutron source
@@ -132,7 +152,8 @@
     if (!nThickCurve) return [];
     const f = 1 + MODALITY_UNCERTAINTY.neutron.hi; // ×/÷ f order-of-mag n register (§11), as elsewhere
     const xs = nThickCurve.thicknesses_cm;
-    const yc = nThickCurve.rate_si.map((r) => r * 3600); // Sv/h
+    const svF = svScale.factor;
+    const yc = nThickCurve.rate_si.map((r) => (r * 3600) / svF); // Sv/h, axis-scaled
     return [
       { x: xs, y: yc.map((r) => r / f), mode: "lines", line: { width: 0 }, hoverinfo: "skip", showlegend: false } as Partial<Plotly.PlotData>,
       {
@@ -151,7 +172,7 @@
         mode: "lines",
         line: { color: MODALITY_COLORS.neutron, width: 2 },
         name: `n ${qShort}`,
-        hovertemplate: "%{x:.3g} cm → %{y:.3e} Sv/h<extra></extra>",
+        hovertemplate: `%{x:.3g} cm → %{y:.3e} ${svScale.symbol}Sv/h<extra></extra>`,
       } as Partial<Plotly.PlotData>,
     ];
   }
@@ -161,7 +182,7 @@
       margin: { l: 72, r: 20, t: 10, b: 42 },
       showlegend: false,
       xaxis: { title: { text: `${matLabel(nSweepId ?? "")} thickness (cm)` }, automargin: true },
-      yaxis: { type: "log", title: { text: `n ${qShort} dose rate (Sv·h⁻¹)` }, automargin: true },
+      yaxis: { type: "log", title: { text: `n ${qShort} dose rate (${svScale.symbol}Sv·h⁻¹)` }, automargin: true },
       shapes: [
         {
           type: "line",
@@ -209,8 +230,9 @@
   // -- Plotly bar (dual y-axis: Sv left for γ, Gy right for β) --------------------
   // Heights are the dose-RATE at the cursor (per hour). The two axes make the
   // "different quantities" explicit — γ reads against Sv·h⁻¹, β against Gy·h⁻¹.
-  function perHour(v: number | null): number | null {
-    return v == null ? null : v * 3600;
+  /** Per-hour rate, scaled by the axis's chosen magnitude prefix (§9). */
+  function scaledPerHour(v: number | null, factor: number): number | null {
+    return v == null ? null : (v * 3600) / factor;
   }
 
   // Error whiskers (§9/§11): the per-modality epistemic register, shown ONLY on the
@@ -241,16 +263,20 @@
   }
 
   function barTraces(): Partial<Plotly.PlotData>[] {
+    const svF = svScale.factor;
+    const svSym = svScale.symbol;
+    const gyF = gyScale.factor;
+    const gySym = gyScale.symbol;
     const traces: Partial<Plotly.PlotData>[] = [
       {
         type: "bar",
         name: `γ (${qShort}, Sv)`,
         x: ["γ + n"],
-        y: [perHour(gRate)],
+        y: [scaledPerHour(gRate, svF)],
         yaxis: "y",
         marker: { color: MODALITY_COLORS.gamma },
-        error_y: whisker("gamma", perHour(gRate)),
-        hovertemplate: "γ %{y:.3e} Sv/h<extra></extra>",
+        error_y: whisker("gamma", scaledPerHour(gRate, svF)),
+        hovertemplate: `γ %{y:.3e} ${svSym}Sv/h<extra></extra>`,
       } as Partial<Plotly.PlotData>,
     ];
     // Source-correlated reaction γ (e.g. AmBe 4.438 MeV): a SECOND γ contribution in the same
@@ -261,11 +287,11 @@
         type: "bar",
         name: `γ source (4.438 MeV, Sv)`,
         x: ["γ + n"],
-        y: [perHour(sgRate)],
+        y: [scaledPerHour(sgRate, svF)],
         yaxis: "y",
         marker: { color: SOURCE_GAMMA_COLOR },
-        error_y: whisker("gamma", perHour(sgRate)),
-        hovertemplate: "γ source %{y:.3e} Sv/h<extra></extra>",
+        error_y: whisker("gamma", scaledPerHour(sgRate, svF)),
+        hovertemplate: `γ source %{y:.3e} ${svSym}Sv/h<extra></extra>`,
       } as Partial<Plotly.PlotData>);
     }
     // Neutron shares the γ Sv axis and the same x-category → in stacked mode it sits ON TOP of
@@ -275,22 +301,22 @@
         type: "bar",
         name: `n (${qShort}, Sv)`,
         x: ["γ + n"],
-        y: [perHour(nRate)],
+        y: [scaledPerHour(nRate, svF)],
         yaxis: "y",
         marker: { color: MODALITY_COLORS.neutron },
-        error_y: whisker("neutron", perHour(nRate)),
-        hovertemplate: "n %{y:.3e} Sv/h<extra></extra>",
+        error_y: whisker("neutron", scaledPerHour(nRate, svF)),
+        hovertemplate: `n %{y:.3e} ${svSym}Sv/h<extra></extra>`,
       } as Partial<Plotly.PlotData>);
     }
     traces.push({
       type: "bar",
       name: "β skin Hp(0.07), Gy",
       x: ["β"],
-      y: [perHour(bRate)],
+      y: [scaledPerHour(bRate, gyF)],
       yaxis: "y2",
       marker: { color: MODALITY_COLORS.beta },
-      error_y: whisker("beta", perHour(bRate)),
-      hovertemplate: "β %{y:.3e} Gy/h<extra></extra>",
+      error_y: whisker("beta", scaledPerHour(bRate, gyF)),
+      hovertemplate: `β %{y:.3e} ${gySym}Gy/h<extra></extra>`,
     } as Partial<Plotly.PlotData>);
     return traces;
   }
@@ -321,6 +347,7 @@
     fill: string,
     name: string,
     modality: "gamma" | "neutron",
+    svSym: string,
   ): Partial<Plotly.PlotData>[] {
     const u = MODALITY_UNCERTAINTY[modality];
     const f = 1 + u.hi;
@@ -328,7 +355,7 @@
     const yUp: number[] = [];
     const yLo: number[] = [];
     for (const d of xs) {
-      const r = rate0 * (d0 / d) ** 2 * 3600; // Sv/h
+      const r = rate0 * (d0 / d) ** 2 * 3600; // Sv/h, already pre-scaled by the caller (rate0)
       yc.push(r);
       // γ: symmetric ±hi; n: multiplicative ×f / ÷f (order-of-magnitude).
       yUp.push(modality === "neutron" ? r * f : r * (1 + u.hi));
@@ -343,7 +370,7 @@
         mode: "lines",
         line: { color, width: 2 },
         name,
-        hovertemplate: "%{x:.3g} m → %{y:.3e} Sv/h<extra></extra>",
+        hovertemplate: `%{x:.3g} m → %{y:.3e} ${svSym}Sv/h<extra></extra>`,
       } as Partial<Plotly.PlotData>,
     ];
   }
@@ -358,10 +385,12 @@
     const la = Math.log10(lo);
     const lb = Math.log10(hi);
     for (let i = 0; i < N; i++) xs.push(10 ** (la + ((lb - la) * i) / (N - 1)));
-    const traces = bandTraces(gRate, d0, xs, MODALITY_COLORS.gamma, DIST_RGBA, `γ ${qShort}`, "gamma");
+    const svF = svScale.factor;
+    const svSym = svScale.symbol;
+    const traces = bandTraces(gRate / svF, d0, xs, MODALITY_COLORS.gamma, DIST_RGBA, `γ ${qShort}`, "gamma", svSym);
     // The §9 contrast: overlay the neutron curve when a prebuilt source is loaded.
     if (hasNeutron && nRate != null && nRate > 0) {
-      traces.push(...bandTraces(nRate, d0, xs, MODALITY_COLORS.neutron, DIST_RGBA_N, "n H*(10)", "neutron"));
+      traces.push(...bandTraces(nRate / svF, d0, xs, MODALITY_COLORS.neutron, DIST_RGBA_N, "n H*(10)", "neutron", svSym));
     }
     return traces;
   }
@@ -372,7 +401,11 @@
       showlegend: hasNeutron, // legend only matters once there are two curves (γ + n)
       legend: { orientation: "h", y: -0.2 },
       xaxis: { type: "log", title: { text: "distance (m)" }, automargin: true },
-      yaxis: { type: "log", title: { text: `${hasNeutron ? "γ + n" : "γ"} ${qShort} dose rate (Sv·h⁻¹)` }, automargin: true },
+      yaxis: {
+        type: "log",
+        title: { text: `${hasNeutron ? "γ + n" : "γ"} ${qShort} dose rate (${svScale.symbol}Sv·h⁻¹)` },
+        automargin: true,
+      },
       shapes: [
         {
           type: "line",
@@ -399,13 +432,13 @@
       legend: { orientation: "h", y: -0.15 },
       yaxis: {
         type: isLog ? "log" : "linear",
-        title: { text: "γ / n dose rate (Sv·h⁻¹)" },
+        title: { text: `γ / n dose rate (${svScale.symbol}Sv·h⁻¹)` },
         automargin: true,
         rangemode: "tozero",
       },
       yaxis2: {
         type: isLog ? "log" : "linear",
-        title: { text: "β skin dose rate (Gy·h⁻¹)" },
+        title: { text: `β skin dose rate (${gyScale.symbol}Gy·h⁻¹)` },
         overlaying: "y",
         side: "right",
         automargin: true,
@@ -427,6 +460,8 @@
     void sgRate;
     void mode;
     void qShort;
+    void svScale;
+    void gyScale;
     const el = plotEl;
     if (!el) return;
     if (!hasDose) {
@@ -443,6 +478,7 @@
     void nRate;
     void appState.doseDistanceM;
     void qShort;
+    void svScale;
     const el = distEl;
     if (!el) return;
     if (!hasDose || gRate == null) {
@@ -458,6 +494,7 @@
     void nThickCurve;
     void appState.neutronSweepThicknessCm;
     void qShort;
+    void svScale;
     const el = nThickEl;
     if (!el) return;
     if (!hasNeutron || !nThickCurve) {
@@ -486,6 +523,34 @@
           >
         {/if}
       </span>
+
+      <!-- Graph axis units (§9): scales the plotted γ/n (Sv) and β (Gy) graphs — a real
+           unit CONVERSION of the plotted values, not a relabel (§9 unit-fix memory). The
+           numeric cards above keep their own auto-formatting either way. -->
+      <label class="graphunit" title="Scales the γ/n (Sv) graph axes below">
+        γ/n graph unit
+        <select
+          data-testid="dose-graph-unit-sv"
+          bind:value={svUnit}
+          aria-label="γ/n graph axis unit"
+        >
+          {#each DOSE_PREFIX_OPTIONS as o (o.value)}
+            <option value={o.value}>{o.value === "auto" ? "auto" : o.value === "base" ? "Sv" : `${o.label}Sv`}</option>
+          {/each}
+        </select>
+      </label>
+      <label class="graphunit" title="Scales the β (Gy) breakdown-bar axis below">
+        β graph unit
+        <select
+          data-testid="dose-graph-unit-gy"
+          bind:value={gyUnit}
+          aria-label="β graph axis unit"
+        >
+          {#each DOSE_PREFIX_OPTIONS as o (o.value)}
+            <option value={o.value}>{o.value === "auto" ? "auto" : o.value === "base" ? "Gy" : `${o.label}Gy`}</option>
+          {/each}
+        </select>
+      </label>
     </header>
 
     {#if appState.doseError}
@@ -870,6 +935,15 @@
   }
   .readout .shielded {
     color: #4e79a7;
+  }
+  .graphunit {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+  }
+  .graphunit select {
+    padding: 0.25rem 0.4rem;
   }
   .inputs {
     display: flex;

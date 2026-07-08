@@ -50,21 +50,24 @@
   function buildTraces(): Partial<Plotly.PlotData>[] {
     const c = appState.curve;
     if (!c) return [];
-    // Drop HIDDEN species (clicked off in the decay chain) entirely — "remove them from
-    // the time-evolution display" (display-only; the store keeps the full closure).
+    // Keep EVERY species as a trace, even hidden ones — hidden traces get
+    // visible:"legendonly" (line hidden, legend entry stays and stays clickable) rather
+    // than being dropped from the array entirely. Dropping them removes their legend
+    // entry too, which strands the user with no way to re-show a species once every
+    // trace is hidden (there'd be nothing left to click) — see the hide-all/legend fix.
     const hidden = appState.hiddenNuclides;
-    const visible = c.nuclides.filter((n) => !hidden.has(n));
     // x is the DISPLAY grid (time since the reference origin), rescaled to the chosen
     // display unit; the store/grid stay SI seconds (§12). The series were evaluated at
     // the absolute times `t₀ + curveX` (the M6d offset, in the store).
     const f = timeUnitDef.seconds;
     const x = appState.curveX.map((v) => v / f);
     const ulabel = timeUnitDef.label;
-    // Floor over the VISIBLE series only, so hiding the dominant species rescales the
-    // gap and reveals the smaller ones (the reason a user hides a trace). Single floor.
-    const peak = globalPeak(c.series, visible);
+    // Floor over ALL series (not just visible), so the y-axis floor stays stable as
+    // species are hidden/shown — a floor keyed to `visible` would make the axis jump
+    // on every toggle, which reads as a layout bug on top of the actual resize one.
+    const peak = globalPeak(c.series, c.nuclides);
     const floor = appState.logY ? peak / 10 ** FLOOR_DECADES : 0;
-    return visible.map((name) => {
+    return c.nuclides.map((name) => {
       const raw = c.series[name] ?? [];
       const y = raw.map((v) =>
         appState.logY ? (v > floor ? v : null) : Number.isFinite(v) ? v : null,
@@ -75,10 +78,32 @@
         name,
         x,
         y,
+        visible: hidden.has(name) ? "legendonly" : true,
         line: { color: appState.colors[name] ?? "#888", width: 2 },
         hovertemplate: `${name}: %{y:.3e} @ %{x:.3e} ${ulabel}<extra></extra>`,
       } as Partial<Plotly.PlotData>;
     });
+  }
+
+  // Plotly's own legend click/dbl-click default to toggling *its* internal per-trace
+  // visibility — which would diverge from appState.hiddenNuclides (and desync the
+  // chain DAG's dot coloring, which reads that same set). Intercept both: route a
+  // single click through the shared toggle and suppress Plotly's default; suppress
+  // double-click's "isolate this trace" outright (no equivalent in the shared state).
+  function attachLegendHandlers(el: HTMLDivElement) {
+    const gd = el as unknown as {
+      removeAllListeners?: (evt: string) => void;
+      on: (evt: string, cb: (ev: unknown) => boolean | void) => void;
+    };
+    gd.removeAllListeners?.("plotly_legendclick");
+    gd.removeAllListeners?.("plotly_legenddoubleclick");
+    gd.on("plotly_legendclick", (ev) => {
+      const name = (ev as { data: { data: Partial<Plotly.PlotData>[] }; curveNumber: number }).data
+        .data[(ev as { curveNumber: number }).curveNumber]?.name as string | undefined;
+      if (name) appState.toggleHidden(name);
+      return false; // suppress Plotly's own legendonly toggle — appState drives it
+    });
+    gd.on("plotly_legenddoubleclick", () => false); // suppress "isolate this trace"
   }
 
   // The time cursor (M6d): a vertical line at the slider's display-time position,
@@ -142,6 +167,7 @@
     const lay = layout();
     lay.shapes = untrack(() => cursorShapes()); // include the current cursor, untracked
     Plotly.react(el, buildTraces(), lay, { responsive: true, displaylogo: false });
+    attachLegendHandlers(el);
   });
 
   // Imperative sync (cursor only): a cursor move is a cheap shapes-only relayout,
@@ -182,6 +208,13 @@
 <section class="curves">
   <header>
     <h2>Time evolution</h2>
+
+    <!-- Hide/show-all (moved from the decay chain, §9 follow-up: this is the panel the
+         buttons actually affect — the chain only reflects hidden state via dot color). -->
+    <div class="visibility" role="group" aria-label="Species visibility" data-testid="chain-visibility">
+      <button data-testid="chain-hide-all" onclick={() => appState.hideAll()}>Hide all</button>
+      <button data-testid="chain-show-all" onclick={() => appState.showAll()}>Show all</button>
+    </div>
 
     <!-- Docked Atoms · Mass · Activity segmented toggle (default Activity, §9). -->
     <div class="axis-toggle" role="group" aria-label="Quantity axis" data-testid="axis-toggle">
