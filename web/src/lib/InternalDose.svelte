@@ -18,6 +18,8 @@
   import { onDestroy } from "svelte";
   import { appState } from "./state.svelte";
   import { formatDose } from "./dosemath";
+  import Term from "./Term.svelte";
+  import LearnMore from "./LearnMore.svelte";
   import {
     INTERNAL_POPULATION_OPTIONS,
     INTERNAL_ROUTE_OPTIONS,
@@ -175,6 +177,33 @@
       </div>
     </div>
 
+    <!-- Novice framing (additive, gate-safe prose): what this number is, and the ONE thing not
+         to do with it — add it to the external dose. Both are effective Sv, which is exactly why
+         the "sum them" trap is tempting; the LearnMore below is the pass's highest-value item. -->
+    <p class="hint muted">
+      This is the <Term term="committed-dose" /> — the dose a reference adult would build up over
+      50 years if the whole inventory were taken in at the cursor time. It is in sieverts, like the
+      external <Term term="effective-dose" />, but a different situation, so the two are never added
+      together.
+    </p>
+
+    <LearnMore summary="Why is this a separate number from the Dose panel?">
+      External dose and this committed internal dose are two different hazards, worked out
+      differently and never added together. An external field irradiates you from a source at a
+      distance; a committed dose is what you would receive from radioactive material actually taken
+      into the body, where it can keep irradiating tissue for years. An alpha emitter shows this
+      starkly: it reads almost nothing on an external survey meter, yet can be very harmful if
+      inhaled or swallowed. A single "total dose" that adds the two would be meaningless — they
+      answer different questions.
+      {#snippet advanced()}
+        Both the external effective dose and E(50) are reported in sieverts, which is precisely why
+        the "just add them" trap is tempting — but they are different exposure scenarios (an
+        external field vs. a hypothetical intake), and the radiation weighting that makes an
+        internal alpha dose large (w_R = 20, applied internally) barely registers on an external
+        survey meter. The tool keeps them on separate panels for this reason.
+      {/snippet}
+    </LearnMore>
+
     {#if appState.internalDoseError}
       <p class="note error" role="alert">⚠ committed dose failed — {appState.internalDoseError}</p>
     {:else if !series}
@@ -302,9 +331,10 @@
             (Gy) in the Dose panel — a different quantity and a different exposure scenario (§6.4).
           </li>
           <li>
-            One <strong>default absorption type / chemical form / f₁</strong> is folded per nuclide
-            (shown in the breakdown). Real intakes vary by compound, particle size, and individual.
-            Where the alternative is materially higher:
+            One default <Term term="absorption-type">absorption type</Term> / chemical form /
+            <Term term="gut-transfer">f₁</Term> is folded per nuclide (shown in the breakdown). Real
+            intakes vary by compound, particle size, and individual. Where the alternative is
+            materially higher:
             <ul class="caveats">
               <li><strong>Po-210</strong> uses the default Type F; <strong>Type M is ~3× higher</strong>
                 and is the value many regulatory tables cite — the default is the UNDER-estimate direction.</li>
@@ -400,6 +430,11 @@
   }
   .sub {
     font-size: 0.82rem;
+  }
+  .hint {
+    font-size: 0.85rem;
+    margin: 0.6rem 0 0;
+    line-height: 1.5;
   }
   .bar-head {
     margin-top: 1rem;

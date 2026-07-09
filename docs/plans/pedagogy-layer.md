@@ -1,11 +1,13 @@
 # Pedagogy / explanations layer (dev-doc)
 
-Status: **Pass 1 + Pass 2 SHIPPED (2026-07-09).** Components + glossary built
-and wired into Curves/Chain/Dose (Pass 1) and Shield/Sources (Pass 2);
-svelte-check clean, gate green dev + built after each pass. **Pass 3 (Internal
-dose, Honesty) is NOT started** — review with the user before starting it. The
-original scope/resume contract is preserved below; see the Pass-2 checklist
-near the end.
+Status: **Pass 1 + Pass 2 + Pass 3 SHIPPED (2026-07-09).** Components + glossary
+built and wired into Curves/Chain/Dose (Pass 1), Shield/Sources (Pass 2), and
+Internal-dose + Honesty (Pass 3); svelte-check clean, gate green dev + built
+after each pass. **The pedagogy layer is now feature-complete** across all
+seven physics panels. The one remaining future-work item — refactoring
+`Honesty.svelte` to CONSUME the glossary (advisor #4) — was deliberately left
+out of Pass 3 and is optional. The original scope/resume contract is preserved
+below; see the Pass-3 checklist near the end.
 
 ## Goal (user request)
 
@@ -147,18 +149,53 @@ The plumbing is easy and will work first try. Spend the care on these:
       placed ABOVE `.layout`, clear of the gate's `.row`/entries-table text
       assertions.
 - [x] `npm run check` clean (0/0); gate green **dev + built**.
-- [ ] **Review with the user before Pass 3 (Internal dose, Honesty).** ← next
+- [x] Reviewed with the user; user said "continue with pass 3".
 
-### Pass-3 notes for the resuming session
+## Pass 3 checklist — DONE (2026-07-09)
 
-- Add Pass-3 terms (committed dose E(50), absorption type / f1, and any
-  Honesty-register vocabulary) when wiring `InternalDose.svelte`, same
-  discipline (paraphrase Honesty, no new numbers).
-- Do NOT refactor `Honesty.svelte` to consume the glossary yet (out of scope,
-  advisor #4) — just keep them non-contradictory. Pass 3 is where the
-  "make Honesty consume the glossary" future-work could finally land if wanted.
-- Reuse the two components as-is; the `advanced` snippet on `LearnMore` now has
-  a first real use (Shield/Sources) to copy.
+- [x] 3 new glossary terms, paraphrased from `Honesty.svelte`/`InternalDose.svelte`,
+      **no new number/citation** and kept **qualitative** (advisor #3, to avoid
+      glossary↔Honesty drift): `committed-dose` (E(50) = Σ eₙ·Aₙ, a SCALAR Sv,
+      50-yr integration baked in), `absorption-type` (F/M/S **respiratory**
+      clearance — inhalation only) and `gut-transfer` (f₁ **GI** uptake fraction —
+      ingestion only). The two intake terms are kept **distinct** and cross-linked
+      (advisor #2: lung clearance ≠ gut uptake — conflating them is itself a quiet
+      error).
+- [x] **The blocking correctness point (advisor #1):** committed E(50) is
+      "effective Sv" yet is NEVER summed with external effective dose — the
+      seductive Pass-3 flattening (both are Sv). Every new line frames it as a
+      **different scenario (a hypothetical intake vs. an external field), not
+      added**. The Internal-dose `<LearnMore>` "Why is this a separate number
+      from the Dose panel?" (the pass's highest-value item) carries the α
+      survey-meter teaching + the `w_R=20`-internal advanced note (a number
+      already in Honesty, not fabricated).
+- [x] Wired **additively**, no `data-testid` rewrapped and — per advisor #4 — the
+      Honesty `GROUPS` data untouched (no glossary refactor). **Internal-dose:**
+      an intro `.hint` (committed-dose + effective-dose Terms + never-added
+      framing) + the `<LearnMore>` after the route/population selectors;
+      `absorption-type`/`gut-transfer` Terms wired into the existing honesty
+      `<ul>` bullet that already defines them (an advisor-safe spot). **Honesty:**
+      one novice `<LearnMore>` "New here? How to read this register" placed
+      ADJACENT to the always-visible disclaimer (advisor #6 — NOT nested in the
+      default-collapsed register, so an intimidated first-timer meets it),
+      decoding the recurring register vocabulary (lower bound / degraded trust /
+      order-of-magnitude / never-mixed) with gray/H*(10)/effective/committed Terms.
+- [x] **Gate landmine avoided (advisor #4):** Terms kept OUT of the two
+      contiguous-phrase asserts — the `internal-lowerbound` banner (dynamic
+      nuclide tokens) and its `internal-lowerbound-note` (`/activity share is not
+      dose share/i`); a Term injected mid-phrase would break the regex. Terms only
+      in header/hint, honesty `<ul>` bullets, and `<LearnMore>`. No `<input
+      type=number>` added (scalar-not-rate `hasNumberInput` assert stays false).
+- [x] `npm run check` clean (0/0); gate green **dev + built** (all M13 internal +
+      honesty checks pass unchanged).
+
+### Optional future work (unchanged)
+
+- Refactor `Honesty.svelte` to CONSUME the glossary (dedupe the term definitions
+  the register and glossary now both carry). Deliberately deferred through Pass 3
+  (advisor #4); the two are kept non-contradictory but not yet unified.
+- Reuse the two components as-is; the `advanced` snippet on `LearnMore` is now
+  used in Shield/Sources (Pass 2) and Internal-dose (Pass 3).
 
 ## Related
 

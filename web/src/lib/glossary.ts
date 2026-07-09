@@ -29,8 +29,9 @@ export interface GlossaryEntry {
 
 // Grown per pass (never pre-populated): ONLY the terms the wired panels actually surface,
 // and only those where a novice genuinely won't know the word AND there is a correctness
-// distinction worth an advanced aside (the quantity family, the core decay terms, and — as
-// of Pass 2 — the shielding + neutron-source vocabulary of the Shield and Sources panels).
+// distinction worth an advanced aside (the quantity family, the core decay terms, the — as
+// of Pass 2 — shielding + neutron-source vocabulary of the Shield and Sources panels, and —
+// as of Pass 3 — the intake / committed-dose vocabulary of the Internal-dose panel).
 // App mechanics (display floor, decades, the Bateman solve, the N–Z chart) are left to
 // prose / <LearnMore> — they are not glossary Terms; `source-age` is the one deliberate
 // exception, a UI-mechanics word a novice meets head-on in the Sources intro.
@@ -270,6 +271,48 @@ export const GLOSSARY = {
       "Source age is an offset applied at evaluate time: the displayed activities, dose and " +
       "chain are the one Bateman solve read at (source age + cursor time). It is a display / " +
       "reference offset, not a re-solve — the 'solve once, evaluate many' contract.",
+  },
+  // -- internal / committed dose (Internal-dose panel; Pass 3) -----------------
+  "committed-dose": {
+    term: "committed dose E(50)",
+    novice:
+      "The dose your body would receive over the next 50 years from radioactive material " +
+      "taken IN once — breathed in or swallowed — because it lodges inside and keeps " +
+      "irradiating tissue long after the intake. It is reported in sieverts (Sv), like an " +
+      "external effective dose, but it describes a different situation — a hypothetical " +
+      "intake, not an external field — so the two are never added together into one total.",
+    advanced:
+      "Committed effective dose E(50) = Σ eₙ·Aₙ: each nuclide's intake activity times its " +
+      "committed effective-dose coefficient eₙ (Sv/Bq), summed. It is a SCALAR in sieverts " +
+      "(not a rate — the 50-year integration is already baked into the coefficient), so " +
+      "there is no exposure window to accumulate. Although it is an effective-dose quantity " +
+      "it is never summed with the external H*(10) / effective dose, which describe a " +
+      "separate exposure scenario.",
+  },
+  "absorption-type": {
+    term: "lung absorption type (F/M/S)",
+    novice:
+      "For something BREATHED IN, how quickly the compound dissolves out of the lungs into " +
+      "the bloodstream: Type F (fast), M (moderate) or S (slow). A slower type keeps the " +
+      "material in the lung longer, which usually means a higher dose. The tool folds one " +
+      "default type per nuclide; a real intake depends on the exact chemical form.",
+    advanced:
+      "The absorption type sets the ICRP respiratory-tract clearance rate for an inhaled " +
+      "aerosol; the alternative type can be materially higher or lower than the folded " +
+      "default (the panel's honesty block lists the cases that bite). It applies to " +
+      "inhalation only — ingestion uses the gut-transfer fraction f₁ instead.",
+  },
+  "gut-transfer": {
+    term: "gut transfer factor (f₁)",
+    novice:
+      "For something SWALLOWED, the fraction of the element that is absorbed from the gut " +
+      "into the bloodstream — the rest passes straight through and out. A larger f₁ means " +
+      "more of an intake actually reaches the body's tissues. It depends on the element and " +
+      "its chemical form.",
+    advanced:
+      "f₁ is the ICRP gastro-intestinal uptake fraction, used for the ingestion route " +
+      "(inhalation uses the lung absorption type F/M/S instead). The panel shows the folded " +
+      "f₁ per nuclide as provenance; a different chemical form can carry a different f₁.",
   },
 } as const satisfies Record<string, GlossaryEntry>;
 

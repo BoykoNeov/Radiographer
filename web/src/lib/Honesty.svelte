@@ -9,6 +9,9 @@
   // UNMERGED OpenMC PR; see docs/plans/M2-conversion.md). A pure static renderer — no store
   // reads, no physics. The headline disclaimer is always visible; the detail is collapsible.
 
+  import Term from "./Term.svelte";
+  import LearnMore from "./LearnMore.svelte";
+
   interface Item {
     title: string;
     body: string;
@@ -292,6 +295,40 @@
     validated codes (MCNP, ORIGEN, VARSKIN) and a qualified health physicist. The first load
     is heavy (the WASM scientific stack) — that is expected, not a bug.
   </p>
+
+  <!-- Novice orientation for the register below. Kept ADJACENT to the always-visible disclaimer
+       (not nested inside the default-collapsed register) so an intimidated first-time reader
+       actually meets it. Additive prose + Terms only — the register's GROUPS data is untouched
+       (Pass-3 scope does NOT refactor Honesty to consume the glossary). -->
+  <LearnMore summary="New here? How to read this register">
+    This tool is candid about its own limits, and the section below lists them. A few phrases
+    recur:
+    <ul>
+      <li>
+        <strong>“lower bound” / “under-count”</strong> — the real value is at least this, and
+        possibly higher, because something was deliberately left out. This is the cautious-but-
+        dangerous direction, so it is always flagged loudly rather than hidden.
+      </li>
+      <li>
+        <strong>“degraded trust” / provenance</strong> — the number is usable but rests on a data
+        source that has not been fully peer-reviewed or independently verified; where the
+        underlying data is clean, the register says so explicitly.
+      </li>
+      <li>
+        <strong>“order-of-magnitude”</strong> — trust the size (the right ballpark, the right power
+        of ten), not the last digits.
+      </li>
+      <li>
+        Different quantities are <strong>never mixed or added</strong>:
+        <Term term="absorbed-dose">gray</Term> vs. sievert, <Term term="dose-equivalent" /> vs.
+        <Term term="effective-dose" />, and an external field vs. a
+        <Term term="committed-dose">committed internal dose</Term> — a recurring theme because it is
+        the easiest mistake to make.
+      </li>
+    </ul>
+    None of this replaces validated codes and a qualified health physicist for real
+    radiation-safety work.
+  </LearnMore>
 
   <details class="register">
     <summary>Accuracy &amp; limitations — the honesty register (HANDOFF_PLAN §11)</summary>
