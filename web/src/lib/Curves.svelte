@@ -34,6 +34,16 @@
 
   let plotEl = $state<HTMLDivElement | null>(null);
 
+  // Opt-in "floor-to-shown" mode (the "isolate mode" from the design chat). Default
+  // OFF keeps the load-bearing GLOBAL floor: peak over ALL species (hidden included),
+  // so a negligible species reads as an honest gap and the y-axis stays put across
+  // hide/show. When ON, the floor is computed over only the SHOWN species, so
+  // deliberately isolating a negligible nuclide (hide the dominant ones) brings it into
+  // view — at the cost of a y-axis that moves with the selection. Log-only: the floor
+  // is only applied on a log y-axis (linear already plots everything), so this is inert
+  // — and disabled in the UI — when logY is off.
+  let isolate = $state<boolean>(false);
+
   // x-axis display time unit (§9 "switch from seconds to years"). DISPLAY-ONLY: the
   // store/grid stay in SI seconds (§12) — this only rescales the plotted x array, the
   // cursor line, the axis title, and the hover label. Default "s" so the existing
@@ -78,10 +88,14 @@
     const f = timeUnitDef.seconds;
     const x = appState.curveX.map((v) => v / f);
     const ulabel = timeUnitDef.label;
-    // Floor over ALL series (not just visible), so the y-axis floor stays stable as
-    // species are hidden/shown — a floor keyed to `visible` would make the axis jump
-    // on every toggle, which reads as a layout bug on top of the actual resize one.
-    const peak = globalPeak(c.series, c.nuclides);
+    // Floor over ALL species by default (not just visible), so the y-axis floor stays
+    // stable as species are hidden/shown — a floor keyed to `visible` would make the
+    // axis jump on every toggle, which reads as a layout bug on top of the actual resize
+    // one. In `isolate` mode the user opts into exactly that jump: floor over only the
+    // SHOWN species so an isolated negligible nuclide becomes visible. `visible` below
+    // still keys off `hidden.has(name)` independent of this — isolate only moves the floor.
+    const floorNames = isolate ? c.nuclides.filter((n) => !hidden.has(n)) : c.nuclides;
+    const peak = globalPeak(c.series, floorNames);
     const floor = appState.logY ? peak / 10 ** FLOOR_DECADES : 0;
     return c.nuclides.map((name) => {
       const raw = c.series[name] ?? [];
@@ -176,7 +190,13 @@
     void appState.logY;
     void appState.colors;
     void appState.curveX;
-    void appState.hiddenNuclides.size; // rebuild traces on hide/show (advisor #3)
+    // Rebuild on hide/show. NOTE: `.size` is a valid trigger only because every current
+    // mutation (toggleHidden ±1, hideAll, showAll) changes the count. In `isolate` mode
+    // the floor depends on WHICH species are shown, not how many — so if a future batch
+    // op ever swaps membership without changing the count, add a `which`-sensitive dep
+    // here or the floor goes silently stale. Correct today (advisor #3/#4).
+    void appState.hiddenNuclides.size;
+    void isolate; // and on the floor-to-shown toggle (recomputes the floor)
     void timeUnit; // and on an x-axis unit switch (rescales x + relabels the axis)
     const el = plotEl;
     if (!el) return;
@@ -275,6 +295,23 @@
       log y-axis
     </label>
 
+    <!-- Opt-in floor-to-shown ("isolate") toggle: floor against only the SHOWN species so
+         a deliberately-isolated negligible nuclide becomes visible. Inert on a linear axis
+         (nothing is floored there), so it's disabled unless log y is on. -->
+    <label
+      class="isolatetoggle"
+      title="Floor the plot against only the shown species, so a negligible nuclide becomes visible when you hide the dominant ones. Log y-axis only."
+    >
+      <input
+        type="checkbox"
+        data-testid="curve-isolate"
+        checked={isolate}
+        disabled={!appState.logY}
+        onchange={(e) => (isolate = (e.target as HTMLInputElement).checked)}
+      />
+      rescale to shown
+    </label>
+
     <!-- x-axis time unit (§9 "switch from seconds to years"); rescales the plotted x. -->
     <label class="timeunit">
       x-axis
@@ -322,9 +359,15 @@
   <p class="hint muted">
     Log-log overlay, one Bateman solve per inventory; the time slider below scrubs a
     cursor over these curves — no re-solve (§3). The Activity axis omits stable
-    end-products (zero activity); switch to Atoms/Mass to see them grow in. Curves
-    below ~{FLOOR_DECADES} decades under the peak are clipped to an honest gap, not
-    drawn toward −∞ (§9).
+    end-products (zero activity); switch to Atoms/Mass to see them grow in.
+    <br />
+    By default the plot is floored against the largest species in the whole inventory,
+    so a nuclide more than ~{FLOOR_DECADES} decades below it stays an honest gap even
+    when shown — that's why a trace-nuclide like a minor actinide can be selected yet
+    draw nothing (it's negligible, not missing), rather than diving toward −∞ (§9). To
+    see one anyway, hide the dominant species and enable “rescale to shown” (log y-axis
+    only): that floors against just the shown species, at the cost of a y-axis that
+    moves with your selection.
   </p>
 </section>
 
@@ -370,14 +413,20 @@
   }
   .unit,
   .logtoggle,
+  .isolatetoggle,
   .timeunit {
     font: inherit;
   }
   .logtoggle,
+  .isolatetoggle,
   .timeunit {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
+  }
+  /* Dim the toggle + its label together when it's inert (linear axis). */
+  .isolatetoggle:has(input:disabled) {
+    opacity: 0.45;
   }
   .unit,
   .timeunit select {

@@ -2773,6 +2773,7 @@ async function runViews(page) {
       await app.clear();
       app.setReferenceTimeS(0);
       app.setAxis("activity");
+      app.setLogY(true); // an earlier suite leaves logY=false; the floor + isolate toggle need log
       app.showAll();
       await app.addEntry("Cs-137", 1.0e9, "Bq");
     }),
@@ -3074,6 +3075,75 @@ async function runViews(page) {
   await guarded("runViews tail (b) restore s", async () => {
     await page.selectOption('[data-testid="curve-time-unit"]', "s"); // restore
   });
+
+  // (c) Floor-to-shown / "isolate" mode (the Cm-250-in-spent-fuel report: a species >13
+  //     decades below the global peak stays an honest gap even when shown). Reproduce it
+  //     deterministically with a two-chain mix — Cs-137 @ 1e9 Bq (already loaded) + Co-60
+  //     @ 1e-6 Bq (15 decades down, independent chain Co-60→Ni-60) — then verify BOTH
+  //     halves: (i) with isolate OFF, shown-but-floored Co-60 draws all-null under the
+  //     GLOBAL floor (peak/1e13 ≈ 1e-4 Bq ≫ Co-60's ≤1e-6); (ii) turning on "rescale to
+  //     shown" re-floors against Co-60 alone so its curve draws (non-null). Log-only —
+  //     logY stays on throughout, so the toggle is enabled.
+  await guarded("runViews (c1) addEntry Co-60 (tiny) → solved + trace present", async () => {
+    await page.evaluate(async () => {
+      await window.__APP__.addEntry("Co-60", 1.0e-6, "Bq"); // 15 decades below Cs-137
+    });
+    await page.waitForFunction(
+      `(() => { const app = window.__APP__; const el = document.querySelector('${PLOTV}');
+        return app.status === 'solved' && app.closure.includes('Co-60')
+          && el && el.data && el.data.some((d) => d.name === 'Co-60'); })()`,
+      null,
+      { timeout: 20_000 },
+    );
+  });
+  await guarded("runViews (c2) hide all but Co-60 → Co-60 shown, Cs-137 legendonly", async () => {
+    await page.evaluate(() => {
+      const app = window.__APP__;
+      app.hideAll();
+      app.toggleHidden("Co-60"); // show ONLY Co-60 (isolate the negligible species)
+    });
+    await page.waitForFunction(
+      `(() => { const el = document.querySelector('${PLOTV}');
+        const co = el && el.data ? el.data.find((d) => d.name === 'Co-60') : null;
+        const cs = el && el.data ? el.data.find((d) => d.name === 'Cs-137') : null;
+        return co && cs && co.visible === true && cs.visible === 'legendonly'; })()`,
+      null,
+      { timeout: 20_000 },
+    );
+  });
+  // isolate OFF: Co-60 is shown (visible:true) yet floored globally → every y is null.
+  const isoOff = await guarded("runViews (c3) read isolate-OFF Co-60 y (expect all null)", () =>
+    page.evaluate((sel) => {
+      const t = document.querySelector(sel).data.find((d) => d.name === "Co-60");
+      const n = t ? t.y.length : -1;
+      return { visible: t?.visible, n, nNull: t ? t.y.filter((v) => v === null).length : -1 };
+    }, PLOTV),
+  );
+  const isoOn = await guarded("runViews (c4) toggle isolate ON → Co-60 draws (non-null)", async () => {
+    await page.click('[data-testid="curve-isolate"]'); // → rescale to shown
+    await page.waitForFunction(
+      `(() => { const el = document.querySelector('${PLOTV}');
+         const t = el && el.data ? el.data.find((d) => d.name === 'Co-60') : null;
+         return t && t.y.some((v) => v !== null && v > 0); })()`,
+      null,
+      { timeout: 20_000 },
+    );
+    return page.evaluate((sel) => {
+      const t = document.querySelector(sel).data.find((d) => d.name === "Co-60");
+      const n = t ? t.y.length : -1;
+      return { visible: t?.visible, n, nNonNull: t ? t.y.filter((v) => v !== null && v > 0).length : -1 };
+    }, PLOTV);
+  });
+  // Reset: isolate OFF + restore full view (next suites clear anyway; keep it tidy).
+  await guarded("runViews (c5) reset isolate off + show all", async () => {
+    await page.click('[data-testid="curve-isolate"]');
+    await page.evaluate(() => window.__APP__.showAll());
+  });
+  record(
+    "floor-to-shown OFF: a species 15 decades below the global peak is shown but honest-gap (all y null); ON: it re-floors against just the shown species and draws (non-null)",
+    isoOff.visible === true && isoOff.n > 0 && isoOff.nNull === isoOff.n && isoOn.nNonNull > 0,
+    `off: visible=${isoOff.visible} null ${isoOff.nNull}/${isoOff.n}; on: non-null ${isoOn.nNonNull}/${isoOn.n}`,
+  );
 
   return { ok: checks.every((c) => c.pass), checks };
 }
