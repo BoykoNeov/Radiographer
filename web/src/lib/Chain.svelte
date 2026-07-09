@@ -21,6 +21,8 @@
   import { onDestroy, untrack } from "svelte";
   import { appState } from "./state.svelte";
   import type { ChainNode } from "./bridge";
+  import Term from "./Term.svelte";
+  import LearnMore from "./LearnMore.svelte";
 
   cytoscape.use(dagre); // register the dagre layout once (else `layout:"dagre"` throws)
 
@@ -463,10 +465,19 @@
     {/if}
 
     <p class="hint muted">
+      This diagram is the decay family tree of the loaded inventory: each box is a nuclide,
+      each arrow a decay step. Node size and brightness track each one's
+      <Term term="activity" /> at the slider time — scrub it to watch a parent fade as its
+      daughters grow in toward <Term term="secular-equilibrium" />.
+    </p>
+
+    <p class="hint muted">
       Node size &amp; opacity track each species' <strong>activity at the time cursor</strong>
       (§9) — scrub the slider above to watch the parent fade and daughters grow in; one
-      Bateman solve, evaluated many (§3). Edges label the decay mode + branching %; colors
-      are the shared per-species palette. <strong>Dagre</strong> is a compact layered DAG;
+      Bateman solve, evaluated many (§3). Edges label the
+      <Term term="decay-mode">decay mode</Term> + <Term term="branching-ratio">branching</Term>
+      %; colors are the shared per-species palette. <strong>Dagre</strong> is a compact
+      layered DAG;
       <strong>Chart (N, Z)</strong> places each node by neutron/proton number (α steps
       down-left, β⁻ a diagonal step — re-convergence falls out because a shared daughter is
       one coordinate). Per-emission energies appear in the dose per-line table (M6f-2).
@@ -475,6 +486,14 @@
       <strong>Hide all</strong> / <strong>Show all</strong> (in the Time evolution panel
       above) bulk-toggle the same state (hide all, then click the few you want to keep).
     </p>
+
+    <LearnMore summary="What is the “Chart (N, Z)” layout?">
+      The chart of nuclides plots every nuclide by its neutron number (across) and proton
+      number (up). Radioactive decays become simple steps on this grid: alpha emission
+      moves down-left, beta-minus moves one diagonal step up. Laying the chain out this way
+      makes the physics visible — and because each nuclide has one fixed place on the grid,
+      two decay paths that reach the same daughter meet at a single box (re-convergence).
+    </LearnMore>
   </section>
 {/if}
 

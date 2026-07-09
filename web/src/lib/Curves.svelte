@@ -9,6 +9,7 @@
   import { onDestroy, untrack } from "svelte";
   import { appState } from "./state.svelte";
   import { ACTIVITY_UNITS, AXIS_OPTIONS, MASS_UNITS, TIME_UNITS } from "./types";
+  import Term from "./Term.svelte";
 
   // Diagnostic only (gate-js-heap-runaway, HANDOFF_PLAN §13 #8): log the render
   // counter INLINE at the call site, wall-clock-throttled, rather than relying only
@@ -355,6 +356,12 @@
       </div>
     {/if}
   </div>
+
+  <p class="hint muted">
+    Each line is one nuclide's <Term term="activity" /> — how fast it is decaying — as it
+    changes over time, with daughters growing in as the parent decays. A species'
+    <Term term="half-life" /> sets how quickly its curve falls.
+  </p>
 
   <p class="hint muted">
     Log-log overlay, one Bateman solve per inventory; the time slider below scrubs a

@@ -1,8 +1,10 @@
 # Pedagogy / explanations layer (dev-doc)
 
-Status: **PLANNED — not started.** Scope agreed with the user; a session pause
-was called right after the advisor review, before any code. This doc is the
-resume contract for a fresh session.
+Status: **Pass 1 SHIPPED (2026-07-09).** Components + glossary built and wired
+into Curves/Chain/Dose; svelte-check clean, gate green dev + built, and a
+focused behaviour check passed. **Pass 2 (Shield, Sources) and Pass 3 (Internal
+dose, Honesty) are NOT started** — review with the user before starting Pass 2.
+The original scope/resume contract is preserved below.
 
 ## Goal (user request)
 
@@ -93,18 +95,43 @@ The plumbing is easy and will work first try. Spend the care on these:
    split earns its keep; lean on `<LearnMore>`/plain prose (and native
    `[title]`) elsewhere — don't put a popover on every noun.
 
-## Pass 1 checklist (next session)
+## Pass 1 checklist — DONE (2026-07-09)
 
-- [ ] `Term.svelte` (Svelte 5 snippet children; keyboard-accessible; hidden =
-      `display:none`; never over a `data-testid` click path)
-- [ ] `LearnMore.svelte` (`<details>` wrapper, consistent summary, optional
-      advanced block)
-- [ ] `glossary.ts` seeded with ONLY the Curves/Chain/Dose terms, each checked
-      against `Honesty.svelte` + §11/§12
-- [ ] Wire into `Curves.svelte`, `Chain.svelte`, `Dose.svelte`
-- [ ] `npm run check` clean; gate green **dev + built**
-- [ ] Commit (Conventional Commits), push; update memory + this doc
-- [ ] Review with user before Pass 2 (Shield, Sources)
+- [x] `Term.svelte` — Svelte 5 snippet children; **CSS-only** reveal
+      (`:hover, :focus-within`), no JS state; hidden = `display:none` (no box to
+      eat clicks); trigger is a `<button>` with a **descriptive** `aria-label`
+      (`Define …`) + `aria-describedby` → popover; instance-unique id via a
+      module counter (activity appears in two panels); theme-aware via
+      `Canvas`/`CanvasText` system colors.
+- [x] `LearnMore.svelte` — `<details>` wrapper (native marker, no manual ▸, to
+      match Honesty/Dose); `children` body + optional `advanced` snippet block.
+- [x] `glossary.ts` — 11 entries, ONLY Curves/Chain/Dose terms, each paraphrased
+      from `Honesty.svelte` with **no new number/citation** (advisor risk #1/#3).
+      `GLOSSARY` is `as const satisfies Record<string, GlossaryEntry>`;
+      `GlossaryKey = keyof typeof GLOSSARY` so `<Term term="…">` is type-checked.
+      Terms: activity, half-life, secular-equilibrium, branching-ratio,
+      decay-mode, absorbed-dose, dose-equivalent (H*(10)), effective-dose,
+      hp007, buildup, inverse-square.
+- [x] Wired into `Curves` (activity, half-life), `Chain` (activity,
+      secular-equilibrium, decay-mode, branching-ratio, + (N,Z) `LearnMore`),
+      `Dose` (H*(10), effective, Hp(0.07), absorbed-dose, inverse-square,
+      buildup) — all additive, in hint prose only; no `data-testid` element or
+      gate-matched control (Atoms/Activity/Mass/H*(10)/Effective) rewrapped.
+- [x] `npm run check` clean (0/0); gate green **dev + built**; focused pedagogy
+      behaviour check passed (labels, display:none-when-idle, focus reveal,
+      Gy≠Sv content, LearnMore toggle).
+- [ ] **Review with the user before Pass 2 (Shield, Sources).** ← next
+
+### Pass-2/3 notes for the resuming session
+
+- Glossary is seeded with ONLY Pass-1 terms by design — add Pass-2 terms
+  (removal cross-section Σ_R, half-value layer, bremsstrahlung, spontaneous
+  fission, (α,n), decay heat, committed dose E(50)) when wiring those panels,
+  same discipline (paraphrase Honesty, no new numbers).
+- Do NOT refactor `Honesty.svelte` to consume the glossary yet (out of scope,
+  advisor #4) — just keep them non-contradictory.
+- Reuse the two components as-is; the `advanced` snippet on `LearnMore` is
+  built but unused so far (a good home for a Pass-2 standards aside).
 
 ## Related
 

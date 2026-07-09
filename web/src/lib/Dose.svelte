@@ -15,6 +15,7 @@
   import { onDestroy } from "svelte";
   import { appState } from "./state.svelte";
   import { DOSE_PREFIX_OPTIONS, formatDose, formatDoseRate, pickPrefix } from "./dosemath";
+  import Term from "./Term.svelte";
   import {
     DOSE_QUANTITY_OPTIONS,
     GEOMETRY_OPTIONS,
@@ -700,6 +701,14 @@
         {/if}
       </div>
 
+      <p class="hint muted">
+        The gamma (and neutron) cards report <Term term="dose-equivalent" /> or
+        <Term term="effective-dose" /> in sieverts (Sv) — energy weighted for biological
+        harm — while the beta card reports <Term term="hp007" /> as
+        <Term term="absorbed-dose" /> in gray (Gy). Sieverts and grays are different
+        quantities and are never added together.
+      </p>
+
       {#if hasNeutron && appState.shieldActive}
         {#if nShieldTransparent}
           <p class="note warn" data-testid="dose-neutron-transparent">
@@ -813,7 +822,8 @@
       </div>
       <div class="plot dist" data-testid="dose-distance-plot" bind:this={distEl}></div>
       <p class="hint muted">
-        γ{#if hasNeutron} and n{/if} fall as 1/distance² (exact here — v1 models no air
+        γ{#if hasNeutron} and n{/if} fall as
+        <Term term="inverse-square">1/distance²</Term> (exact here — v1 models no air
         attenuation, §11); the bands are the models' accuracy registers, not statistical error.
         {#if hasNeutron}The TIGHT γ band vs the wide order-of-magnitude n band is the point — the
         neutron source term is tabulated to ×/÷ a few (§11).{/if}
@@ -900,7 +910,9 @@
       <p class="hint muted">
         Point-source external dose in air, evaluated at the time cursor; one solve,
         evaluated many (§3) — distance/quantity/geometry recompute the rate series,
-        the cursor &amp; exposure just index/integrate it. <strong>γ/n (Sv) and β
+        the cursor &amp; exposure just index/integrate it. When a shield is applied a
+        <Term term="buildup">buildup factor</Term> accounts for scattered γ that still
+        reaches the detector. <strong>γ/n (Sv) and β
         (Gy, Hp(0.07)) are different quantities on separate axes — never summed, and
         their bar heights are NOT comparable across quantities</strong> (§6.2); the
         cards above carry the true magnitudes. Uncertainty is shown as whiskers on the
