@@ -1,10 +1,11 @@
 # Pedagogy / explanations layer (dev-doc)
 
-Status: **Pass 1 SHIPPED (2026-07-09).** Components + glossary built and wired
-into Curves/Chain/Dose; svelte-check clean, gate green dev + built, and a
-focused behaviour check passed. **Pass 2 (Shield, Sources) and Pass 3 (Internal
-dose, Honesty) are NOT started** — review with the user before starting Pass 2.
-The original scope/resume contract is preserved below.
+Status: **Pass 1 + Pass 2 SHIPPED (2026-07-09).** Components + glossary built
+and wired into Curves/Chain/Dose (Pass 1) and Shield/Sources (Pass 2);
+svelte-check clean, gate green dev + built after each pass. **Pass 3 (Internal
+dose, Honesty) is NOT started** — review with the user before starting it. The
+original scope/resume contract is preserved below; see the Pass-2 checklist
+near the end.
 
 ## Goal (user request)
 
@@ -122,16 +123,42 @@ The plumbing is easy and will work first try. Spend the care on these:
       Gy≠Sv content, LearnMore toggle).
 - [ ] **Review with the user before Pass 2 (Shield, Sources).** ← next
 
-### Pass-2/3 notes for the resuming session
+## Pass 2 checklist — DONE (2026-07-09)
 
-- Glossary is seeded with ONLY Pass-1 terms by design — add Pass-2 terms
-  (removal cross-section Σ_R, half-value layer, bremsstrahlung, spontaneous
-  fission, (α,n), decay heat, committed dose E(50)) when wiring those panels,
-  same discipline (paraphrase Honesty, no new numbers).
+- [x] 7 new glossary terms, paraphrased from `Honesty.svelte`, no new
+      number/citation: **Shield** — `attenuation`, `half-value-layer` (HVL,
+      `HVL = ln2/μ` is a definitional identity, not a fabricated number),
+      `bremsstrahlung`, `removal-cross-section` (Σ_R); **Sources** —
+      `spontaneous-fission`, `alpha-n`, `source-age` (the one deliberate
+      UI-mechanics Term).
+- [x] **Advisor-caught correctness fix (blocks, advisor #1/#4):** the
+      `spontaneous-fission` novice line must NOT cite the Pu-240 in a Pu pit as
+      an SF example — the tool models the pit α/γ-only (Honesty: "~1000 n/s/g
+      Pu-240 SF neutrons … v1 does NOT model"). A novice would load the pit and
+      see no neutrons = wrong-but-quiet. Fixed to name only tool-modelled SF
+      sources: **Cf-252** and **the curium in cooled spent fuel**. The gate
+      confirms the consistency (Pu pit → "neutron GRAYED"; Cf-252 → "live card +
+      n bar trace"; spent fuel → "MULTI-parent neutron path").
+- [x] Wired **additively**, no `data-testid` element rewrapped: Shield — Terms
+      in the inactive note + the (existence-only-checked) high-Z warning + a
+      novice `<LearnMore>` "How a shield reduces the dose" (uses the `advanced`
+      snippet for the first time). Sources — `source-age` Term in the intro + a
+      novice `<LearnMore>` "What makes a source emit neutrons? (the 'n' badge)"
+      placed ABOVE `.layout`, clear of the gate's `.row`/entries-table text
+      assertions.
+- [x] `npm run check` clean (0/0); gate green **dev + built**.
+- [ ] **Review with the user before Pass 3 (Internal dose, Honesty).** ← next
+
+### Pass-3 notes for the resuming session
+
+- Add Pass-3 terms (committed dose E(50), absorption type / f1, and any
+  Honesty-register vocabulary) when wiring `InternalDose.svelte`, same
+  discipline (paraphrase Honesty, no new numbers).
 - Do NOT refactor `Honesty.svelte` to consume the glossary yet (out of scope,
-  advisor #4) — just keep them non-contradictory.
-- Reuse the two components as-is; the `advanced` snippet on `LearnMore` is
-  built but unused so far (a good home for a Pass-2 standards aside).
+  advisor #4) — just keep them non-contradictory. Pass 3 is where the
+  "make Honesty consume the glossary" future-work could finally land if wanted.
+- Reuse the two components as-is; the `advanced` snippet on `LearnMore` now has
+  a first real use (Shield/Sources) to copy.
 
 ## Related
 

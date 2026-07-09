@@ -20,6 +20,8 @@
   import { appState } from "./state.svelte";
   import { formatDoseRate } from "./dosemath";
   import { MATERIAL_GUIDANCE, MODALITY_COLORS, MODALITY_UNCERTAINTY, doseQuantityLabel, humanTime } from "./types";
+  import Term from "./Term.svelte";
+  import LearnMore from "./LearnMore.svelte";
 
   let thickEl = $state<HTMLDivElement | null>(null);
   let timeEl = $state<HTMLDivElement | null>(null);
@@ -268,10 +270,11 @@
 
       {#if !active}
         <p class="note muted">
-          Add a layer to attenuate the γ dose. Only materials with ANS-6.4.3 buildup data are
-          offered (a shield without scatter buildup is a data hole, not a transparent medium —
-          §11). When a neutron source is active the same stack also drives the neutron dose:
-          <strong>water</strong> is hydrogenous and removes fast neutrons, while high-Z γ shields
+          Add a layer to <Term term="attenuation">attenuate</Term> the γ dose. Only materials
+          with ANS-6.4.3 buildup data are offered (a shield without scatter buildup is a data
+          hole, not a transparent medium — §11). When a neutron source is active the same stack
+          also drives the neutron dose: <strong>water</strong> is hydrogenous and
+          <Term term="removal-cross-section">removes fast neutrons</Term>, while high-Z γ shields
           (lead) are neutron-transparent — the neutron card says so (§6.3). Stack multiple layers
           source-side → detector-side — <strong>order matters</strong> for buildup (§6.4).
         </p>
@@ -315,7 +318,8 @@
         {#if bremsRelevant}
           <p class="note warn" data-testid="shield-highz-warn">
             ⚠ {matLabel(betaLayer?.material ?? "")} (the source-side layer) is high-Z: it stops the
-            β but converts it into penetrating bremsstrahlung photons — <strong>more shield can
+            β but converts it into penetrating
+            <Term term="bremsstrahlung">bremsstrahlung</Term> photons — <strong>more shield can
             increase the total (photon) dose</strong>. For a β emitter, a low-Z layer (aluminium,
             water) source-side first, then high-Z for the γ, is the standard order.
           </p>
@@ -362,6 +366,27 @@
           the coefficients; the cursor just indexes. <strong>Not for safety decisions</strong> (§11).
         </p>
       {/if}
+
+      <LearnMore summary="How a shield reduces the dose">
+        A shield works by <Term term="attenuation">attenuation</Term>: each bit of thickness
+        removes a fraction of the radiation, so the dose coming out falls off exponentially — a
+        good rule of thumb is the <Term term="half-value-layer">half-value layer</Term>, the
+        thickness that halves the dose. But absorption is not the whole story: some gamma rays
+        scatter rather than stop and still reach the far side, which the
+        <Term term="buildup">buildup factor</Term> adds back — so a shield is never quite as good
+        as simple absorption predicts. Neutrons follow different rules entirely: they are stopped
+        by <em>light</em> nuclei, so a hydrogen-rich shield (water, polyethylene)
+        <Term term="removal-cross-section">removes fast neutrons</Term> while a heavy gamma shield
+        like lead lets them straight through.
+        {#snippet advanced()}
+          Choosing a shield means matching the material to the radiation: high-Z and dense for γ
+          (more electrons per cm to interact with), hydrogenous for fast neutrons, and low-Z
+          <em>first</em> for a strong β emitter to avoid making <Term term="bremsstrahlung"
+          >bremsstrahlung</Term>. In a mixed stack the attenuation is order-independent but the
+          buildup is not — this tool uses the detector-side layer's buildup and reports the
+          resulting layer-order sensitivity, the least-reliable part of the γ calc (§6.4/§11).
+        {/snippet}
+      </LearnMore>
     {/if}
   </section>
 {/if}

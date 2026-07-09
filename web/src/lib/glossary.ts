@@ -27,11 +27,13 @@ export interface GlossaryEntry {
   advanced?: string;
 }
 
-// The Pass-1 set: ONLY the terms the Curves, Chain, and Dose panels actually surface,
+// Grown per pass (never pre-populated): ONLY the terms the wired panels actually surface,
 // and only those where a novice genuinely won't know the word AND there is a correctness
-// distinction worth an advanced aside (the quantity family, plus the core decay terms).
+// distinction worth an advanced aside (the quantity family, the core decay terms, and — as
+// of Pass 2 — the shielding + neutron-source vocabulary of the Shield and Sources panels).
 // App mechanics (display floor, decades, the Bateman solve, the N–Z chart) are left to
-// prose / <LearnMore> — they are not glossary Terms. Extend per pass, never pre-populate.
+// prose / <LearnMore> — they are not glossary Terms; `source-age` is the one deliberate
+// exception, a UI-mechanics word a novice meets head-on in the Sources intro.
 export const GLOSSARY = {
   // -- decay basics (Curves + Chain) ------------------------------------------
   activity: {
@@ -171,6 +173,103 @@ export const GLOSSARY = {
       "rate(d) = rate(d₀)·(d₀/d)². Version 1 models no intervening-air attenuation, so the " +
       "falloff is purely geometric — good for penetrating photons, an over-estimate for " +
       "soft ones (a 10 keV dose-scoring floor stands in for the missing air path).",
+  },
+  // -- shielding (Shield; Pass 2) ---------------------------------------------
+  attenuation: {
+    term: "attenuation",
+    novice:
+      "As radiation passes through a shield, some of it is absorbed or scattered aside, so " +
+      "less comes out the far side than went in. Thicker shields — and denser, higher-" +
+      "atomic-number materials — remove more. For gamma rays the fraction getting through " +
+      "falls off exponentially with thickness.",
+    advanced:
+      "Narrow-beam (point-kernel) transmission is exp(−Σ μᵢxᵢ): each layer's linear " +
+      "attenuation coefficient μ times its thickness x, summed. It is exact and independent " +
+      "of layer order — what depends on order is the buildup correction applied on top, " +
+      "which accounts for scattered photons the narrow-beam term leaves out.",
+  },
+  "half-value-layer": {
+    term: "half-value layer (HVL)",
+    novice:
+      "The thickness of a given material that cuts the radiation dose in half. Two half-" +
+      "value layers cut it to a quarter, three to an eighth, and so on. A smaller HVL means " +
+      "a more effective shield for that radiation — a handy way to compare materials.",
+    advanced:
+      "For a single photon energy the dose falls as (½)^(x/HVL), so HVL = ln 2 / μ. For a " +
+      "real mixed-energy source it is NOT one constant: the beam 'hardens' as soft lines are " +
+      "removed first, and scattered buildup adds dose back — which is why the dose-vs-" +
+      "thickness curve here is not a straight line on a log axis. Read it as the actual " +
+      "transmission, not a fixed HVL.",
+  },
+  bremsstrahlung: {
+    term: "bremsstrahlung",
+    novice:
+      "'Braking radiation': when fast beta electrons are stopped abruptly in matter, some of " +
+      "their energy comes back out as penetrating X-rays. Dense, high-atomic-number " +
+      "materials like lead produce far more of it — so a heavy shield can turn a stopped " +
+      "beta into a new, more penetrating photon hazard. That is why adding lead in front of " +
+      "a strong beta emitter can INCREASE the total (photon) dose.",
+    advanced:
+      "The radiated fraction rises with the absorber's atomic number Z and the beta endpoint " +
+      "energy. This tool models the bremsstrahlung as leaving the (β-thin) shield " +
+      "unattenuated and reports it as an order-of-magnitude γ (Sv) quantity, shown beside " +
+      "the β skin dose (Gy) and never summed into it. It exists to teach the 'more lead can " +
+      "increase dose' crossover, not for precise photon dose.",
+  },
+  "removal-cross-section": {
+    term: "removal cross-section (Σ_R)",
+    novice:
+      "A shortcut for how well a hydrogen-rich shield (water, polyethylene) stops fast " +
+      "neutrons. Neutrons are slowed best by light nuclei — above all hydrogen — so heavy " +
+      "gamma shields like lead barely touch them. The fraction of fast neutrons getting " +
+      "through a hydrogenous shield falls off exponentially with thickness.",
+    advanced:
+      "Fast-neutron transmission here is T = exp(−Σ_R·x), with Σ_R a single energy-" +
+      "independent effective removal cross-section (measured mass values combined by the " +
+      "mixture rule). It is only valid where hydrogen is present to thermalize the removed " +
+      "neutrons, so only hydrogenous shields carry removal data and a high-Z γ shield is " +
+      "treated as neutron-transparent. Calibrated to a fission spectrum; for thick shields " +
+      "it under-counts the dose (deep-penetration buildup) — flagged in the honesty register.",
+  },
+  // -- neutron sources (Sources; Pass 2) --------------------------------------
+  "spontaneous-fission": {
+    term: "spontaneous fission",
+    novice:
+      "Some very heavy nuclei — californium-252, and the curium that builds up in cooled " +
+      "spent fuel — occasionally split into two fragments entirely on their own, with " +
+      "nothing hitting them. Each split throws off several fast neutrons, so these materials " +
+      "are neutron sources even sitting alone in the dark.",
+    advanced:
+      "The neutron yield of a nuclide is its spontaneous-fission rate times the mean prompt " +
+      "neutron multiplicity ν̄. Spontaneous fission is one of the two terms summed for a " +
+      "spent-fuel or actinide neutron source (the other is the (α,n) reaction); the ν̄ " +
+      "values come from evaluated safeguards / nuclear-data tables, cited in the honesty " +
+      "register.",
+  },
+  "alpha-n": {
+    term: "(α,n) reaction",
+    novice:
+      "A second way a source makes neutrons: alpha particles emitted by decaying atoms " +
+      "(plutonium, americium, curium) strike light nuclei nearby — the oxygen in oxide fuel, " +
+      "or the beryllium in an Am-Be source — and knock a neutron loose. No fission needed; " +
+      "the alpha particle does it.",
+    advanced:
+      "In spent oxide fuel the (α,n)-on-oxygen term is summed with spontaneous fission for " +
+      "the total neutron source, and its share grows over decades as Am-241 (a strong α " +
+      "emitter with no spontaneous fission) ingrows. Thick-target (α,n) yields carry a " +
+      "±factor uncertainty and a softer spectrum than fission — folded on the same dose " +
+      "response and flagged in the honesty register.",
+  },
+  "source-age": {
+    term: "source age",
+    novice:
+      "How old the source is at the moment you load it — the point on the decay timeline " +
+      "where the loaded inventory 'starts'. A spent-fuel vector, for example, loads at " +
+      "discharge (age zero) and the time slider then moves forward through cooling.",
+    advanced:
+      "Source age is an offset applied at evaluate time: the displayed activities, dose and " +
+      "chain are the one Bateman solve read at (source age + cursor time). It is a display / " +
+      "reference offset, not a re-solve — the 'solve once, evaluate many' contract.",
   },
 } as const satisfies Record<string, GlossaryEntry>;
 

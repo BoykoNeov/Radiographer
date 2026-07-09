@@ -15,6 +15,8 @@
   import { appState } from "./state.svelte";
   import { sourcesByCategory, type PrebuiltSource } from "./sources";
   import { UNIT_OPTIONS } from "./types";
+  import Term from "./Term.svelte";
+  import LearnMore from "./LearnMore.svelte";
 
   // Static manifest sources + the runtime spent-fuel catalog (inventory from validated
   // data/spent_fuel, fetched after boot). Each spent-fuel vector is its own category group,
@@ -103,10 +105,26 @@
   <h2>Prebuilt sources</h2>
   <p class="muted intro">
     Select a curated source to review its composition, adjust how much of it to load, then
-    commit with "Load". <strong>Loading REPLACES the current inventory</strong> (source-age,
-    and for neutron sources the tabulated neutron term, populate too), then every view
-    evolves live. <strong>Educational/reference only</strong>, not for safety decisions (§11).
+    commit with "Load". <strong>Loading REPLACES the current inventory</strong> (the
+    <Term term="source-age">source-age</Term>, and for neutron sources the tabulated neutron
+    term, populate too), then every view evolves live. <strong>Educational/reference only</strong>,
+    not for safety decisions (§11).
   </p>
+
+  <LearnMore summary="What makes a source emit neutrons? (the “n” badge)">
+    Most of these sources emit gamma and beta radiation; a few also emit neutrons — those carry
+    a green <strong>n</strong> badge in the list. There are two ways a source makes neutrons:
+    <Term term="spontaneous-fission">spontaneous fission</Term> and the
+    <Term term="alpha-n">(α,n) reaction</Term>. A californium-252 check source, an
+    americium-beryllium source, and cooled spent fuel all light up the neutron view for these
+    reasons; an ordinary gamma source such as Co-60 or Cs-137 does not.
+    {#snippet advanced()}
+      Neutron output is shown only for prebuilt sources whose neutron term is tabulated (not
+      derived), so a user-typed inventory shows the neutron card grayed (§6.3). For spent fuel
+      the two terms are summed off the one decay solve, and the (α,n) share is displayed because
+      it grows over decades as Am-241 ingrows — see the honesty register.
+    {/snippet}
+  </LearnMore>
 
   {#if !appState.ready}
     <p class="muted">Waiting for the engine to finish booting…</p>
