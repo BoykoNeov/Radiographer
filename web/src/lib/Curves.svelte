@@ -299,14 +299,25 @@
     <p class="note muted">
       All loaded nuclides are stable — there is no time evolution to plot.
     </p>
-  {:else if allHidden}
-    <p class="note muted" data-testid="curves-all-hidden">
-      All species hidden — click a node in the decay chain, or use “Show all”, to restore them.
-    </p>
   {/if}
 
-  <!-- The plot div is always present so the $effect can react()/purge() it. -->
-  <div class="plot" data-testid="curves-plot" class:empty={!hasCurve} bind:this={plotEl}></div>
+  <!-- The plot div is always present so the $effect can react()/purge() it. The
+       all-hidden note is an ABSOLUTE overlay INSIDE the (always-420px, whenever hasCurve)
+       plot area, not another block in the note chain above. As a block it pushed the plot
+       up/down every time the last species was hidden/shown — that resize moved the scroll
+       (the shift the user reported, in both directions). As an overlay it never changes
+       layout. pointer-events:none so clicks fall through to the legend beneath it (the
+       restore path) instead of being swallowed by the centered note. -->
+  <div class="plot-wrap">
+    <div class="plot" data-testid="curves-plot" class:empty={!hasCurve} bind:this={plotEl}></div>
+    {#if allHidden}
+      <div class="overlay">
+        <p class="note muted" data-testid="curves-all-hidden">
+          All species hidden — click a node in the decay chain, or use “Show all”, to restore them.
+        </p>
+      </div>
+    {/if}
+  </div>
 
   <p class="hint muted">
     Log-log overlay, one Bateman solve per inventory; the time slider below scrubs a
@@ -372,6 +383,9 @@
   .timeunit select {
     padding: 0.3rem 0.4rem;
   }
+  .plot-wrap {
+    position: relative;
+  }
   .plot {
     width: 100%;
     height: 420px;
@@ -380,6 +394,23 @@
   .plot.empty {
     height: 0;
     margin: 0;
+  }
+  /* All-species-hidden note, centered over the (fixed-height) plot. Absolute so
+     toggling it never resizes the panel; pointer-events:none so it never blocks a
+     legend click. Sits over the empty axes Plotly still draws when every trace is off. */
+  .overlay {
+    position: absolute;
+    inset: 0.75rem 0 0; /* match .plot's top margin so it covers the plot box, not the gap */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    text-align: center;
+    pointer-events: none;
+  }
+  .overlay .note {
+    margin: 0;
+    max-width: 30rem;
   }
   /* Move Plotly's (hover-only) modebar to the TOP-LEFT. Its default is the top-RIGHT,
      directly over our vertical legend — where it silently intercepts clicks on the top
