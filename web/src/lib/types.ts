@@ -56,7 +56,7 @@ export const ATOMS_UNIT = "atoms";
 // input accuracy and round-trips exactly through the serializer (§11 — a
 // display setting must not become a silent data edit). It is also unrelated to
 // `Precision` ("double"/"hp"), which is the numerical SOLVER precision.
-export const DISPLAY_DIGITS_OPTIONS = [0, 1, 2, 3, 4, 6] as const;
+export const DISPLAY_DIGITS_OPTIONS = [0, 1, 2, 3, 4, 5, 6] as const;
 export const DEFAULT_DISPLAY_DIGITS = 3;
 export const MAX_DISPLAY_DIGITS = 6;
 
