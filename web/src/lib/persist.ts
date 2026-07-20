@@ -6,6 +6,11 @@
 // `shield` (material, thickness), and the `cursor_offset_s` time cursor. A v1 file still
 // loads: the new sections are optional and fall back to the type defaults.
 //
+// v6 adds `view.display_digits` — how many digits to show after the decimal point for
+// linear-rendered quantities (masses above all). It is DISPLAY ONLY: `entries[].quantity`
+// keeps full input accuracy and still round-trips exactly, so raising or lowering the
+// setting can never alter a saved number (§11 — a cosmetic knob must not edit data).
+//
 // What is and is NOT persisted is a CONSCIOUS decision (M6-ui M6h #4; §11 no-silent-drop):
 // purely cosmetic / write-only entry state is EPHEMERAL by design — the dose breakdown
 // `mode` (stacked↔grouped), the exposure-entry display unit, and the time control's "go
@@ -21,10 +26,12 @@
 import {
   ACTIVITY_UNITS,
   AXIS_OPTIONS,
+  DEFAULT_DISPLAY_DIGITS,
   DEFAULT_GEOMETRY,
   DOSE_QUANTITY_OPTIONS,
   GEOMETRY_OPTIONS,
   MASS_UNITS,
+  MAX_DISPLAY_DIGITS,
   type Axis,
   type DoseQuantity,
   type InventoryEntry,
@@ -48,6 +55,9 @@ export interface PersistableState {
   activityUnit: string;
   massUnit: string;
   logY: boolean;
+  /** Digits after the decimal point for linear-rendered quantities (v6). DISPLAY ONLY —
+   *  it never affects a stored `entries[].quantity`, which round-trips exactly. */
+  displayDigits: number;
   // dose (v2)
   doseDistanceM: number;
   doseQuantity: DoseQuantity;
@@ -71,6 +81,7 @@ export const PERSIST_DEFAULTS: Omit<
   activityUnit: "Bq",
   massUnit: "g",
   logY: true,
+  displayDigits: DEFAULT_DISPLAY_DIGITS,
   doseDistanceM: 1.0,
   doseQuantity: "ambient_H10",
   doseGeometry: DEFAULT_GEOMETRY,
@@ -80,7 +91,7 @@ export const PERSIST_DEFAULTS: Omit<
 };
 
 export const STATE_SCHEMA = "radiographer.app-state";
-export const STATE_VERSION = 5;
+export const STATE_VERSION = 6;
 
 export class PersistError extends Error {
   constructor(message: string) {
@@ -112,6 +123,7 @@ interface Envelope {
     activity_unit: string;
     mass_unit: string;
     log_y: boolean;
+    display_digits: number;
   };
   dose: {
     distance_m: number;
@@ -147,6 +159,7 @@ export function serializeState(state: PersistableState): string {
       activity_unit: state.activityUnit,
       mass_unit: state.massUnit,
       log_y: state.logY,
+      display_digits: state.displayDigits,
     },
     dose: {
       distance_m: state.doseDistanceM,
@@ -296,6 +309,18 @@ export function deserializeState(text: string): PersistableState {
     if (typeof view.log_y !== "boolean") throw new PersistError(`view.log_y must be a boolean (got ${JSON.stringify(view.log_y)})`);
     logY = view.log_y;
   }
+  // display digits (v6; optional → default). An integer in [0, MAX_DISPLAY_DIGITS] — loud
+  // on anything else rather than clamping, since the load path bypasses the setter (M6h #2).
+  let displayDigits = PERSIST_DEFAULTS.displayDigits;
+  if (view.display_digits !== undefined) {
+    const d = view.display_digits;
+    if (typeof d !== "number" || !Number.isInteger(d) || d < 0 || d > MAX_DISPLAY_DIGITS) {
+      throw new PersistError(
+        `view.display_digits must be an integer in [0, ${MAX_DISPLAY_DIGITS}] (got ${JSON.stringify(d)})`,
+      );
+    }
+    displayDigits = d;
+  }
 
   // -- dose (v2; optional → defaults). distance > 0 (γ field singular at 0); exposure ≥ 0. --
   const dose = obj.dose === undefined ? {} : obj.dose;
@@ -332,6 +357,7 @@ export function deserializeState(text: string): PersistableState {
     activityUnit,
     massUnit,
     logY,
+    displayDigits,
     doseDistanceM,
     doseQuantity,
     doseGeometry,

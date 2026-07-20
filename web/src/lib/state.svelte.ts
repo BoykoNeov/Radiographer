@@ -48,9 +48,11 @@ import {
 } from "./persist";
 import {
   ATOMS_UNIT,
+  DEFAULT_DISPLAY_DIGITS,
   DEFAULT_GEOMETRY,
   DEFAULT_SHIELD_THICKNESS_CM,
   DEFAULT_UNIT,
+  MAX_DISPLAY_DIGITS,
   type Axis,
   type DoseQuantity,
   type InternalPopulation,
@@ -124,6 +126,13 @@ export class AppState {
   massUnit = $state<string>("g");
   /** Log y-axis (default, §9) vs linear; a pure render flag — no re-evaluate. */
   logY = $state<boolean>(true);
+  /**
+   * Digits shown AFTER the decimal point for linear-rendered quantities (masses
+   * above all). Pure display state — it never re-solves, never re-evaluates, and
+   * never rounds a stored `quantity`; the inventory keeps full input accuracy.
+   * Distinct from `precision` (the double/hp SOLVER precision).
+   */
+  displayDigits = $state<number>(DEFAULT_DISPLAY_DIGITS);
   /** The one evaluate() feeding the overlay; null when empty/stale/failed. */
   curve = $state<EvaluateOk | null>(null);
   /**
@@ -1019,6 +1028,17 @@ export class AppState {
     this.logY = v;
   }
 
+  /** Displayed digits after the decimal point. Display-only: no re-solve, no re-evaluate,
+   *  and no write-back to any stored quantity. Out-of-range input is clamped (this is a
+   *  cosmetic knob, not a physics path — the loud-failure rule applies to the load path,
+   *  where the deserializer validates instead). */
+  setDisplayDigits(d: number): void {
+    if (!Number.isFinite(d)) return;
+    const clamped = Math.min(MAX_DISPLAY_DIGITS, Math.max(0, Math.round(d)));
+    if (clamped === this.displayDigits) return;
+    this.displayDigits = clamped;
+  }
+
   // -- per-species visibility (view-only; #2 display-only, never a physics path) ----
   // No recompute/re-evaluate: hiding only filters the rendered curves traces and greys
   // the DAG node; the curves/DAG effects re-run off `hiddenNuclides` reactively.
@@ -1690,6 +1710,7 @@ export class AppState {
       activityUnit: this.activityUnit,
       massUnit: this.massUnit,
       logY: this.logY,
+      displayDigits: this.displayDigits, // display-only fraction digits (v6)
       // dose (M6h)
       doseDistanceM: this.doseDistanceM,
       doseQuantity: this.doseQuantity,
@@ -1736,6 +1757,7 @@ export class AppState {
     this.activityUnit = parsed.activityUnit;
     this.massUnit = parsed.massUnit;
     this.logY = parsed.logY;
+    this.displayDigits = parsed.displayDigits;
     this.doseDistanceM = parsed.doseDistanceM;
     this.doseQuantity = parsed.doseQuantity;
     this.doseGeometry = parsed.doseGeometry;

@@ -1736,6 +1736,7 @@ async function runM6h(page) {
     app.setMassUnit("kg"); // default g
     app.setActivityUnit("Ci"); // default Bq (inactive on mass axis, but must round-trip)
     app.setLogY(false); // default true
+    app.setDisplayDigits(5); // default 3 (v6 display-only fraction digits)
     app.setDoseQuantity("effective"); // default ambient_H10
     app.setDoseGeometry("PA"); // default AP
     app.setDoseDistanceM(2.5); // default 1.0
@@ -1852,10 +1853,16 @@ async function runM6h(page) {
     const badVer = await app.loadFromText(
       JSON.stringify({ schema: SCHEMA, version: 999, inventory: mkInv() }),
     );
+    // d) out-of-range display digits (v6) — the load path bypasses the setter's clamp, so
+    //    the deserializer must refuse rather than quietly substitute a legal value
+    const badDigits = await app.loadFromText(
+      JSON.stringify({ schema: SCHEMA, version: 6, inventory: mkInv(), view: { display_digits: 12 } }),
+    );
     return {
       badDist,
       badGeom,
       badVer,
+      badDigits,
       entriesUntouched: app.entries.length === okEntries,
       handleUntouched: app.handle === okHandle,
     };
@@ -1865,9 +1872,11 @@ async function runM6h(page) {
     /distance_m must be > 0/i.test(reject.badDist ?? "") &&
       /geometry must be one of/i.test(reject.badGeom ?? "") &&
       /newer version/i.test(reject.badVer ?? "") &&
+      /display_digits must be an integer/i.test(reject.badDigits ?? "") &&
       reject.entriesUntouched &&
       reject.handleUntouched,
     `dist=${JSON.stringify(reject.badDist)}, geom=${JSON.stringify(reject.badGeom)}, ver=${JSON.stringify(reject.badVer)}, ` +
+      `digits=${JSON.stringify(reject.badDigits)}, ` +
       `entriesUntouched=${reject.entriesUntouched}, handleUntouched=${reject.handleUntouched}`,
   );
 
@@ -2273,8 +2282,10 @@ async function runM7(page) {
     return { grayed: card ? card.getAttribute("data-rate-si") === null : null };
   });
   record(
-    "persist (v5): neutron source survives save/load → key + live card restored (#4)",
-    parsed.version === 5 &&
+    // A FLOOR, not an equality: the envelope keeps gaining additive sections (v6 added
+    // view.display_digits), and what this check is about is that neutron_source survives.
+    "persist (v≥5): neutron source survives save/load → key + live card restored (#4)",
+    parsed.version >= 5 &&
       parsed.inventory.neutron_source === "Cf-252" &&
       loadErr === null &&
       restored.grayed === false,
@@ -2449,8 +2460,9 @@ async function runM7(page) {
     };
   }, sfSaved);
   record(
-    "M9 persist (v5): spent_fuel_neutron_id survives save/load → id + live SF neutron card restored",
-    sfPersist.version === 5 &&
+    // Floor, not equality — see the v≥5 note above.
+    "M9 persist (v≥5): spent_fuel_neutron_id survives save/load → id + live SF neutron card restored",
+    sfPersist.version >= 5 &&
       sfPersist.savedId === "pwr-uox-45gwd-4pct" &&
       sfPersist.loadErr === null &&
       sfPersist.restoredId === "pwr-uox-45gwd-4pct" &&
@@ -3239,6 +3251,60 @@ async function runUnitsAndSources(page) {
       /Total/.test(detail.totalText || ""),
     `stillTwoEntries=${detail.stillTwoEntries}, rows=${JSON.stringify(detail.rowText)}, total="${detail.totalText}"`,
   );
+
+  // 3b) Display-digit selector (v6): it changes how many digits are SHOWN after the decimal
+  //     point and NOTHING else. Fresh fuel is 40 g + 960 g = exactly 1000 g, so the total
+  //     exercises grouping and decimals at once. The load-bearing half of the check is the
+  //     second one: the stored quantities must be byte-identical before and after, because a
+  //     display knob that rounded the data would be a silent physics edit (§11).
+  const DIGITS = '.detail .digits select';
+  await page.click('[data-testid="source-fresh-fuel"]');
+  await page.waitForSelector(DIGITS);
+  const quantsBefore = await page.evaluate(() =>
+    JSON.stringify(window.__APP__.entries.map((e) => [e.name, e.quantity, e.unit])),
+  );
+  // Set 3 explicitly rather than trusting the default — an earlier section round-trips a
+  // non-default digit count through the serializer, so the store is not at its initial value.
+  await page.selectOption(DIGITS, "3");
+  await page.waitForFunction(
+    `document.querySelector('.detail .total').textContent.includes('1,000.000 g')`,
+    null,
+    { timeout: 10_000 },
+  );
+  const at3 = await page.evaluate(() => ({
+    total: document.querySelector(".detail .total").textContent.trim(),
+    firstRow: document.querySelector(".detail table.entries tbody tr").textContent.trim(),
+  }));
+  await page.selectOption(DIGITS, "1");
+  await page.waitForFunction(
+    `document.querySelector('.detail .total').textContent.includes('1,000.0 g')`,
+    null,
+    { timeout: 10_000 },
+  );
+  const at1 = await page.evaluate(() => ({
+    total: document.querySelector(".detail .total").textContent.trim(),
+    firstRow: document.querySelector(".detail table.entries tbody tr").textContent.trim(),
+    digits: window.__APP__.displayDigits,
+  }));
+  const quantsAfter = await page.evaluate(() =>
+    JSON.stringify(window.__APP__.entries.map((e) => [e.name, e.quantity, e.unit])),
+  );
+  record(
+    "display-digit selector re-renders masses (3→1 decimals) and NEVER touches stored quantities (§11)",
+    /1,000\.000 g/.test(at3.total) &&
+      /1\.000 kg/.test(at3.total) &&
+      /40\.000 g/.test(at3.firstRow) &&
+      /1,000\.0 g/.test(at1.total) &&
+      /1\.0 kg/.test(at1.total) &&
+      /40\.0 g/.test(at1.firstRow) &&
+      at1.digits === 1 &&
+      quantsAfter === quantsBefore,
+    `at3 total="${at3.total}" row="${at3.firstRow}"; at1 total="${at1.total}" row="${at1.firstRow}"; ` +
+      `digits=${at1.digits}, quantities untouched=${quantsAfter === quantsBefore}`,
+  );
+  // Back to the default so the later checks read the shipped formatting.
+  await page.selectOption(DIGITS, "3");
+  await page.click(CS137);
 
   // 4) Scale multiplier (§9 "how much of this source to add"), driven through the real
   //    scale input + Add button: scale=2 on the Cs-137 manifest (1 Ci) commits 2 Ci.

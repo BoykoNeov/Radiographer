@@ -14,7 +14,7 @@
   // for a many-nuclide source like spent fuel).
   import { appState } from "./state.svelte";
   import { sourcesByCategory, type PrebuiltSource } from "./sources";
-  import { UNIT_OPTIONS } from "./types";
+  import { DISPLAY_DIGITS_OPTIONS, UNIT_OPTIONS } from "./types";
   import Term from "./Term.svelte";
   import LearnMore from "./LearnMore.svelte";
 
@@ -69,15 +69,20 @@
     return UNIT_OPTIONS.find((u) => u.value === unit)?.label ?? unit;
   }
 
-  // Compact, precision-4 number formatting with thousands-grouping for the "big and
-  // ordinary" range and scientific notation at the extremes (spent-fuel trace nuclides
-  // span many decades of mass) — display only, not round-trip-exact.
+  // Thousands-grouped fixed-decimal formatting for the "big and ordinary" range, with
+  // scientific notation at the extremes (spent-fuel trace nuclides span many decades of
+  // mass) — display only, never round-trip-exact. The number of digits after the decimal
+  // point is the user's `displayDigits` setting (default 3, chosen for grams).
+  //
+  // The exponential fallback also covers values the chosen digit count could not show at
+  // all: at 0 digits a 0.004 g line would render "0", which reads as "nothing is there".
+  // Falling back to 4.000e-3 keeps a small quantity honest at every setting (§11).
   function fmtQty(v: number): string {
     if (!Number.isFinite(v)) return String(v);
+    const d = appState.displayDigits;
     const av = Math.abs(v);
-    if (av !== 0 && (av < 1e-3 || av >= 1e9)) return v.toExponential(3);
-    if (av >= 100) return Math.round(v).toLocaleString("en-US");
-    return String(Number(v.toPrecision(4)));
+    if (av !== 0 && (av < 1e-3 || av < 0.5 * 10 ** -d || av >= 1e9)) return v.toExponential(3);
+    return v.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
   }
 
   // Sum entries by unit (the amount actually added, at the current scale) — the "how
@@ -166,6 +171,24 @@
         <p class="total">
           {#each totals as t, i (t.unit)}{i > 0 ? " + " : ""}Total: {totalLine(t)}{/each}
         </p>
+
+        <!-- Display-only digit count. It rounds what is SHOWN here and in the table below;
+             the loaded quantities keep their full accuracy (see fmtQty). -->
+        <div class="digits">
+          <label>
+            Decimals shown:
+            <select
+              aria-label="Digits shown after the decimal point"
+              value={appState.displayDigits}
+              onchange={(ev) => appState.setDisplayDigits(Number((ev.target as HTMLSelectElement).value))}
+            >
+              {#each DISPLAY_DIGITS_OPTIONS as d (d)}
+                <option value={d}>{d}</option>
+              {/each}
+            </select>
+          </label>
+          <span class="muted">display only — loaded amounts keep full accuracy</span>
+        </div>
 
         <div class="entries-scroll">
           <table class="entries">
@@ -331,6 +354,22 @@
   .total {
     font-weight: 600;
     margin: 0.5rem 0;
+  }
+  .digits {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin: 0 0 0.5rem;
+    font-size: 0.9rem;
+  }
+  .digits label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .digits select {
+    font: inherit;
   }
   .addrow {
     display: flex;

@@ -45,6 +45,21 @@ export const MASS_UNITS = ["g", "kg", "mg"] as const;
 /** Atoms has a single unit; kept as a constant so labels stay obsessive (§12). */
 export const ATOMS_UNIT = "atoms";
 
+// --- display precision (DISPLAY ONLY) ----------------------------------------
+// How many digits to render AFTER the decimal point for linear-rendered
+// quantities (the Sources totals; masses in g/kg/mg above all). This is a
+// FRACTION-DIGIT count, not significant figures — deliberately distinct from
+// the sig-fig helpers in dosemath.ts, which stay as they are because dose spans
+// many decades and wants sig-figs on purpose.
+//
+// It NEVER touches a stored value: the inventory `quantity` keeps its full
+// input accuracy and round-trips exactly through the serializer (§11 — a
+// display setting must not become a silent data edit). It is also unrelated to
+// `Precision` ("double"/"hp"), which is the numerical SOLVER precision.
+export const DISPLAY_DIGITS_OPTIONS = [0, 1, 2, 3, 4, 6] as const;
+export const DEFAULT_DISPLAY_DIGITS = 3;
+export const MAX_DISPLAY_DIGITS = 6;
+
 // --- time units (M6d, §9 time control) ---------------------------------------
 // The engine speaks SI seconds everywhere (solve metadata `time_range_s`,
 // `half_lives_s`, `evaluate(times_s)`); these are the human-facing units for the
