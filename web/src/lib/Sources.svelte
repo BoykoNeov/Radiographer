@@ -15,6 +15,7 @@
   import { appState } from "./state.svelte";
   import { sourcesByCategory, type PrebuiltSource } from "./sources";
   import { DISPLAY_DIGITS_OPTIONS, UNIT_OPTIONS } from "./types";
+  import { fmtQuantity } from "./format";
   import Term from "./Term.svelte";
   import LearnMore from "./LearnMore.svelte";
 
@@ -72,17 +73,10 @@
   // Thousands-grouped fixed-decimal formatting for the "big and ordinary" range, with
   // scientific notation at the extremes (spent-fuel trace nuclides span many decades of
   // mass) — display only, never round-trip-exact. The number of digits after the decimal
-  // point is the user's `displayDigits` setting (default 3, chosen for grams).
-  //
-  // The exponential fallback also covers values the chosen digit count could not show at
-  // all: at 0 digits a 0.004 g line would render "0", which reads as "nothing is there".
-  // Falling back to 4.000e-3 keeps a small quantity honest at every setting (§11).
+  // point is the user's `displayDigits` setting (default 3, chosen for grams). The rule
+  // itself lives in `format.ts`, shared with the Inventory quantity cells.
   function fmtQty(v: number): string {
-    if (!Number.isFinite(v)) return String(v);
-    const d = appState.displayDigits;
-    const av = Math.abs(v);
-    if (av !== 0 && (av < 1e-3 || av < 0.5 * 10 ** -d || av >= 1e9)) return v.toExponential(3);
-    return v.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+    return fmtQuantity(v, appState.displayDigits);
   }
 
   // Sum entries by unit (the amount actually added, at the current scale) — the "how

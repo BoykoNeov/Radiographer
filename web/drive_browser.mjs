@@ -3322,6 +3322,65 @@ async function runUnitsAndSources(page) {
     `entry=${JSON.stringify(scaled)}`,
   );
 
+  // 5) The display-digit setting also drives the INVENTORY quantity fields, through their
+  //    own selector in the Inventory controls. A spent-fuel gram entry stores values like
+  //    695.7233725074361 and used to fill the field with all 16 digits.
+  //
+  //    Load-bearing half (§11): the row being edited shows the STORED value in full, and a
+  //    focus/blur with no typing leaves the stored quantity byte-identical — otherwise a
+  //    display knob would silently round the physics through the inventory path. Grouping
+  //    must stay off here too: "1,000.5" is not a valid type=number value and blanks the
+  //    field, so the check reads the field's real .value, not its text.
+  const LONG_QTY = 695.7233725074361;
+  const INV_DIGITS = '[aria-label="Digits shown after the decimal point in the inventory"]';
+  const QTY = '[aria-label="Quantity for Co-60"]';
+  await page.evaluate(async (q) => {
+    const app = window.__APP__;
+    await app.clear();
+    await app.addEntry("Co-60", q, "g");
+  }, LONG_QTY);
+  await page.waitForFunction(
+    "window.__APP__.status === 'solved' && window.__APP__.entries.length === 1",
+    null,
+    { timeout: 30_000 },
+  );
+  const storedBefore = await page.evaluate(() => window.__APP__.entries[0].quantity);
+  await page.selectOption(INV_DIGITS, "3");
+  await page.waitForFunction(`document.querySelector('${QTY}').value === '695.723'`, null, {
+    timeout: 10_000,
+  });
+  const invAt3 = await page.inputValue(QTY);
+  await page.selectOption(INV_DIGITS, "1");
+  await page.waitForFunction(`document.querySelector('${QTY}').value === '695.7'`, null, {
+    timeout: 10_000,
+  });
+  const invAt1 = await page.inputValue(QTY);
+  await page.focus(QTY);
+  await page.waitForFunction(
+    `document.querySelector('${QTY}').value === '${LONG_QTY}'`,
+    null,
+    { timeout: 10_000 },
+  );
+  const focused = await page.inputValue(QTY);
+  await page.evaluate(`document.querySelector('${QTY}').blur()`);
+  await page.waitForFunction(`document.querySelector('${QTY}').value === '695.7'`, null, {
+    timeout: 10_000,
+  });
+  const afterBlur = await page.inputValue(QTY);
+  const storedAfter = await page.evaluate(() => window.__APP__.entries[0].quantity);
+  record(
+    "inventory quantity fields honour the display-digit setting; the focused row shows the stored value IN FULL and a focus/blur with no edit leaves it byte-identical (§11)",
+    invAt3 === "695.723" &&
+      invAt1 === "695.7" &&
+      focused === String(LONG_QTY) &&
+      afterBlur === "695.7" &&
+      storedBefore === LONG_QTY &&
+      storedAfter === storedBefore,
+    `invAt3="${invAt3}", invAt1="${invAt1}", focused="${focused}", afterBlur="${afterBlur}", stored ${storedBefore}→${storedAfter} ` +
+      `(untouched=${storedAfter === storedBefore})`,
+  );
+  await page.selectOption(INV_DIGITS, "3"); // back to the shipped default
+
   return { ok: checks.every((c) => c.pass), checks };
 }
 

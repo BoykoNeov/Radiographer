@@ -4,7 +4,8 @@
   // store (the single source of truth). The solved-closure legend shows the shared
   // per-species palette that M6c/M6e/M6f will consume identically.
   import { appState } from "./state.svelte";
-  import { UNIT_OPTIONS, DEFAULT_UNIT } from "./types";
+  import { UNIT_OPTIONS, DEFAULT_UNIT, DISPLAY_DIGITS_OPTIONS } from "./types";
+  import { fmtQuantity } from "./format";
 
   // Local draft for the add row (committed to the store on "Add").
   let draftName = $state("");
@@ -44,6 +45,21 @@
     const input = ev.target as HTMLInputElement;
     const err = await appState.updateEntry(i, { quantity: input.valueAsNumber });
     if (err) input.value = String(prev);
+  }
+
+  // Quantity cells are rendered at the user's `displayDigits` setting: a spent-fuel gram
+  // entry stores 695.7233725074361 and used to fill the field with all 16 digits. The
+  // rounding is display ONLY — the row being edited shows the stored value in full, so an
+  // edit always starts from the real number and a focus/blur with no typing cannot round
+  // the data behind the user's back (§11).
+  //
+  // `editingIdx` deliberately makes the focused state part of the reactive expression:
+  // Svelte then stays the single writer of the input's text (the one imperative write
+  // below, the rejected-edit snap-back, agrees with it because the row is focused there).
+  let editingIdx = $state<number | null>(null);
+  function qtyValue(q: number, i: number): string {
+    if (editingIdx === i) return String(q);
+    return fmtQuantity(q, appState.displayDigits, { group: false }); // no "1,000.5" — invalid in type=number
   }
 
   // Switch one entry's unit — re-expresses the same physical amount (never a relabel).
@@ -152,7 +168,9 @@
                 type="number"
                 min="0"
                 step="any"
-                value={e.quantity}
+                value={qtyValue(e.quantity, i)}
+                onfocus={() => (editingIdx = i)}
+                onblur={() => (editingIdx = null)}
                 onchange={(ev) => onEditQty(i, e.quantity, ev)}
               />
             </td>
@@ -200,6 +218,22 @@
         <option value="double">double</option>
         <option value="hp">high (arbitrary)</option>
       </select>
+    </label>
+    <!-- Display-only digit count (shared with the Sources review panel — one setting, a
+         control next to each set of numbers it governs). It rounds what the quantity
+         fields SHOW; the stored amounts keep their full accuracy. -->
+    <label class="invdigits">
+      Decimals shown:
+      <select
+        aria-label="Digits shown after the decimal point in the inventory"
+        value={appState.displayDigits}
+        onchange={(ev) => appState.setDisplayDigits(Number((ev.target as HTMLSelectElement).value))}
+      >
+        {#each DISPLAY_DIGITS_OPTIONS as d (d)}
+          <option value={d}>{d}</option>
+        {/each}
+      </select>
+      <span class="muted">display only — the stored amount keeps full accuracy</span>
     </label>
     {#if appState.hpRecommended && appState.precision === "double"}
       <span class="hint" role="alert"
@@ -333,6 +367,9 @@
     display: inline-flex;
     gap: 0.4rem;
     align-items: center;
+  }
+  .invdigits .muted {
+    font-size: 0.85rem;
   }
   .persist {
     display: flex;
