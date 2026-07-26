@@ -3381,6 +3381,32 @@ async function runUnitsAndSources(page) {
   );
   await page.selectOption(INV_DIGITS, "3"); // back to the shipped default
 
+  // 6) The small-value EXPONENTIAL fallback survives inside an <input type="number">.
+  //    Values the digit count could not show at all fall back to 3.000e-7 rather than
+  //    rendering "0" — but a number input SANITIZES anything outside the valid
+  //    floating-point grammar to the empty string, and a blanked quantity field reads as
+  //    "the amount is gone": the inverse of what the fallback is for (§11). The unit
+  //    dropdown reaches this branch routinely (0.3 µg → g is 3e-7).
+  await page.evaluate(async () => {
+    const app = window.__APP__;
+    await app.clear();
+    await app.addEntry("Am-241", 3e-7, "g");
+  });
+  await page.waitForFunction(
+    "window.__APP__.status === 'solved' && window.__APP__.entries.length === 1",
+    null,
+    { timeout: 30_000 },
+  );
+  const tiny = await page.evaluate(() => {
+    const el = document.querySelector('[aria-label="Quantity for Am-241"]');
+    return { value: el.value, asNumber: el.valueAsNumber, stored: window.__APP__.entries[0].quantity };
+  });
+  record(
+    "small-value exponential fallback renders INSIDE the number input (not sanitized to a blank field) and still parses to the stored amount",
+    tiny.value === "3.000e-7" && tiny.asNumber === 3e-7 && tiny.stored === 3e-7,
+    `value="${tiny.value}", valueAsNumber=${tiny.asNumber}, stored=${tiny.stored}`,
+  );
+
   return { ok: checks.every((c) => c.pass), checks };
 }
 
