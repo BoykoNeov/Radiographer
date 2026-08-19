@@ -1248,17 +1248,23 @@ export class AppState {
   /**
    * Probe-energy presets taken from the loaded inventory's OWN scored γ lines (engine data —
    * no hardcoded line table, so nothing here can drift from ICRP-107 or be fabricated).
-   * Strongest contributors first, de-duplicated to 0.1 keV, and filtered to the stack's
-   * scoreable band so a preset can never be an off-band probe. Empty before a solve.
+   * De-duplicated to 0.1 keV and filtered to the stack's scoreable band, so a preset can never
+   * be an off-band probe. Empty before a solve.
+   *
+   * Which lines: the strongest per-decay contributors (`coeff_si`, distance/time-free), but
+   * listed in ENERGY order and explicitly NOT ranked by dose at the cursor — the user is picking
+   * an energy, and a contribution-ranked list would silently re-order under the time slider as
+   * daughters grow in, making the dropdown's shown option jump mid-scrub (advisor). Energy order
+   * also makes the list cursor-INDEPENDENT: scrubbing time cannot churn it at all.
    */
   get beamLinePresets(): { label: string; keV: number }[] {
     const dl = this.gammaLines;
     if (!dl) return [];
     const band = this.beamBandKeV;
-    const ranked = this.gammaLinesAtCursor?.rows ?? [...dl.lines].sort((a, b) => b.coeff_si - a.coeff_si);
+    const strongest = [...dl.lines].sort((a, b) => b.coeff_si - a.coeff_si);
     const seen = new Set<string>();
     const out: { label: string; keV: number }[] = [];
-    for (const ln of ranked) {
+    for (const ln of strongest) {
       const keV = ln.E_MeV * 1e3;
       if (band && (keV < band[0] || keV > band[1])) continue;
       const key = keV.toFixed(1);
@@ -1267,6 +1273,7 @@ export class AppState {
       out.push({ label: `${ln.nuclide} — ${keV.toFixed(1)} keV`, keV });
       if (out.length >= 10) break;
     }
+    out.sort((a, b) => a.keV - b.keV);
     return out;
   }
 

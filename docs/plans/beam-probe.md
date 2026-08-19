@@ -94,7 +94,11 @@ a no-op while the probe is closed. Glossary gained `beam-hardening`.
 
 5. **Line presets come from the loaded inventory's own scored γ lines**, not a hardcoded line
    table — nothing to drift from ICRP-107, nothing to fabricate. They are filtered to the scored
-   band so a preset can never be an off-band probe.
+   band so a preset can never be an off-band probe. Picked by per-decay strength but **listed in
+   energy order**, deliberately not ranked by dose at the cursor: the user is choosing an energy,
+   and a contribution-ranked list would re-order under the time slider as daughters grow in,
+   making the dropdown's shown option jump mid-scrub. Energy order also makes the list
+   cursor-independent, so scrubbing cannot churn it at all.
 
 ## Validation
 
