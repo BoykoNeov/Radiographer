@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from engine import bridge
+from engine.dose import stack_transmission
 
 
 def test_nuclides_lists_the_solvable_set():
@@ -340,13 +341,83 @@ def test_materials_lists_buildup_flag_and_density():
     assert by_id["paraffin"]["has_buildup"] is False
     assert by_id["paraffin"]["has_removal"] is True and by_id["paraffin"]["sigma_r_cm1"] > 0.0
     assert by_id["paraffin"]["density_g_cm3"] > 0.0
+    # The beam probe needs each material's ANS-6.4.3 buildup ENERGY range so the UI can
+    # constrain a probe energy to the stack's scoreable band (lead's G-P table starts at
+    # 30 keV, the others at 15 keV; all end at 15 MeV). null when there is no buildup file.
+    assert by_id["lead"]["buildup_band_MeV"][0] > by_id["aluminium"]["buildup_band_MeV"][0]
+    assert by_id["aluminium"]["buildup_band_MeV"][1] == 15.0
+    assert by_id["paraffin"]["buildup_band_MeV"] is None
+
+
+def test_beam_probe_is_stateless_and_matches_the_dose_path():
+    """The beam probe crosses the bridge with NO handle (the materials()/convert_unit()
+    pattern): a shield's transmission is a property of the stack alone. It must not touch the
+    solve registry, and its number must equal what the γ dose path folds at that energy."""
+    before = json.loads(bridge.registry_size())["size"]
+    res = json.loads(
+        bridge.beam_probe(
+            json.dumps(
+                {
+                    "layers": [["lead", 0.5], ["water", 3.0]],
+                    "beam": {"kind": "line", "E_MeV": 0.6617},
+                }
+            )
+        )
+    )
+    assert res["ok"] is True and res["kind"] == "line"
+    assert res["line"]["transmission"] == stack_transmission(
+        [("lead", 0.5), ("water", 3.0)], 0.6617
+    )
+    assert res["line"]["transmission"] >= res["line"]["transmission_narrow"]
+    assert len(res["curve"]["E_MeV"]) == len(res["curve"]["transmission"]) > 2
+    assert json.loads(bridge.registry_size())["size"] == before  # no handle created
+
+
+def test_beam_probe_xray_tube_reports_transmission_never_a_rate():
+    res = json.loads(
+        bridge.beam_probe(
+            json.dumps(
+                {
+                    "layers": [["lead", 0.1]],
+                    "beam": {"kind": "xray_tube", "kvp": 100.0, "filtration_mm_al": 2.5},
+                    "quantity": "ambient_H10",
+                }
+            )
+        )
+    )
+    assert res["ok"] is True and res["kind"] == "xray_tube"
+    t = res["tube"]
+    assert 0.0 < t["transmission"] < 1.0
+    assert t["mean_E_out_MeV"] > t["mean_E_in_MeV"]  # beam hardening
+    assert 0.0 <= t["dropped_incident_fraction"] < 1.0  # §11, reported not silent
+    # NO absolute dose rate anywhere in the payload (an X-ray tube's mGy/mAs is not in data/)
+    assert not any(k.endswith("_si") or "rate" in k for k in t)
+
+
+def test_beam_probe_off_band_energy_is_a_loud_structured_error():
+    res = json.loads(
+        bridge.beam_probe(
+            json.dumps({"layers": [["lead", 0.1]], "beam": {"kind": "line", "E_MeV": 0.012}})
+        )
+    )
+    assert res["ok"] is False
+    assert res["error"]["type"] == "BeamError"
+    assert "scoreable band" in res["error"]["message"]
+    assert res["error"]["traceback"] is None  # an expected domain error, not a crash
+
+
+def test_beam_probe_unknown_kind_refused():
+    res = json.loads(bridge.beam_probe(json.dumps({"layers": [], "beam": {"kind": "laser"}})))
+    assert res["ok"] is False and "unknown beam kind" in res["error"]["message"]
 
 
 def test_convert_unit_round_trip_and_solve_identity():
     # The §9 unit-dropdown fix: convert_unit must re-express the SAME physical amount,
     # not relabel the number — proven by solving both forms and getting identical atoms.
     res = json.loads(
-        bridge.convert_unit(json.dumps({"name": "Co-60", "quantity": 1e9, "from_unit": "Bq", "to_unit": "Ci"}))
+        bridge.convert_unit(
+            json.dumps({"name": "Co-60", "quantity": 1e9, "from_unit": "Bq", "to_unit": "Ci"})
+        )
     )
     assert res["ok"] is True
     ci = res["quantity"]
@@ -363,7 +434,9 @@ def test_convert_unit_round_trip_and_solve_identity():
 
 def test_convert_unit_unknown_nuclide_is_structured_error():
     res = json.loads(
-        bridge.convert_unit(json.dumps({"name": "Zz-000", "quantity": 1.0, "from_unit": "Bq", "to_unit": "Ci"}))
+        bridge.convert_unit(
+            json.dumps({"name": "Zz-000", "quantity": 1.0, "from_unit": "Bq", "to_unit": "Ci"})
+        )
     )
     assert res["ok"] is False
     assert res["error"]["type"] == "EngineError"

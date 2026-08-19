@@ -21,6 +21,7 @@ import radioactivedecay as rd
 
 from engine import attenuation, buildup, neutron_removal
 from engine.attenuation import AttenuationError
+from engine.beam import BeamError, line_probe, transmission_curve, tube_probe
 from engine.beta_dose import BetaDoseError, BetaSkinDoseModel
 from engine.buildup import BuildupError
 from engine.chain import build_dag
@@ -46,6 +47,7 @@ from engine.photon_interp import OffGridError
 _EXPECTED_ERRORS = (
     EngineError,
     DoseError,
+    BeamError,
     DecayHeatError,
     BetaDoseError,
     NeutronDoseError,
@@ -153,6 +155,16 @@ def materials() -> str:
                     "has_removal": has_rem,
                     "density_g_cm3": density,
                     "sigma_r_cm1": neutron_removal.sigma_r_cm1(m) if has_rem else None,
+                    # ANS-6.4.3 buildup energy range (MeV) — the SCOREABLE band of a shield
+                    # made of this material (lead's G-P table starts at 30 keV, others at
+                    # 15 keV; all end at 15 MeV). The §9 beam probe constrains its energy
+                    # input to the stack's intersection of these, so an off-band probe is
+                    # prevented in the UI rather than only raised in the engine.
+                    "buildup_band_MeV": (
+                        [buildup.energies(m)[0], buildup.energies(m)[-1]]
+                        if buildup.has_material(m)
+                        else None
+                    ),
                 }
             )
         return _ok({"materials": out})
@@ -180,6 +192,53 @@ def _get(handle: str) -> SolvedInventory:
     if solved is None:
         raise EngineError(f"unknown or released handle {handle!r}")
     return solved
+
+
+def beam_probe(payload_json: str) -> str:
+    """``{"layers","beam",...}`` -> ``{ok, kind, curve, line?, tube?}`` — probe a shield stack
+    with an EXTERNAL beam (§9 shield builder). **Stateless**: no handle, no solve, no
+    inventory, no time, no distance — a shield's transmission is a property of the stack alone
+    (the ``materials()``/``convert_unit()`` pattern).
+
+    Payload::
+
+        {"layers": [["lead", 0.5], ["water", 3.0]],           # source-side -> detector-side
+         "beam": {"kind": "line", "E_MeV": 0.0595}
+              or {"kind": "xray_tube", "kvp": 100, "filtration_mm_al": 2.5,
+                  "anode": "tungsten", "n_bins": 240},
+         "quantity": "ambient_H10", "geometry": null,          # tube fold weighting only
+         "curve_points": 121}
+
+    Returns dimensionless **transmission** (+ HVL/TVL, mean energies, spectrum shape) and
+    NEVER an absolute dose rate: an X-ray tube's output (mGy/mAs at 1 m) is not in ``data/``
+    and would be fabricated. The transmission-vs-energy ``curve`` is always included (it is
+    quantity-independent) so the UI can plot the stack's response either way."""
+    try:
+        req = json.loads(payload_json)
+        layers = [(str(m), float(x)) for m, x in (req.get("layers") or [])]
+        spec = req.get("beam") or {}
+        kind = str(spec.get("kind", "line"))
+        out: dict = {
+            "kind": kind,
+            "curve": transmission_curve(layers, n_points=int(req.get("curve_points", 121))),
+        }
+        if kind == "line":
+            out["line"] = line_probe(layers, float(spec["E_MeV"]))
+        elif kind == "xray_tube":
+            out["tube"] = tube_probe(
+                layers,
+                kvp=float(spec["kvp"]),
+                filtration_mm_al=float(spec.get("filtration_mm_al", 2.5)),
+                anode=str(spec.get("anode", "tungsten")),
+                quantity=str(req.get("quantity", "ambient_H10")),
+                geometry=req.get("geometry"),
+                n_bins=int(spec.get("n_bins", 240)),
+            )
+        else:
+            raise BeamError(f"unknown beam kind {kind!r}; expected 'line' or 'xray_tube'")
+        return _ok(out)
+    except Exception as exc:  # noqa: BLE001 - surfaced loudly as structured error
+        return _err(exc)
 
 
 def solve(spec_json: str) -> str:

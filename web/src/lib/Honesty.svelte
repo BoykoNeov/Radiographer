@@ -272,6 +272,27 @@
             "mirror this split (H*(10) = ICRP-74, effective = ICRP-116), also non-comparable.",
         },
         {
+          title: "Beam probe — the X-ray tube spectrum is IDEALIZED, and it reports transmission only",
+          body:
+            "The shield builder's “test against a beam” mode reports a TRANSMISSION FRACTION, never " +
+            "an absolute dose rate: an X-ray tube's output (mGy per mAs at 1 m) is a tube-and-geometry " +
+            "calibration this tool does not have and will not invent — multiply your own MEASURED " +
+            "unshielded reading by the transmission. The tube spectrum is a Kramers thick-target " +
+            "continuum (Kramers 1923, the same model as the bremsstrahlung above) shaped by the inherent " +
+            "filtration you enter in mm Al equivalent, which also stands in for absorption in the anode. " +
+            "It has NO tungsten K characteristic lines (they appear above roughly 70 kVp) and no " +
+            "anode-angle detail, so the transmission-vs-energy SHAPE and the beam-hardening TREND are " +
+            "meaningful while the absolute HVL in mm Al is indicative only — not a QA or compliance " +
+            "figure. Only a tungsten anode is offered (Mo/Rh mammography beams are dominated by " +
+            "characteristic lines this model lacks). Below a material's ANS-6.4.3 buildup floor " +
+            "(15 keV; 30 keV for lead) the probe REFUSES to score rather than assuming no scatter: a " +
+            "line probe there is an error, and the tube fold drops those bins from both sides of the " +
+            "ratio and reports the excluded share as the “outside the scored band” fraction. Those are " +
+            "the softest photons — the ones a shield stops hardest — so the quoted transmission is an " +
+            "UPPER bound on the whole beam's. A single line, by contrast, is exact within this model, " +
+            "and transmits the same fraction whichever dose quantity you pick.",
+        },
+        {
           title: "Multi-layer shields — last-layer buildup, the least-reliable element",
           body:
             "A layer stack's attenuation exp(−Σμᵢxᵢ) is EXACT and order-independent, but its " +

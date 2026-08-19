@@ -22,6 +22,7 @@
   import { MATERIAL_GUIDANCE, MODALITY_COLORS, MODALITY_UNCERTAINTY, doseQuantityLabel, humanTime } from "./types";
   import Term from "./Term.svelte";
   import LearnMore from "./LearnMore.svelte";
+  import BeamProbe from "./BeamProbe.svelte";
 
   let thickEl = $state<HTMLDivElement | null>(null);
   let timeEl = $state<HTMLDivElement | null>(null);
@@ -366,6 +367,10 @@
           the coefficients; the cursor just indexes. <strong>Not for safety decisions</strong> (§11).
         </p>
       {/if}
+
+      <!-- Beam probe (§9): test the STACK against an external line / X-ray tube spectrum,
+           independently of the loaded inventory. Its own stateless bridge call; no solve. -->
+      <BeamProbe />
 
       <LearnMore summary="How a shield reduces the dose">
         A shield works by <Term term="attenuation">attenuation</Term>: each bit of thickness

@@ -202,6 +202,23 @@ export const GLOSSARY = {
       "thickness curve here is not a straight line on a log axis. Read it as the actual " +
       "transmission, not a fixed HVL.",
   },
+  "beam-hardening": {
+    term: "beam hardening",
+    novice:
+      "A shield does not weaken every part of a mixed-energy beam equally: it removes the " +
+      "low-energy photons far more effectively than the high-energy ones. So the radiation " +
+      "that makes it through is more penetrating, on average, than the beam that went in — " +
+      "the beam has been 'hardened'. A practical consequence: the second half-value layer of " +
+      "shielding always removes less than the first one did.",
+    advanced:
+      "Because μ falls with energy across the diagnostic and gamma range, the transmitted " +
+      "spectrum is weighted toward the high end: its mean energy and its half-value layer " +
+      "both rise with thickness. That is why an 'attenuation factor' measured at one " +
+      "thickness cannot be reused at another, and why the dose-vs-thickness curve here is " +
+      "not a straight line on a log axis (buildup, which adds scattered photons back, bends " +
+      "it the other way). For a single line there is nothing to harden — the effect exists " +
+      "only for a spectrum.",
+  },
   bremsstrahlung: {
     term: "bremsstrahlung",
     novice:

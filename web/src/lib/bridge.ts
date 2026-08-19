@@ -228,6 +228,12 @@ export interface MaterialInfo {
   /** Fast-neutron removal cross-section Σ_R (cm⁻¹) for the neutron dose-vs-thickness widget
    *  (T_n = exp(−Σ_R·x), folded client-side). `null` when the material has no removal data. */
   sigma_r_cm1: number | null;
+  /** ANS-6.4.3 buildup energy range `[lo, hi]` in MeV — the band in which a shield of this
+   *  material is SCOREABLE (lead's G-P table starts at 30 keV, the others at 15 keV; all end
+   *  at 15 MeV). The beam probe intersects these across the stack to constrain its energy
+   *  input, so an off-band probe never has to be discovered as an engine error.
+   *  `null` when the material has no buildup file. */
+  buildup_band_MeV: [number, number] | null;
 }
 
 export interface MaterialsOk {
@@ -337,6 +343,94 @@ export interface DecayHeatOk {
 export type SolveResponse = Result<SolveOk>;
 export type NuclidesResponse = Result<NuclidesOk>;
 export type MaterialsResponse = Result<MaterialsOk>;
+/** One layer's coefficients at the probe energy (the "why" behind the total transmission). */
+export interface BeamLayerRow {
+  material: string;
+  thickness_cm: number;
+  mu_rho_cm2_g: number;
+  mu_cm1: number;
+  mfp: number;
+}
+
+/** The monoenergetic ("specific line") probe of the shield stack. `transmission` is the SAME
+ *  broad-beam factor `B·exp(−Σμx)` the γ dose path folds per line, so a probe at a real line
+ *  energy reconciles with the dose card. Quantity-independent: transmission scales fluence. */
+export interface BeamLineOk {
+  E_MeV: number;
+  band_MeV: [number, number];
+  transmission: number;
+  transmission_narrow: number;
+  buildup: number | null;
+  total_mfp: number;
+  mfp_fit_max: number;
+  buildup_capped: boolean;
+  layers: BeamLayerRow[];
+  detector_material: string | null;
+  /** HVL/TVL of the DETECTOR-side material at this energy: narrow-beam closed form `ln2/μ`
+   *  (`hvl_cm`/`tvl_cm`) and the broad-beam thickness that actually halves the dose
+   *  (`hvl_broad_cm` — larger, because buildup adds scattered photons back). */
+  hvl_cm: number | null;
+  tvl_cm: number | null;
+  hvl_broad_cm: number | null;
+}
+
+/** The idealized X-ray-tube probe. Kramers thick-target continuum (tungsten anode, no K
+ *  characteristic lines) shaped by inherent filtration in mm Al, folded through the stack.
+ *  TRANSMISSION ONLY — an absolute tube output (mGy/mAs) is not in `data/` and is never
+ *  fabricated. Incident-beam numbers use the stack-INDEPENDENT `beam_band_MeV`; the stack
+ *  transmission uses the buildup-limited `band_MeV`, with `dropped_incident_fraction` as the
+ *  §11 readout of how much of the incident beam that band excludes. */
+export interface BeamTubeOk {
+  kvp: number;
+  anode: string;
+  filtration_mm_al: number;
+  quantity: string;
+  geometry: string | null;
+  band_MeV: [number, number];
+  beam_band_MeV: [number, number];
+  endpoint_MeV: number;
+  transmission: number;
+  transmission_narrow: number;
+  transmission_air_kerma: number;
+  buildup_effective: number | null;
+  mean_E_in_MeV: number;
+  mean_E_in_scored_MeV: number;
+  mean_E_out_MeV: number | null;
+  hvl_al_in_mm: number | null;
+  hvl_al_out_mm: number | null;
+  dropped_incident_fraction: number;
+  n_bins_scored: number;
+  spectrum: { E_MeV: number[]; phi_in: number[]; phi_out: number[] };
+}
+
+/** `beam_probe` payload: the stack's transmission-vs-energy curve (always — it is
+ *  quantity-independent) plus whichever beam mode was asked for. */
+export interface BeamProbeOk {
+  kind: "line" | "xray_tube";
+  curve: {
+    E_MeV: number[];
+    transmission: number[];
+    transmission_narrow: number[];
+    band_MeV: [number, number];
+  };
+  line?: BeamLineOk;
+  tube?: BeamTubeOk;
+}
+
+/** The beam-probe request. STATELESS — no handle: a shield's transmission is a property of
+ *  the layer stack alone (no inventory, no time, no distance). */
+export interface BeamProbeRequest {
+  layers: ShieldSpec;
+  beam:
+    | { kind: "line"; E_MeV: number }
+    | { kind: "xray_tube"; kvp: number; filtration_mm_al: number; anode?: string; n_bins?: number };
+  /** Weighting for the polyenergetic fold only (a mono line transmits the same either way). */
+  quantity?: string;
+  geometry?: string | null;
+  curve_points?: number;
+}
+
+export type BeamProbeResponse = Result<BeamProbeOk>;
 export type DoseThicknessResponse = Result<DoseThicknessOk>;
 export type RegistrySizeResponse = Result<RegistrySizeOk>;
 export type EvaluateResponse = Result<EvaluateOk>;
@@ -376,6 +470,15 @@ export class BridgeClient {
   /** The add-by-name source for the inventory panel; one fetch, cached by the caller. */
   nuclides(): NuclidesResponse {
     return this.call<NuclidesResponse>("nuclides");
+  }
+
+  /** Probe the shield stack with an EXTERNAL beam — a specific photon line or an idealized
+   *  X-ray tube spectrum (§9 shield builder). **Stateless**: no handle, no solve, no cursor —
+   *  transmission is a property of the stack, so this is safe to call on a parameter change
+   *  and never touches the solve registry (the gate asserts that). Returns dimensionless
+   *  transmission + HVL/TVL/mean-energy readouts, never an absolute dose rate. */
+  beam_probe(req: BeamProbeRequest): BeamProbeResponse {
+    return this.call<BeamProbeResponse>("beam_probe", JSON.stringify(req));
   }
 
   /** The M6g shield-builder material list (id, has_buildup, density); one fetch, cached. */

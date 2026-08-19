@@ -3410,6 +3410,252 @@ async function runUnitsAndSources(page) {
   return { ok: checks.every((c) => c.pass), checks };
 }
 
+
+/**
+ * Beam probe (§9 shield builder): the shield stack tested against an EXTERNAL beam — a single
+ * photon line or the idealized X-ray-tube continuum — instead of against the loaded inventory.
+ *
+ * The physics equalities (probe transmission == the γ dose path's own `stack_transmission`, the
+ * one-bin-spectrum == mono-line fold, the ln2/μ HVL algebra) are pytest's job in
+ * tests/test_beam.py, where exact equality is available. What can only be checked HERE is the
+ * wiring: that the mode buttons drive a real stateless bridge call, that the call creates NO
+ * handle (registry stays 1 — the §3 assert this gate makes everywhere), that a stack change
+ * re-probes, that the UI clamps a probe energy to the stack's buildup-limited band instead of
+ * letting the engine raise, and that the tube mode surfaces hardening + the dropped fraction.
+ */
+async function runBeamProbe(page) {
+  const checks = [];
+  const record = (name, pass, detail) => checks.push({ name, pass, detail });
+  const PANEL = '[data-testid="beam-probe"]';
+
+  // A clean Cs-137 reference with a single lead layer: enough γ to render the Shield panel
+  // (the probe lives inside it), and lead is the interesting case — its ANS-6.4.3 buildup
+  // table starts at 30 keV, not 15 keV, so it is the stack that shrinks the scoreable band.
+  await page.evaluate(async () => {
+    const app = window.__APP__;
+    await app.clear();
+    app.setReferenceTimeS(0);
+    app.clearShield();
+    await app.addEntry("Cs-137", 1e10, "Bq");
+  });
+  await page.waitForFunction("window.__APP__.status === 'solved'", null, { timeout: 30_000 });
+  await page.evaluate(() => {
+    window.__APP__.addShieldLayer("lead");
+    window.__APP__.setShieldLayerThicknessCm(0, 1.0);
+  });
+  await page.waitForFunction("window.__APP__.shieldActive && window.__APP__.gammaDoseSeries", null, {
+    timeout: 30_000,
+  });
+
+  const before = await page.evaluate(() => ({
+    handle: window.__APP__.handle,
+    registry: window.__BRIDGE__.registry_size().size,
+    probe: window.__APP__.beamProbe, // null while the probe is closed — it costs nothing
+  }));
+
+  // 1) Opening "Single line" (the real button) runs the probe: a result appears, and because
+  //    the call is STATELESS the handle and the registry are untouched (no solve, no handle).
+  await page.click(`${PANEL} [data-testid="beam-mode-line"]`);
+  await page.waitForFunction("window.__APP__.beamProbe !== null", null, { timeout: 30_000 });
+  const opened = await page.evaluate(() => {
+    const app = window.__APP__;
+    const p = app.beamProbe;
+    return {
+      handle: app.handle,
+      registry: window.__BRIDGE__.registry_size().size,
+      kind: p.kind,
+      t: p.line.transmission,
+      narrow: p.line.transmission_narrow,
+      buildup: p.line.buildup,
+      mfp: p.line.total_mfp,
+      nLayerRows: document.querySelectorAll('[data-testid="beam-layer-table"] tbody tr').length,
+      curveN: p.curve.E_MeV.length,
+      error: app.beamError,
+    };
+  });
+  record(
+    "open 'Single line': stateless probe runs (no handle created, registry stays 1), broad >= narrow, buildup > 1",
+    before.probe === null &&
+      opened.error === "" &&
+      opened.kind === "line" &&
+      opened.handle === before.handle &&
+      opened.registry === before.registry &&
+      opened.registry === 1 &&
+      opened.t >= opened.narrow &&
+      opened.buildup > 1 &&
+      opened.mfp > 0 &&
+      opened.nLayerRows === 1 &&
+      opened.curveN > 2,
+    `closed→open (probe was null=${before.probe === null}), handleStable=${opened.handle === before.handle}, ` +
+      `registry=${opened.registry}, T=${opened.t.toExponential(3)} >= narrow=${opened.narrow.toExponential(3)}, ` +
+      `B=${opened.buildup?.toFixed(3)}, mfp=${opened.mfp.toFixed(2)}, layerRows=${opened.nLayerRows}, curve=${opened.curveN}pts`,
+  );
+
+  // 2) The scalar card and the transmission-vs-energy curve must come from ONE engine core, so
+  //    probing AT one of the curve's own grid energies has to reproduce that grid point. Checked
+  //    at a grid point deliberately: between points the curve can span >2 decades (through 1 cm
+  //    of lead at 60 keV the depth is ~58 mfp and μ falls steeply with energy), so comparing an
+  //    INTERPOLATED curve value would be measuring log-log interpolation error, not agreement.
+  const gridProbe = await page.evaluate(() => {
+    const xs = window.__APP__.beamProbe.curve.E_MeV;
+    const k = Math.floor(xs.length / 2);
+    window.__APP__.setBeamLineKeV(xs[k] * 1e3);
+    return { k, keV: xs[k] * 1e3 };
+  });
+  await page.waitForFunction(
+    `window.__APP__.beamProbe && Math.abs(window.__APP__.beamLineKeV - ${gridProbe.keV}) < 1e-9`,
+    null,
+    { timeout: 30_000 },
+  );
+  const consistent = await page.evaluate((k) => {
+    const p = window.__APP__.beamProbe;
+    return { card: p.line.transmission, grid: p.curve.transmission[k], keV: p.line.E_MeV * 1e3 };
+  }, gridProbe.k);
+  record(
+    "probing AT a curve grid energy reproduces that grid point (the card and the curve are one engine core, not two)",
+    Math.abs(consistent.card / consistent.grid - 1) < 1e-6,
+    `at ${consistent.keV.toFixed(3)} keV (grid point ${gridProbe.k}): card=${consistent.card.toExponential(6)}, curve=${consistent.grid.toExponential(6)}`,
+  );
+
+  // 3) The scoreable band follows the STACK's buildup data: lead's G-P table starts at 30 keV,
+  //    so a 12 keV probe is CLAMPED by the UI to 30 keV rather than raising in the engine —
+  //    and the clamp is visible in the store, not just in the input's value attribute.
+  const clamped = await page.evaluate(() => {
+    const app = window.__APP__;
+    app.setBeamLineKeV(12);
+    return { band: app.beamBandKeV, keV: app.beamLineKeV, error: app.beamError };
+  });
+  record(
+    "line energy is clamped into the stack's scoreable band (lead's 30 keV buildup floor), never an engine error",
+    clamped.band[0] === 30 && clamped.keV === 30 && clamped.error === "",
+    `band=[${clamped.band[0]}, ${clamped.band[1]}] keV, asked 12 → got ${clamped.keV}, error="${clamped.error}"`,
+  );
+
+  // 4) A stack change re-probes automatically (the probe reads the live stack): more lead ⇒
+  //    strictly less transmission at the same energy. No solve involved (handle stable).
+  await page.evaluate(() => {
+    window.__APP__.setBeamLineKeV(661.7);
+  });
+  await page.waitForFunction("window.__APP__.beamLineKeV === 661.7 && window.__APP__.beamProbe", null, {
+    timeout: 30_000,
+  });
+  const thin = await page.evaluate(() => window.__APP__.beamProbe.line.transmission);
+  await page.evaluate(() => {
+    window.__APP__.setShieldLayerThicknessCm(0, 3.0);
+  });
+  await page.waitForFunction(
+    "window.__APP__.shieldLayers[0].thicknessCm === 3 && window.__APP__.beamProbe",
+    null,
+    { timeout: 30_000 },
+  );
+  const thick = await page.evaluate(() => ({
+    t: window.__APP__.beamProbe.line.transmission,
+    handle: window.__APP__.handle,
+    registry: window.__BRIDGE__.registry_size().size,
+  }));
+  record(
+    "a stack change re-probes: 1 cm → 3 cm of lead transmits strictly less at 662 keV, still no re-solve",
+    thick.t < thin && thick.handle === before.handle && thick.registry === 1,
+    `T(1cm)=${thin.toExponential(3)} → T(3cm)=${thick.t.toExponential(3)}, handleStable=${thick.handle === before.handle}, registry=${thick.registry}`,
+  );
+
+  // 5) X-ray tube mode (the real button): a polyenergetic fold with beam hardening, an honest
+  //    dropped-incident fraction (lead's 30 keV floor cuts a real chunk of a 100 kVp beam), and
+  //    both plots drawn. Statement-body evaluate on the Plotly nodes — never return the element
+  //    or a live library object over CDP (gate-js-heap-runaway, §13 #8).
+  await page.click(`${PANEL} [data-testid="beam-mode-tube"]`);
+  await page.waitForFunction("window.__APP__.beamProbe && window.__APP__.beamProbe.tube", null, {
+    timeout: 30_000,
+  });
+  const tube = await page.evaluate(() => {
+    const t = window.__APP__.beamProbe.tube;
+    const spec = document.querySelector('[data-testid="beam-spectrum-plot"]');
+    const curve = document.querySelector('[data-testid="beam-curve-plot"]');
+    return {
+      kvp: t.kvp,
+      anode: t.anode,
+      transmission: t.transmission,
+      meanIn: t.mean_E_in_MeV,
+      meanOut: t.mean_E_out_MeV,
+      hvlIn: t.hvl_al_in_mm,
+      hvlOut: t.hvl_al_out_mm,
+      dropped: t.dropped_incident_fraction,
+      specTraces: spec && spec.data ? spec.data.length : 0,
+      curveTraces: curve && curve.data ? curve.data.length : 0,
+      registry: window.__BRIDGE__.registry_size().size,
+    };
+  });
+  record(
+    "X-ray tube mode: beam HARDENS through the stack (mean E and HVL both rise), dropped fraction reported, both plots drawn",
+    tube.anode === "tungsten" &&
+      tube.transmission > 0 &&
+      tube.transmission < 1 &&
+      tube.meanOut > tube.meanIn &&
+      tube.hvlOut > tube.hvlIn &&
+      tube.dropped > 0 &&
+      tube.dropped < 1 &&
+      tube.specTraces === 2 &&
+      tube.curveTraces === 2 &&
+      tube.registry === 1,
+    `${tube.kvp} kVp ${tube.anode}: T=${tube.transmission.toExponential(3)}, mean ${(tube.meanIn * 1e3).toFixed(1)}→${(tube.meanOut * 1e3).toFixed(1)} keV, ` +
+      `HVL_Al ${tube.hvlIn.toFixed(2)}→${tube.hvlOut.toFixed(2)} mm, dropped=${(tube.dropped * 100).toFixed(1)}%, ` +
+      `traces spec=${tube.specTraces}/curve=${tube.curveTraces}, registry=${tube.registry}`,
+  );
+
+  // 6) The incident beam's own characterization must NOT move when the shield does (the
+  //    two-band split in engine/beam.py): its mean energy and HVL in Al are properties of the
+  //    beam. Only the SCORED band — and hence the dropped fraction — follows the stack.
+  await page.evaluate(() => {
+    window.__APP__.setShieldLayerMaterial(0, "aluminium");
+  });
+  await page.waitForFunction(
+    "window.__APP__.shieldLayers[0].material === 'aluminium' && window.__APP__.beamProbe && window.__APP__.beamProbe.tube",
+    null,
+    { timeout: 30_000 },
+  );
+  const swapped = await page.evaluate(() => {
+    const t = window.__APP__.beamProbe.tube;
+    return {
+      meanIn: t.mean_E_in_MeV,
+      hvlIn: t.hvl_al_in_mm,
+      bandLo: t.band_MeV[0],
+      dropped: t.dropped_incident_fraction,
+    };
+  });
+  record(
+    "swapping lead→aluminium leaves the INCIDENT beam identical but widens the scored band and shrinks the dropped fraction",
+    Math.abs(swapped.meanIn - tube.meanIn) < 1e-12 &&
+      Math.abs(swapped.hvlIn - tube.hvlIn) < 1e-9 &&
+      swapped.bandLo < 0.03 &&
+      swapped.dropped < tube.dropped,
+    `mean_in ${(tube.meanIn * 1e3).toFixed(3)}→${(swapped.meanIn * 1e3).toFixed(3)} keV (unchanged), ` +
+      `HVL_in ${tube.hvlIn.toFixed(4)}→${swapped.hvlIn.toFixed(4)} mm (unchanged), band floor ${(swapped.bandLo * 1e3).toFixed(0)} keV, ` +
+      `dropped ${(tube.dropped * 100).toFixed(1)}%→${(swapped.dropped * 100).toFixed(1)}%`,
+  );
+
+  // 7) Closing the probe releases it (and the plots) — the panel is opt-in, so an inactive
+  //    probe must hold no result and cost no bridge call on later stack changes.
+  await page.click(`${PANEL} [data-testid="beam-mode-off"]`);
+  await page.waitForFunction("window.__APP__.beamProbe === null", null, { timeout: 30_000 });
+  const closed = await page.evaluate(() => {
+    window.__APP__.setShieldLayerThicknessCm(0, 2.0); // a stack change while closed: still null
+    return {
+      probe: window.__APP__.beamProbe,
+      mode: window.__APP__.beamMode,
+      hasPlot: !!document.querySelector('[data-testid="beam-curve-plot"]'),
+      registry: window.__BRIDGE__.registry_size().size,
+    };
+  });
+  record(
+    "closing the probe clears it and stops the bridge call (a stack change while closed stays null)",
+    closed.probe === null && closed.mode === "off" && closed.hasPlot === false && closed.registry === 1,
+    `probe=${closed.probe}, mode=${closed.mode}, plotMounted=${closed.hasPlot}, registry=${closed.registry}`,
+  );
+
+  await page.evaluate(() => window.__APP__.clearShield());
+  return { ok: checks.every((c) => c.pass), checks };
+}
+
 let exitCode = 1;
 let browser;
 let server;
@@ -3458,6 +3704,7 @@ try {
   let m13 = { ok: false, checks: [] };
   let views = { ok: false, checks: [] };
   let unitsAndSources = { ok: false, checks: [] };
+  let beamProbe = { ok: false, checks: [] };
   // Per-suite entering markers (gate-js-heap-runaway, HANDOFF_PLAN §13 #8): none of
   // M6b..unitsAndSources print anything until their OWN checks section below, which
   // only runs after this ENTIRE nested chain returns — so "M6a printed, then
@@ -3498,6 +3745,12 @@ try {
                       if (views.ok) {
                         await logStep(page, "entering runUnitsAndSources");
                         unitsAndSources = await runUnitsAndSources(page);
+                        if (unitsAndSources.ok) {
+                          await logStep(page, "entering runBeamProbe");
+                          beamProbe = await runBeamProbe(page);
+                        } else {
+                          console.log("[gate] skipping beam probe — units/sources checks failed");
+                        }
                       } else {
                         console.log("[gate] skipping units/sources follow-up — Views checks failed");
                       }
@@ -3587,6 +3840,11 @@ try {
     console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
   }
 
+  console.log("\n===== Beam probe: shield vs an external line / X-ray tube =====");
+  for (const c of beamProbe.checks) {
+    console.log(`  ${c.pass ? "✓" : "✗"} ${c.name} — ${c.detail}`);
+  }
+
   exitCode =
     m6aOk &&
     m6b.ok &&
@@ -3599,12 +3857,13 @@ try {
     m7.ok &&
     m13.ok &&
     views.ok &&
-    unitsAndSources.ok
+    unitsAndSources.ok &&
+    beamProbe.ok
       ? 0
       : 1;
   console.log(
     exitCode === 0
-      ? "\n✅ PASS (real browser): boot + inventory + curves + time + chain + dose + shield + honesty/round-trip + sources/neutron + spent-fuel/decay-heat + internal/committed dose + views (hide-show + time-unit) + units/sources follow-up"
+      ? "\n✅ PASS (real browser): boot + inventory + curves + time + chain + dose + shield + honesty/round-trip + sources/neutron + spent-fuel/decay-heat + internal/committed dose + views (hide-show + time-unit) + units/sources follow-up + beam probe"
       : "\n❌ FAIL (real browser)",
   );
 } catch (err) {

@@ -21,6 +21,7 @@
 
 import {
   BridgeClient,
+  type BeamProbeOk,
   type ChainOk,
   type DecayHeatOk,
   type DoseLinesOk,
@@ -236,6 +237,31 @@ export class AppState {
   neutronSweepMaterial = $state<string | null>(null);
   /** Selected explorer thickness (cm) — drives the readout + the marker line. */
   neutronSweepThicknessCm = $state<number>(10);
+
+  // -- beam probe: test the shield against an EXTERNAL beam (§9 shield builder) ----------
+  // The inventory answers "what dose does MY source deliver through this stack". This answers
+  // the shield designer's other question: "how much of a 60 keV line / of a 100 kVp X-ray tube
+  // beam gets through it". It is a property of the LAYER STACK alone — no handle, no solve, no
+  // cursor, no distance — so `beam_probe` is a STATELESS bridge call (the materials()/
+  // convert_unit() pattern) and can never grow the solve registry (the gate asserts that).
+  // Results are dimensionless TRANSMISSION + HVL/mean-energy readouts, never an absolute dose
+  // rate: an X-ray tube's output (mGy/mAs at 1 m) is not in `data/` and would be fabricated.
+  // EPHEMERAL (not serialized), like `neutronSweep*`: a what-if probe, not part of the scenario.
+  /** "off" hides the probe entirely (and skips its bridge call); the two modes are a single
+   *  photon line and the idealized X-ray-tube continuum. */
+  beamMode = $state<"off" | "line" | "xray_tube">("off");
+  /** Probe energy for the line mode, in **keV** (the unit an X-ray/γ line is quoted in; the
+   *  engine takes MeV, converted at the call — §12). */
+  beamLineKeV = $state<number>(59.5);
+  /** Tube potential (kV) — the Kramers endpoint. */
+  beamKvp = $state<number>(100);
+  /** Inherent filtration in mm of aluminium equivalent (how tubes are specced; the stand-in
+   *  for anode self-absorption, which Kramers' law does not contain). */
+  beamFiltrationMmAl = $state<number>(2.5);
+  /** Last successful probe payload (curve + line/tube readouts); null before the first call. */
+  beamProbe = $state<BeamProbeOk | null>(null);
+  /** Loud beam-path error (its own field — a probe failure must not blank the dose panel). */
+  beamError = $state<string>("");
 
   // -- shield builder (M6g + M8 multi-layer, §9, §13 #2) --------------------
   // A shield is an ORDERED STACK of layers (source-side → detector-side; the LAST layer is
@@ -1194,6 +1220,124 @@ export class AppState {
     this.recomputeDose();
   }
 
+  // -- beam probe (external line / X-ray tube through the stack) -------------
+
+  /**
+   * The stack's SCOREABLE energy band in keV — the intersection of every active layer's
+   * ANS-6.4.3 buildup range (lead's G-P table starts at 30 keV, the others at 15 keV; all end
+   * at 15 MeV), from the engine's own `materials()` list. The line-mode input is constrained to
+   * it, so an off-band probe is prevented in the UI instead of only surfacing as an engine
+   * error — and the *reason* (a data hole below the buildup floor, never a silent B=1, §6.5)
+   * stays visible in the panel copy. Null while the material list has not loaded.
+   */
+  get beamBandKeV(): [number, number] | null {
+    const mats = this.availableMaterials;
+    if (mats.length === 0) return null;
+    let lo = 10; // the app-wide 10 keV dose-scoring floor δ (§11)
+    let hi = Infinity;
+    for (const layer of this.activeShieldLayers) {
+      const band = mats.find((m) => m.id === layer.material)?.buildup_band_MeV;
+      if (!band) return null; // a layer with no buildup data — the γ engine refuses it anyway
+      lo = Math.max(lo, band[0] * 1e3);
+      hi = Math.min(hi, band[1] * 1e3);
+    }
+    if (!Number.isFinite(hi)) hi = 15_000; // no layers: the buildup tables' common upper end
+    return hi > lo ? [lo, hi] : null;
+  }
+
+  /**
+   * Probe-energy presets taken from the loaded inventory's OWN scored γ lines (engine data —
+   * no hardcoded line table, so nothing here can drift from ICRP-107 or be fabricated).
+   * Strongest contributors first, de-duplicated to 0.1 keV, and filtered to the stack's
+   * scoreable band so a preset can never be an off-band probe. Empty before a solve.
+   */
+  get beamLinePresets(): { label: string; keV: number }[] {
+    const dl = this.gammaLines;
+    if (!dl) return [];
+    const band = this.beamBandKeV;
+    const ranked = this.gammaLinesAtCursor?.rows ?? [...dl.lines].sort((a, b) => b.coeff_si - a.coeff_si);
+    const seen = new Set<string>();
+    const out: { label: string; keV: number }[] = [];
+    for (const ln of ranked) {
+      const keV = ln.E_MeV * 1e3;
+      if (band && (keV < band[0] || keV > band[1])) continue;
+      const key = keV.toFixed(1);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ label: `${ln.nuclide} — ${keV.toFixed(1)} keV`, keV });
+      if (out.length >= 10) break;
+    }
+    return out;
+  }
+
+  setBeamMode(mode: "off" | "line" | "xray_tube"): void {
+    if (this.beamMode === mode) return;
+    this.beamMode = mode;
+    if (mode === "off") {
+      this.beamProbe = null;
+      this.beamError = "";
+      return;
+    }
+    this.refreshBeamProbe();
+  }
+
+  /** Probe energy in keV, clamped into the stack's scoreable band (`beamBandKeV`). */
+  setBeamLineKeV(keV: number): void {
+    if (!Number.isFinite(keV) || keV <= 0) return;
+    const band = this.beamBandKeV;
+    const next = band ? Math.min(Math.max(keV, band[0]), band[1]) : keV;
+    if (next === this.beamLineKeV) return;
+    this.beamLineKeV = next;
+    this.refreshBeamProbe();
+  }
+
+  setBeamKvp(kvp: number): void {
+    if (!Number.isFinite(kvp) || kvp < 5 || kvp > 450 || kvp === this.beamKvp) return;
+    this.beamKvp = kvp;
+    this.refreshBeamProbe();
+  }
+
+  setBeamFiltrationMmAl(mm: number): void {
+    if (!Number.isFinite(mm) || mm < 0 || mm === this.beamFiltrationMmAl) return;
+    this.beamFiltrationMmAl = mm;
+    this.refreshBeamProbe();
+  }
+
+  /**
+   * Re-run the beam probe for the CURRENT layer stack + beam parameters. A no-op while the
+   * probe is closed (`beamMode === "off"`), so the panel costs nothing until it is opened.
+   * Stateless: no handle is passed and none is created — this is safe to call before/without a
+   * solve, and the registry-size gate stays at 1 across any number of probes (§3).
+   */
+  refreshBeamProbe(): void {
+    if (this.beamMode === "off") return;
+    if (!this.client) {
+      this.beamProbe = null;
+      return;
+    }
+    const beam =
+      this.beamMode === "line"
+        ? { kind: "line" as const, E_MeV: this.beamLineKeV * 1e-3 }
+        : {
+            kind: "xray_tube" as const,
+            kvp: this.beamKvp,
+            filtration_mm_al: this.beamFiltrationMmAl,
+          };
+    const res = this.client.beam_probe({
+      layers: this.shield ?? [],
+      beam,
+      quantity: this.doseQuantity,
+      geometry: this.doseQuantity === "effective" ? this.doseGeometry : null,
+    });
+    if (!res.ok) {
+      this.beamProbe = null;
+      this.beamError = `${res.error.type}: ${res.error.message}`;
+      return;
+    }
+    this.beamError = "";
+    this.beamProbe = res;
+  }
+
   // -- the solve primitive --------------------------------------------------
 
   /**
@@ -1351,6 +1495,11 @@ export class AppState {
    * steer-to-hydrogenous). A neutron failure sets `neutronDoseError` and never touches γ/β.
    */
   private recomputeDose(): void {
+    // The beam probe depends on the layer stack (and, for the polyenergetic fold, the dose
+    // quantity) — every one of those changes routes through here. It does NOT depend on time,
+    // distance, or the cursor, and it is a no-op while the probe is closed, so this is the one
+    // hook it needs (a stateless call: no handle, so it runs even before a solve).
+    this.refreshBeamProbe();
     const meta = this.solveMeta;
     if (!this.client || !this.handle || !meta || this.curveX.length === 0) {
       this.clearDoseSeries();
